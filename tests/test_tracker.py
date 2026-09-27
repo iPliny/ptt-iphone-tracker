@@ -160,6 +160,47 @@ class RealPostRegressionTest(unittest.TestCase):
         self.assertEqual(T.detect_status("[販售] 台北 全新iPhone 18 Pro Max 256G 銀", body), T.STATUS_ACTIVE)
 
 
+class DaysToSellTest(unittest.TestCase):
+    def setUp(self):
+        self.now = T.datetime.now()
+        self.posted = self.now - T.timedelta(days=5)
+        self.row = {"post_time": self.posted.strftime("%Y-%m-%d %H:%M:%S")}
+
+    def fmt(self, dt):
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+    def test_parse_last_edit(self):
+        html = ('<div id="main-content">[型號] iPhone 14\n--\n※ 發信站: 批踢踢實業坊(ptt.cc)\n'
+                '※ 編輯: abc (1.2.3.4 臺灣), 09/25/2026 10:00:00\n'
+                '<div class="push">推 x</div>※ 編輯: abc (1.2.3.4 臺灣), 09/26/2026 21:30:05\n</div>')
+        art = T.parse_article(html)
+        self.assertEqual(art["last_edit"], T.datetime(2026, 9, 26, 21, 30, 5))
+        self.assertNotIn("編輯", art["body"])
+
+    def test_first_sight_uses_last_edit(self):
+        T.set_days_to_sell(self.row, "", self.posted + T.timedelta(days=2))
+        self.assertEqual((self.row["days_to_sell"], self.row["days_to_sell_basis"]), (2.0, T.BASIS_ESTIMATED))
+
+    def test_first_sight_without_edit(self):
+        T.set_days_to_sell(self.row, "", None)
+        self.assertEqual((self.row["days_to_sell"], self.row["days_to_sell_basis"]), ("", T.BASIS_UNKNOWN))
+
+    def test_observed_prefers_edit_between_checks(self):
+        prev = self.fmt(self.now - T.timedelta(hours=6))
+        T.set_days_to_sell(self.row, prev, self.now - T.timedelta(hours=3))
+        self.assertEqual(self.row["days_to_sell_basis"], T.BASIS_OBSERVED)
+        self.assertAlmostEqual(self.row["days_to_sell"], 4.9, places=1)
+
+    def test_observed_ignores_old_edit(self):
+        prev = self.fmt(self.now - T.timedelta(hours=6))
+        T.set_days_to_sell(self.row, prev, self.posted + T.timedelta(hours=1))  # 早於上次檢查的編輯不採用
+        self.assertEqual((self.row["days_to_sell"], self.row["days_to_sell_basis"]), (5.0, T.BASIS_OBSERVED))
+
+    def test_edit_before_post_is_ignored(self):
+        T.set_days_to_sell(self.row, "", self.posted - T.timedelta(days=1))
+        self.assertEqual(self.row["days_to_sell_basis"], T.BASIS_UNKNOWN)
+
+
 class PipelineTest(unittest.TestCase):
     """模擬兩次執行：第一次抓到新文章，第二次文章已擠出首頁，但回訪仍偵測到售出/改價/刪文。"""
 
@@ -242,7 +283,9 @@ class PipelineTest(unittest.TestCase):
         self.arts[pa] = ("[販售] 台北 iPhone 15 pro 256 已售出", self.arts[pa][1], "")
         rows = self.run_main()
         row = rows[T.BASE_URL + pa]
-        self.assertEqual((row["status"], row["days_to_sell"]), (T.STATUS_SOLD, ""))
+        # 假頁面沒有「※ 編輯」紀錄 → 無法推估
+        self.assertEqual((row["status"], row["days_to_sell"], row["days_to_sell_basis"]),
+                         (T.STATUS_SOLD, "", T.BASIS_UNKNOWN))
         legacy = dict(row, days_to_sell="1.1", sold_detected_at=row["first_seen"])
         self.assertTrue(T.sold_on_first_sight(legacy))
 
