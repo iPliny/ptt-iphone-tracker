@@ -56,7 +56,11 @@ LISTING_FIELDS = [
     "source_url", "post_time", "title", "status", "sold_detected_at", "days_to_sell",
     "model", "storage", "全新未拆封機", "battery_health", "price", "first_price",
     "warranty", "notes", "model_raw", "first_seen", "last_checked", "body_hash",
+    "days_to_sell_basis",  # 觀測＝兩次檢查之間偵測到售出；推估＝用最後編輯時間推算；無法推估
 ]
+BASIS_OBSERVED = "觀測"
+BASIS_ESTIMATED = "推估"
+BASIS_UNKNOWN = "無法推估"
 EVENT_FIELDS = ["time", "source_url", "event", "detail"]
 
 STATUS_ACTIVE = "在售"
@@ -241,7 +245,18 @@ def parse_article(html):
             tag.decompose()
     text = main.get_text()
     body = re.split(r"\n--\n※ 發信站|※ 發信站", text)[0].strip()
-    return {"title": title, "body": body}
+    return {"title": title, "body": body, "last_edit": last_edit_time(text)}
+
+
+_EDIT_RE = re.compile(r"※ 編輯: \S+ \([^)]*\), (\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2})")
+
+
+def last_edit_time(text):
+    """文末「※ 編輯: id (ip 地區), 09/27/2026 19:17:06」的最後一筆，回傳 datetime 或 None。"""
+    stamps = _EDIT_RE.findall(text)
+    if not stamps:
+        return None
+    return datetime.strptime(stamps[-1], "%m/%d/%Y %H:%M:%S")
 
 
 def body_hash(body):
@@ -499,7 +514,39 @@ def log_event(url, event, detail="", path=None):
 MAX_CHECK_GAP_DAYS = 3  # 兩次檢查間隔超過這麼久，售出天數誤差太大，不採計
 
 
-def mark_status(row, status, prev_checked=""):
+def _parse_time(value):
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+    except (TypeError, ValueError):
+        return None
+
+
+def set_days_to_sell(row, prev_checked="", last_edit=None):
+    """
+    售出天數：
+    - 觀測：上次檢查時還在賣（且間隔不超過 MAX_CHECK_GAP_DAYS），這次才看到售出。
+      若最後編輯時間落在兩次檢查之間，用編輯時間，否則用這次檢查時間。
+    - 推估：第一次看到就已售出，或間隔太久；用最後一次編輯文章的時間（賣家通常在賣掉時改標題）。
+    - 無法推估：文章沒有編輯紀錄。
+    """
+    now = datetime.now()
+    posted, last = _parse_time(row.get("post_time")), _parse_time(prev_checked)
+    row["days_to_sell"], row["days_to_sell_basis"] = "", BASIS_UNKNOWN
+    if posted is None:
+        return
+    edit_ok = last_edit is not None and posted < last_edit <= now
+    if last is not None and (now - last).days <= MAX_CHECK_GAP_DAYS:
+        sold_at = last_edit if edit_ok and last_edit > last else now
+        basis = BASIS_OBSERVED
+    elif edit_ok:
+        sold_at, basis = last_edit, BASIS_ESTIMATED
+    else:
+        return
+    row["days_to_sell"] = round((sold_at - posted).total_seconds() / 86400, 1)
+    row["days_to_sell_basis"] = basis
+
+
+def mark_status(row, status, prev_checked="", last_edit=None):
     """更新狀態；第一次偵測到已售出時記錄時間與銷售天數。"""
     old = row.get("status") or STATUS_ACTIVE
     if status == old:
@@ -507,15 +554,13 @@ def mark_status(row, status, prev_checked=""):
     row["status"] = status
     if status == STATUS_SOLD and not row.get("sold_detected_at"):
         row["sold_detected_at"] = now_str()
-        row["days_to_sell"] = ""
-        try:
-            posted = datetime.strptime(row["post_time"], "%Y-%m-%d %H:%M:%S")
-            last = datetime.strptime(prev_checked, "%Y-%m-%d %H:%M:%S")
-            if (datetime.now() - last).days <= MAX_CHECK_GAP_DAYS:
-                row["days_to_sell"] = round((datetime.now() - posted).total_seconds() / 86400, 1)
-        except (KeyError, ValueError):
-            pass
+        set_days_to_sell(row, prev_checked, last_edit)
     log_event(row["source_url"], "狀態變更", f"{old} → {status}")
+
+
+def needs_days_backfill(row):
+    """舊版留下的已售出資料：沒有 basis，或售出天數是「第一次看到就已售出」時誤算的。"""
+    return row.get("status") == STATUS_SOLD and not row.get("days_to_sell_basis")
 
 
 # ==========================================
@@ -563,6 +608,8 @@ def process_article(url, listings, use_llm, stats):
     code, html = fetch(url)
     row = listings.get(url)
     if code == 404:
+        if row and needs_days_backfill(row):
+            row["days_to_sell"], row["days_to_sell_basis"] = "", BASIS_UNKNOWN
         if row and row.get("status") in OPEN_STATUSES:
             mark_status(row, STATUS_DELETED)
             row["last_checked"] = now_str()
@@ -611,7 +658,12 @@ def process_article(url, listings, use_llm, stats):
     row["body_hash"] = h
     row["last_checked"] = now_str()
     before = row.get("status")
-    mark_status(row, status, prev_checked)
+    if before == STATUS_SOLD and needs_days_backfill(row):
+        if row.get("days_to_sell") not in ("", None) and not sold_on_first_sight(row):
+            row["days_to_sell_basis"] = BASIS_OBSERVED
+        else:
+            set_days_to_sell(row, "", art["last_edit"])
+    mark_status(row, status, prev_checked, art["last_edit"])
     if status == STATUS_SOLD and before != STATUS_SOLD:
         stats["sold"] += 1
 
@@ -662,8 +714,18 @@ def build_summary(listings, path=None):
     for (model, storage, new), items in groups.items():
         prices = [p for _, p in items]
         sold = [(r, p) for r, p in items if r["status"] == STATUS_SOLD]
-        days = [float(r["days_to_sell"]) for r, _ in sold
-                if r.get("days_to_sell") not in ("", None) and not sold_on_first_sight(r)]
+        days, n_obs, n_est = [], 0, 0
+        for r, _ in sold:
+            if r.get("days_to_sell") in ("", None):
+                continue
+            basis = r.get("days_to_sell_basis")
+            if basis == BASIS_ESTIMATED:
+                n_est += 1
+            elif basis == BASIS_OBSERVED or (not basis and not sold_on_first_sight(r)):
+                n_obs += 1
+            else:
+                continue
+            days.append(float(r["days_to_sell"]))
         batt = [to_int(r.get("battery_health")) for r, _ in items if to_int(r.get("battery_health"))]
         rows.append({
             "model": model, "storage": storage, "全新未拆封機": new,
@@ -675,6 +737,7 @@ def build_summary(listings, path=None):
             "最低價": min(prices), "最高價": max(prices),
             "平均電池": round(sum(batt) / len(batt)) if batt else "",
             "售出天數中位數": round(statistics.median(days), 1) if days else "",
+            "售出天數樣本(觀測/推估)": f"{n_obs}/{n_est}" if days else "",
         })
     rows.sort(key=lambda r: (r["model"], r["storage"], r["全新未拆封機"]))
     fields = list(rows[0].keys()) if rows else ["model"]
@@ -749,8 +812,10 @@ def main():
         track_cutoff = (datetime.now() - timedelta(days=args.track_days)).timestamp()
         revisit = [u for u, r in listings.items()
                    if r.get("status") in OPEN_STATUSES and (url_timestamp(u) or 0) >= track_cutoff]
-        queue = list(dict.fromkeys([t["link"] for t in targets] + revisit))
-        print(f"[INFO] 另有 {len(revisit)} 篇在售文章需回訪，合計處理 {len(queue)} 篇。")
+        backfill = [u for u, r in listings.items() if needs_days_backfill(r)]
+        queue = list(dict.fromkeys([t["link"] for t in targets] + revisit + backfill))
+        print(f"[INFO] 另有 {len(revisit)} 篇在售文章需回訪、{len(backfill)} 篇已售出文章補算售出天數，"
+              f"合計處理 {len(queue)} 篇。")
 
         print("=" * 60 + "\n[INFO] 第二、三階段：解析新文章 + 回訪追蹤\n" + "=" * 60)
         for i, url in enumerate(queue, 1):
