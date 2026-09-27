@@ -18,6 +18,7 @@ data/market_summary.csv  各型號 × 容量：刊登數、售出率、刊登價
 data/macshop_raw_data_v1.csv  v1 原始資料（已匯入 listings.csv）
 ```
 `status`：在售／交易中／已售出／已刪除／略過（非單一 iPhone 或抓不到單機價格）。
+`days_to_sell_basis`：售出天數怎麼來的。「觀測」是兩次檢查之間看到它賣掉；「推估」是第一次看到就已售出，用文章最後一次編輯時間（賣家通常賣掉時改標題）減發文時間；沒有編輯紀錄則為「無法推估」。
 
 ## 排程與手動執行
 - 排程：`.github/workflows/track.yml`，台灣時間 02、08、14、20 點。
