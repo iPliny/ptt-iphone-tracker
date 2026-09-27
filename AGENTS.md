@@ -12,7 +12,8 @@
   3. 同一個 `process_article` 也負責回訪：`detect_status` 只用關鍵字判斷 在售／交易中／已售出，404 記為已刪除
   4. `build_summary`：輸出 `data/market_summary.csv`
 - `data/listings.csv`：以 `source_url` 為主鍵，一篇一列；`events.csv` 只附加不改寫
-- `.github/workflows/track.yml`：每 6 小時在 GitHub Actions 執行並把 `data/` commit 回 main；`ci.yml` 跑測試
+- `.github/workflows/track.yml`：每 6 小時在 GitHub Actions 執行，把 `data/` commit 回 main 後觸發 `pages.yml` 重新部署網站；`ci.yml` 跑測試
+- `data/` 的 CSV 欄位是網站的介面，改欄位名稱或意義時要在這裡註明並同步改網站
 - `legacy/`：v1 程式，只供參考，不要修改
 
 ## 開發規則

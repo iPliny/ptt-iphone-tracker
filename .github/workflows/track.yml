@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: track
@@ -32,7 +33,9 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Scan and track
         run: python tracker.py --days "${{ inputs.days || '3' }}" --track-days "${{ inputs.track_days || '45' }}"
-      - name: Commit data
+      - name: Commit data and redeploy site
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "ptt-tracker-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -44,7 +47,11 @@ jobs:
           git commit -m "資料更新 $(TZ=Asia/Taipei date '+%F %H:%M')"
           # 期間若有人推送，rebase 後重試
           for attempt in 1 2 3; do
-            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            if git pull --rebase origin main && git push origin HEAD:main; then
+              # 用 workflow token 推送不會觸發其他 workflow，所以明確啟動網站部署
+              gh workflow run pages.yml --ref main || echo "網站部署未觸發（pages.yml 尚未存在？）"
+              exit 0
+            fi
             sleep 15
           done
           echo "推送失敗" >&2
