@@ -237,6 +237,15 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(second[b]["first_price"], "9000")
         self.assertEqual(second[d]["status"], T.STATUS_DELETED)
 
+    def test_sold_on_first_sight_has_no_days(self):
+        pa = self.paths[0]
+        self.arts[pa] = ("[販售] 台北 iPhone 15 pro 256 已售出", self.arts[pa][1], "")
+        rows = self.run_main()
+        row = rows[T.BASE_URL + pa]
+        self.assertEqual((row["status"], row["days_to_sell"]), (T.STATUS_SOLD, ""))
+        legacy = dict(row, days_to_sell="1.1", sold_detected_at=row["first_seen"])
+        self.assertTrue(T.sold_on_first_sight(legacy))
+
 
 if __name__ == "__main__":
     unittest.main()

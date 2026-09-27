@@ -580,7 +580,7 @@ def process_article(url, listings, use_llm, stats):
     if row is None:
         if not use_llm:
             return  # 新文章要等有 LLM 時才解析
-        print("    [NEW] 新文章，送 LLM 解析。")
+        print("    [NEW] 新文章，解析欄位。")
         fields = safe_extract(art, stats)
         if fields is None:
             # 仍記錄 hash，避免每次重跑；status 標成「略過」不進行情統計
@@ -605,7 +605,8 @@ def process_article(url, listings, use_llm, stats):
                 stats["price_changes"] += 1
             row.update(fields)
 
-    prev_checked = row.get("last_checked") or row.get("first_seen", "")
+    # 新文章沒有上次檢查時間：第一次看到就已售出時，無從得知何時賣掉，不計售出天數
+    prev_checked = row.get("last_checked", "")
     row["title"] = art["title"]
     row["body_hash"] = h
     row["last_checked"] = now_str()
@@ -631,6 +632,16 @@ def safe_extract(art, stats):
 # ==========================================
 # 第四階段：行情彙整
 # ==========================================
+def sold_on_first_sight(row):
+    """舊版會替「第一次看到就已售出」的文章算售出天數；這類資料不採計。"""
+    try:
+        first = datetime.strptime(row["first_seen"], "%Y-%m-%d %H:%M:%S")
+        sold = datetime.strptime(row["sold_detected_at"], "%Y-%m-%d %H:%M:%S")
+    except (KeyError, ValueError):
+        return False
+    return abs((sold - first).total_seconds()) < 600
+
+
 def median(xs):
     return int(statistics.median(xs)) if xs else ""
 
@@ -651,7 +662,8 @@ def build_summary(listings, path=None):
     for (model, storage, new), items in groups.items():
         prices = [p for _, p in items]
         sold = [(r, p) for r, p in items if r["status"] == STATUS_SOLD]
-        days = [float(r["days_to_sell"]) for r, _ in sold if r.get("days_to_sell") not in ("", None)]
+        days = [float(r["days_to_sell"]) for r, _ in sold
+                if r.get("days_to_sell") not in ("", None) and not sold_on_first_sight(r)]
         batt = [to_int(r.get("battery_health")) for r, _ in items if to_int(r.get("battery_health"))]
         rows.append({
             "model": model, "storage": storage, "全新未拆封機": new,
