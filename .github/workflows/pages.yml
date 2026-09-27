@@ -1,0 +1,48 @@
+# 建置並部署「PTT每日交易觀測」網站到 GitHub Pages。
+# 爬蟲排程在另一個 workflow；這裡只讀 data/ 的 CSV。
+name: 網站部署
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "data/**"
+      - "site/**"
+      - ".github/workflows/pages.yml"
+  # 爬蟲若用 GITHUB_TOKEN 推送 data/，不會觸發上面的 push，所以每天另外排一次
+  schedule:
+    - cron: "30 0 * * *"   # 每天台灣時間 08:30
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 建置網站
+        run: python site/build_site.py --out _site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PTT每日交易觀測</title>
+  <meta name="description" content="每天整理 PTT MacShop 版 iPhone 二手機的新刊登、售出與行情。">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <h1>PTT每日交易觀測</h1>
+      <p class="sub">MacShop 版 iPhone 二手機 · <span id="updated">載入中…</span></p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="day-bar" aria-label="選擇日期">
+      <button id="prev-day" type="button" aria-label="前一天">‹</button>
+      <input id="day" type="date">
+      <button id="next-day" type="button" aria-label="後一天">›</button>
+      <button id="latest-day" type="button" class="ghost">最新一天</button>
+    </section>
+
+    <section class="kpis" id="kpis"></section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>近 30 天走勢</h2>
+        <div class="legend"><span class="sw new"></span>新刊登 <span class="sw sold"></span>偵測售出 <span class="sw shelf"></span>日終在架</div>
+      </div>
+      <div id="chart" class="chart"></div>
+      <p class="hint">點長條可切換到那一天。</p>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2 id="day-title">當日動態</h2>
+        <div class="tabs" role="tablist">
+          <button type="button" data-tab="new" class="on">新刊登</button>
+          <button type="button" data-tab="sold">售出</button>
+          <button type="button" data-tab="events">改價／刪文</button>
+        </div>
+      </div>
+      <div id="day-list"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>型號行情</h2>
+        <input id="model-q" type="search" placeholder="篩選型號，例如 15 Pro">
+      </div>
+      <div class="scroll"><table id="models"></table></div>
+      <p class="hint">「成交價」是偵測到售出時的最後標價，PTT 沒有真實成交價。售出天數取決於回訪頻率。</p>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>所有追蹤中的文章</h2>
+        <div class="filters">
+          <select id="status-f">
+            <option value="">全部狀態</option>
+            <option>在售</option><option>交易中</option><option>已售出</option><option>已刪除</option>
+          </select>
+          <input id="list-q" type="search" placeholder="搜尋型號或備註">
+        </div>
+      </div>
+      <div id="all-list"></div>
+      <button id="more" type="button" class="ghost more" hidden>顯示更多</button>
+    </section>
+  </main>
+
+  <footer class="wrap foot">
+    <p>資料來源：PTT MacShop 版標題含「[販售]」與 iPhone 的文章，由 <a href="https://github.com/iPliny/ptt-iphone-tracker">ptt-iphone-tracker</a> 每日回訪整理。
+    下載原始資料：<a href="data/listings.csv">listings.csv</a> · <a href="data/events.csv">events.csv</a> · <a href="data/market_summary.csv">market_summary.csv</a></p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

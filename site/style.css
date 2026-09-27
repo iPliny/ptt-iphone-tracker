@@ -1,0 +1,102 @@
+:root {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --ink: #1b1f24;
+  --muted: #5f6b7a;
+  --line: #e2e6eb;
+  --accent: #2563eb;
+  --new: #2563eb;
+  --sold: #16a34a;
+  --del: #9ca3af;
+  --shelf: #f59e0b;
+  --chip: #eef2f7;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111418;
+    --card: #1a1f25;
+    --ink: #e6e9ed;
+    --muted: #97a3b3;
+    --line: #2b323b;
+    --accent: #60a5fa;
+    --new: #60a5fa;
+    --sold: #4ade80;
+    --del: #6b7280;
+    --shelf: #fbbf24;
+    --chip: #232a33;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.6 -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+.top { background: var(--card); border-bottom: 1px solid var(--line); padding: 20px 0 14px; }
+h1 { margin: 0; font-size: 26px; letter-spacing: .02em; }
+h2 { margin: 0; font-size: 17px; }
+.sub { margin: 4px 0 0; color: var(--muted); }
+
+.day-bar { display: flex; gap: 8px; align-items: center; margin: 18px 0 12px; flex-wrap: wrap; }
+button, input, select {
+  font: inherit; color: var(--ink); background: var(--card);
+  border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
+}
+button { cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button:disabled { opacity: .4; cursor: default; }
+.ghost { background: transparent; }
+
+.kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.kpi { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.kpi .label { color: var(--muted); font-size: 13px; }
+.kpi .value { font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.kpi .note { color: var(--muted); font-size: 12px; }
+@media (max-width: 720px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin: 14px 0; }
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+.legend { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-left: 6px; }
+.sw.new { background: var(--new); } .sw.sold { background: var(--sold); } .sw.shelf { background: var(--shelf); height: 3px; }
+
+.chart { width: 100%; overflow-x: auto; }
+.chart svg { display: block; width: 100%; min-width: 560px; height: 220px; }
+.chart .axis { fill: var(--muted); font-size: 11px; }
+.chart .grid { stroke: var(--line); }
+.chart .bar-new { fill: var(--new); }
+.chart .bar-sold { fill: var(--sold); }
+.chart .shelf { fill: none; stroke: var(--shelf); stroke-width: 2; }
+.chart .hit { fill: transparent; cursor: pointer; }
+.chart .hit:hover, .chart .hit.sel { fill: var(--chip); }
+
+.tabs { display: flex; gap: 4px; }
+.tabs button { border-radius: 999px; padding: 4px 12px; }
+.tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 500; font-size: 13px; cursor: pointer; user-select: none; }
+th.sorted::after { content: " ▾"; }
+th.sorted.asc::after { content: " ▴"; }
+td.num, th.num { text-align: right; }
+td.notes { white-space: normal; color: var(--muted); font-size: 13px; min-width: 180px; }
+
+.items { display: grid; gap: 8px; }
+.item { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.item .name { font-weight: 600; }
+.item .price { font-weight: 650; font-size: 17px; text-align: right; font-variant-numeric: tabular-nums; }
+.item .meta { color: var(--muted); font-size: 13px; }
+.item .side { text-align: right; }
+.chip { display: inline-block; background: var(--chip); border-radius: 999px; padding: 0 8px; font-size: 12px; margin-right: 4px; }
+.st-在售 { color: var(--new); } .st-交易中 { color: var(--shelf); } .st-已售出 { color: var(--sold); } .st-已刪除 { color: var(--del); }
+.empty { color: var(--muted); padding: 18px 0; text-align: center; }
+.more { display: block; margin: 12px auto 0; }
+.foot { color: var(--muted); font-size: 13px; padding-bottom: 32px; }
