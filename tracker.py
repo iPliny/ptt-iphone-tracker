@@ -6,15 +6,17 @@ v1 的問題：每次只看最新 2 頁，文章一旦被擠出前 2 頁就再�
 
 v2 的流程（每次執行都做完這四步）：
   1. 掃描：往回翻頁，直到文章時間早於 --days 天前（上限 --max-pages 頁）。
-  2. 萃取：新文章、或「本文」有被編輯（推文不算）的文章才送 Ollama 解析。
+  2. 萃取：新文章、或「本文」有被編輯（推文不算）的文章才解析欄位；
+     預設依發文範本用規則萃取（雲端可跑），--extractor ollama 改用本機 LLM。
   3. 回訪：所有仍在售、且發文在 --track-days 天內的文章逐篇重新打開，
-     只用標題/本文關鍵字判斷是否已售出或被刪除（不耗 LLM 算力）。
+     只用標題/本文關鍵字判斷是否已售出或被刪除。
   4. 彙整：輸出 data/ 底下的 listings.csv（每篇文章一列、最新狀態）、events.csv（變動紀錄）、
      market_summary.csv（各型號行情）。
 
 用法：
-  python tracker.py                 # 完整執行
-  python tracker.py --no-llm        # 只回訪既有文章、更新成交狀態（不需開 Ollama）
+  python tracker.py                 # 完整執行（GitHub Actions 每 6 小時跑這個）
+  python tracker.py --extractor ollama   # 改用本機 Ollama 萃取
+  python tracker.py --track-only    # 只回訪既有文章、更新成交狀態
   python tracker.py --report-only   # 只重算行情彙整
   python tracker.py --migrate data/macshop_raw_data_v1.csv   # 把 v1 的 CSV 匯入成 listings.csv
 """
@@ -31,17 +33,18 @@ import time
 from datetime import datetime, timedelta
 
 import requests
-import urllib3
 from bs4 import BeautifulSoup
 
 try:
-    urllib3.disable_warnings(urllib3.exceptions.NotOpenSSLWarning)
-except AttributeError:
-    pass
+    # 模擬瀏覽器 TLS 指紋；GitHub Actions 等雲端 IP 用一般 requests 會被 Cloudflare 擋（403）
+    from curl_cffi import requests as cffi_requests
+except ImportError:
+    cffi_requests = None
 
 BASE_URL = "https://www.ptt.cc"
 INDEX_URL = BASE_URL + "/bbs/MacShop/index.html"
 HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
+IMPERSONATE = ["chrome", "safari", "firefox"]  # 被 403 時依序換一種瀏覽器指紋
 OLLAMA_MODEL = "qwen2.5:32b"
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
@@ -107,21 +110,25 @@ def post_time_from_url(url):
     return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M:%S") if ts else ""
 
 
+def _get(url, attempt):
+    if cffi_requests is not None:
+        return cffi_requests.get(url, impersonate=IMPERSONATE[attempt % len(IMPERSONATE)], timeout=20)
+    return requests.get(url, headers=HEADERS, timeout=20)
+
+
 def fetch(url, max_retries=3):
     """回傳 (status_code, text)。404 直接回傳，不重試；連線失敗回傳 (None, None)。"""
     for attempt in range(max_retries):
         try:
-            r = requests.get(url, headers=HEADERS, timeout=10)
+            r = _get(url, attempt)
             if r.status_code in (200, 404):
                 return r.status_code, r.text
             print(f"[WARN] 伺服器回傳異常狀態碼：{r.status_code}")
-        except requests.exceptions.ConnectionError:
-            wait = 15 * (attempt + 1)
-            print(f"[WARN] 連線被重置，等待 {wait} 秒後第 {attempt + 1} 次重試...")
-            time.sleep(wait)
+            time.sleep(5 * (attempt + 1))
         except Exception as e:
-            print(f"[ERROR] 未知的網路錯誤：{e}")
-            break
+            wait = 15 * (attempt + 1)
+            print(f"[WARN] 連線失敗（{type(e).__name__}），等待 {wait} 秒後第 {attempt + 1} 次重試...")
+            time.sleep(wait)
     return None, None
 
 
@@ -270,7 +277,145 @@ def is_iphone_sale_title(title):
 
 
 # ==========================================
-# LLM 萃取
+# 規則萃取（預設，不需 LLM；依 MacShop 發文範本）
+# 範本欄位：[型號] [規格] [保固] [盒裝配件] [售價] [交易方式/地點] [連絡方式] [商品照/補充說明]
+# ==========================================
+_FIELD_RE = re.compile(r"^\s*[\[【［]\s*([^\]】］\n]{1,12}?)\s*[\]】］]\s*[:：]?\s*(.*)$")
+_ACCESSORY_RE = re.compile(r"殼|保護貼|玻璃貼|鏡頭貼|充電器|充電線|傳輸線|豆腐頭|耳機|錶帶|卡夾|支架|包膜")
+_BRAND_NEW_RE = re.compile(r"全新未拆|未拆封|未開通|未啟用|全新未使用|膜未撕")
+# 「配件全新未使用」「傳輸線全新」這類描述的是配件，不是機身
+_ACCESSORY_NEW_RE = re.compile(r"(配件|傳輸線|充電線|線材|耳機|殼|保護貼|玻璃貼|保貼|卡針|豆腐頭)[^，,。\n]{0,15}?(全新|未使用|未拆)[^，,。\n]*")
+_NUMBERED_LINE_RE = re.compile(r"^\s*[1-9]\s*[.、)）:：]?\s*\S", re.M)
+VALID_STORAGE_GB = {32, 64, 128, 256, 512}
+_BATTERY_RE = re.compile(r"(?:電池|健康度|battery|bh)[^\d\n]{0,10}(\d{2,3})\s*%?", re.I)
+_DATE_RE = re.compile(r"(20\d{2})\s*[/.\-年]\s*(\d{1,2})(?:\s*[/.\-月]\s*(\d{1,2}))?")
+
+
+def split_template(body):
+    """把本文依 [欄位] 切開；值可能在同一行或下一行。回傳 {欄位名: 內容}。"""
+    fields, key = {}, None
+    for line in body.splitlines():
+        m = _FIELD_RE.match(line)
+        if m:
+            key = m.group(1).strip()
+            fields[key] = m.group(2).strip()
+        elif key is not None:
+            fields[key] = (fields[key] + "\n" + line.strip()).strip()
+    return fields
+
+
+def _field(fields, *names):
+    for k, v in fields.items():
+        if any(n in k for n in names):
+            return v
+    return ""
+
+
+def parse_price(text):
+    """'41,500元'、'NT$ 20000'、'2.5萬' → int；取第一個合理的金額。"""
+    text = text.replace(",", "").replace("，", "")
+    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*(萬|w|k|千)?", text, re.I):
+        n, unit = float(m.group(1)), (m.group(2) or "").lower()
+        n *= {"萬": 10000, "w": 10000, "k": 1000, "千": 1000}.get(unit, 1)
+        if 1000 <= n <= 200000:
+            return int(n)
+    return None
+
+
+def parse_storage(*texts):
+    """依序在各段文字找容量，跳過不合理的數字（如筆誤 265G）。"""
+    for t in texts:
+        for m in re.finditer(r"(\d{1,4})\s*(g|gb|t|tb)\b|(?<!\d)(\d{2,3})(?!\d)", t or "", re.I):
+            if m.group(2):
+                n, unit = int(m.group(1)), m.group(2).lower()
+                if unit.startswith("t") and n in (1, 2):
+                    return f"{n}TB"
+                if unit.startswith("g") and n in VALID_STORAGE_GB:
+                    return f"{n}GB"
+            elif int(m.group(3)) in (64, 128, 256, 512):
+                return f"{m.group(3)}GB"
+    return None
+
+
+def strip_signature(text):
+    text = re.split(r"\n--+\s*\n|\n-{3,}", "\n" + text)[0]
+    return "\n".join(l for l in text.splitlines() if not l.strip().lower().startswith("sent from"))
+
+
+def is_brand_new(title, fields):
+    """機身全新未拆才算；配件全新、已過保、電池非 100% 都不算。"""
+    if re.search(r"過保|無保", _field(fields, "保固")):
+        return False
+    bh = _BATTERY_RE.search("\n".join(fields.values()))
+    if bh and int(bh.group(1)) < 100:
+        return False
+    if re.search(r"全新|未拆", title) and "二手" not in title:
+        return True
+    text = "\n".join(v for k, v in fields.items() if not any(n in k for n in ("交易", "連絡", "聯絡")))
+    return bool(_BRAND_NEW_RE.search(_ACCESSORY_NEW_RE.sub("", text)))
+
+
+def parse_warranty(text):
+    t = (text or "").strip()
+    if not t:
+        return None
+    if re.search(r"過保|^無|無保|沒有保固|已過", t):
+        return "無保固"
+    m = _DATE_RE.search(t)
+    if m:
+        return "/".join(g for g in m.groups() if g)
+    if re.search(r"一年|1年|開通", t):
+        return "一年"
+    return t.splitlines()[0][:30]
+
+
+def rule_extract(title, body):
+    """回傳與 LLM 相同格式的 dict；無法確定是單一 iPhone 時 model 為 None。"""
+    body = strip_signature(body)
+    fields = split_template(body)
+    model_text = _field(fields, "型號", "品名", "物品")
+    spec = _field(fields, "規格", "容量", "顏色")
+    price_text = _field(fields, "售價", "價格", "價錢")
+    note = _field(fields, "補充", "說明", "備註", "附註")
+    bare_title = re.sub(r"^\[[^\]]*\]\s*", "", title)
+
+    # 一篇賣多支（型號欄是 1. 2. 編號清單）→ 價格無法對應單機，略過
+    multi = len(_NUMBERED_LINE_RE.findall(model_text)) >= 2
+    model = None
+    # 型號欄常只寫 A2633、MG6K4ZP/A 這類料號，依序改用規格欄、標題
+    for source in (model_text, spec, bare_title):
+        if not source or not re.search(r"i\s*phone|愛鳳", title + source, re.I):
+            continue
+        numbers = set(re.findall(r"(?<![\d.])(1[0-9]|[4-9])(?:\s*(?:pro|plus|mini|max|e)\b|\b)", source, re.I))
+        cand = normalize_model(source)
+        if cand.startswith("iPhone") and len(numbers) <= 1 and not _ACCESSORY_RE.search(source):
+            model = cand
+            break
+    if multi:
+        model = None
+
+    battery = None
+    m = _BATTERY_RE.search(body)
+    if m and 50 <= int(m.group(1)) <= 100:
+        battery = int(m.group(1))
+
+    # 去掉網址與賣家沒刪的發文範本提示
+    note = "\n".join(l for l in note.splitlines() if not re.search(r"水桶|板規|請再次確認|詳閱|需附實物照|入鏡", l))
+    notes = re.sub(r"https?://\S+", "", note)
+    notes = re.sub(r"\s+", " ", notes).strip()[:120]
+    return {
+        "model": model,
+        "storage": parse_storage(spec, model_text, bare_title),
+        "price": parse_price(price_text) if price_text else None,
+        "battery_health": battery,
+        "warranty": parse_warranty(_field(fields, "保固")),
+        "notes": notes,
+        "is_brand_new": is_brand_new(title, fields),
+    }
+
+
+# ==========================================
+# LLM 萃取（選用：本機有 Ollama 時可用 --extractor ollama）
 # ==========================================
 def llm_extract(title, body):
     import ollama  # 延遲載入：--no-llm 模式不需要安裝 / 啟動 Ollama
@@ -470,9 +615,13 @@ def process_article(url, listings, use_llm, stats):
         stats["sold"] += 1
 
 
+EXTRACTOR = "rules"
+
+
 def safe_extract(art, stats):
     try:
-        return build_fields(llm_extract(art["title"], art["body"]))
+        extract = llm_extract if EXTRACTOR == "ollama" else rule_extract
+        return build_fields(extract(art["title"], art["body"]))
     except Exception as e:
         print(f"    [ERR] LLM 解析失敗：{e}")
         stats["errors"] += 1
@@ -561,7 +710,10 @@ def main():
     ap.add_argument("--days", type=int, default=3, help="掃描看板時往回看幾天的新文章（預設 3）")
     ap.add_argument("--max-pages", type=int, default=30, help="掃描看板最多翻幾頁（預設 30）")
     ap.add_argument("--track-days", type=int, default=45, help="在售文章發文後持續回訪幾天（預設 45）")
-    ap.add_argument("--no-llm", action="store_true", help="不呼叫 Ollama，只回訪既有文章更新狀態")
+    ap.add_argument("--extractor", choices=["rules", "ollama"], default="rules",
+                    help="欄位萃取方式：rules＝依發文範本（預設，雲端可跑）；ollama＝本機 LLM")
+    ap.add_argument("--no-llm", "--track-only", dest="no_llm", action="store_true",
+                    help="不解析新文章，只回訪既有文章更新狀態")
     ap.add_argument("--report-only", action="store_true", help="只重算行情彙整")
     ap.add_argument("--migrate", metavar="V1_CSV", help="匯入 v1 的 macshop_raw_data.csv")
     args = ap.parse_args()
@@ -574,7 +726,9 @@ def main():
 
     if not args.report_only and not args.migrate:
         stats = {"new": 0, "sold": 0, "deleted": 0, "price_changes": 0, "errors": 0}
-        use_llm = not args.no_llm
+        use_llm = not args.no_llm  # 是否解析新文章／被編輯的文章
+        global EXTRACTOR
+        EXTRACTOR = args.extractor
 
         print("=" * 60 + "\n[INFO] 第一階段：掃描看板\n" + "=" * 60)
         targets = [] if not use_llm else scan_board(args.days, args.max_pages)

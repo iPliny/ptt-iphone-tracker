@@ -45,6 +45,121 @@ class StatusTest(unittest.TestCase):
         self.check("[販售] 台北 iPhone 15 交易中", "", T.STATUS_PENDING)
 
 
+SAMPLE_1 = """[型號] iPhone 17 pro max
+
+[規格] 256gb/橘
+
+[保固] 開通後一年
+
+[盒裝配件] 原廠配件
+
+[售價] 41500元
+
+[交易方式/地點] 台中西屯面交
+
+[連絡方式] 站內信
+
+[商品照/補充說明]
+https://i.imgur.com/0BAjZFr.jpeg
+-----
+Sent from JPTT on my iPhone"""
+
+SAMPLE_2 = """[型號]
+iPhone 14
+[規格]
+128G 藍色
+[保固]
+過保
+[盒裝配件]
+原廠盒裝(不含線)
+[售價]
+7000
+[交易方式/地點]
+林口面交 新莊面交
+[連絡方式]
+站內信
+[商品照/補充說明]
+外觀良好
+電池健康度77%
+https://i.mopix.cc/9T9dgT.jpg"""
+
+
+class RuleExtractTest(unittest.TestCase):
+    def test_same_line_template(self):
+        f = T.build_fields(T.rule_extract("[販售] 台中iPhone 17 pro max 256橘", SAMPLE_1))
+        self.assertEqual((f["model"], f["storage"], f["price"], f["warranty"]),
+                         ("iPhone 17 Pro Max", "256GB", 41500, "一年"))
+
+    def test_next_line_template(self):
+        f = T.build_fields(T.rule_extract("[販售] 雙北 iPhone 14 128G 藍色", SAMPLE_2))
+        self.assertEqual((f["model"], f["storage"], f["price"], f["battery_health"], f["warranty"]),
+                         ("iPhone 14", "128GB", 7000, 77, "無保固"))
+        self.assertIn("外觀良好", f["notes"])
+
+    def test_multi_model_skipped(self):
+        body = "[型號] iPhone 15 Pro/14 Pro Max/13 Pro Max/13/12 Pro\n[售價] 詳見內文"
+        self.assertIsNone(T.build_fields(T.rule_extract("[販售] 台中 iPhone 15 Pro/14 Pro Max", body)))
+
+    def test_accessory_skipped(self):
+        body = "[型號] 犀牛盾手機殼 iPhone 15 Pro 用\n[售價] 1500"
+        self.assertIsNone(T.build_fields(T.rule_extract("[販售] iPhone 15 Pro 手機殼", body)))
+
+    def test_brand_new_and_price_units(self):
+        body = "[型號] iPhone 17\n[規格] 256G 黑 全新未拆封\n[保固] 2027/7/10\n[售價] 2.5萬"
+        f = T.build_fields(T.rule_extract("[販售] 台北 iPhone 17 256GB 黑 全新", body))
+        self.assertEqual((f["全新未拆封機"], f["price"], f["battery_health"]), ("是", 25000, 100))
+        self.assertEqual(T.parse_warranty("保固至 2027/7/10"), "2027/7/10")
+
+
+class RealPostRegressionTest(unittest.TestCase):
+    """取自 2026-09-27 實際 MacShop 文章（精簡），曾被誤判的格式。"""
+
+    def fields(self, title, body):
+        return T.build_fields(T.rule_extract(title, body))
+
+    def test_fullwidth_brackets(self):
+        body = "［型號］iPhone 18 Pro max\n［規格］512G 藍色\n［保固］一年\n［售價］56900\n----\nSent from BePTT on my iPhone 17"
+        f = self.fields("[販售] 台中 iPhone 18 Pro max 512G 藍色", body)
+        self.assertEqual((f["model"], f["storage"], f["price"]), ("iPhone 18 Pro Max", "512GB", 56900))
+        f = self.fields("[販售] 桃園 iPhone 15 pro 256G藍 保內",
+                        "[型號］iPhone 15 pro 256G 藍\n[規格］256G 藍\n[保固］2026/10/19\n[售價］現金16500")
+        self.assertEqual((f["model"], f["price"], f["warranty"]), ("iPhone 15 Pro", 16500, "2026/10/19"))
+
+    def test_part_number_in_model_field(self):
+        f = self.fields("[販售] 台中 iPhone 17 Pro 256G 橘",
+                        "[型號]\nA3523\n\n[規格]\niPhone 17 Pro 256G 橘\n\n[保固]\n已過保\n[售價]\n29000")
+        self.assertEqual((f["model"], f["storage"], f["price"]), ("iPhone 17 Pro", "256GB", 29000))
+        f = self.fields("[販售] 台北 iPhone 17 256G 白色",
+                        "[型號] MG6K4ZP/A\n[規格] iPhone 17 265G 白色\n[保固] 2027/06/27\n[售價]25900")
+        self.assertEqual((f["model"], f["storage"]), ("iPhone 17", "256GB"))  # 265G 筆誤改用標題
+        f = self.fields("[販售] 全國 iphone13 128g 紅 過保", "[型號]\n\nA2633\n\n[規格]\n\n128g紅\n\n[售價]\n\n$6500")
+        self.assertEqual((f["model"], f["price"]), ("iPhone 13", 6500))
+
+    def test_numbered_multi_item_skipped(self):
+        body = "[型號]\n1. iPhone 17 256g 白 (全新)\n2. Airpods 5 一般版(全新)\n[售價]\n1.29800\n2.4000"
+        self.assertIsNone(self.fields("[販售] 台北 iPhone 17", body))
+
+    def test_accessory_new_is_not_brand_new(self):
+        cases = [
+            ("[販售] 雙北 iphone XR 256g", "[型號] iPhone XR 256G\n[保固] 過保\n[盒裝配件] 完整盒裝 配件（耳機、線、豆腐頭）全新未使用\n[售價] 3300"),
+            ("[販售] 高雄 iPhone 17 Pro 512G 橘色", "[型號] iPhone 17 Pro\n[保固] 保固至2026/10/20\n[盒裝配件] 原廠盒裝，傳輸線和SIM卡針全新未使用過\n[售價] 35,000\n[商品照/補充說明]\n電池健康度96%"),
+            ("[販售] 新北 iPhone 16 Pro Max 512G 白色", "[型號] iPhone 16 Pro Max (A3296)\n[保固] 已過保\n[盒裝配件] 原廠盒裝完整，配件全新未拆\n[售價] 32,000 元"),
+        ]
+        for title, body in cases:
+            self.assertEqual(self.fields(title, body)["全新未拆封機"], "否", title)
+
+    def test_sealed_phone_is_brand_new(self):
+        f = self.fields("[販售] 台北 iPhone 18 Pro 256GB 紅色",
+                        "[型號] iPhone 18 Pro 256GB 紅色\n[保固] 連網後開通，保固一年\n[盒裝配件] 全新未拆\n[售價] $42500")
+        self.assertEqual((f["全新未拆封機"], f["price"]), ("是", 42500))
+
+    def test_rule_text_in_price_field(self):
+        body = "[型號]\nA3717\n[規格]\niPhone 18 Pro Max 256G\n[售價]\n不得超過台灣官方定價。\n售出後修改價格至不可視者水桶並劣退。\n48200"
+        f = self.fields("[販售] 台北 全新iPhone 18 Pro Max 256G 銀", body)
+        self.assertEqual((f["model"], f["price"], f["全新未拆封機"]), ("iPhone 18 Pro Max", 48200, "是"))
+        self.assertEqual(T.detect_status("[販售] 台北 全新iPhone 18 Pro Max 256G 銀", body), T.STATUS_ACTIVE)
+
+
 class PipelineTest(unittest.TestCase):
     """模擬兩次執行：第一次抓到新文章，第二次文章已擠出首頁，但回訪仍偵測到售出/改價/刪文。"""
 
