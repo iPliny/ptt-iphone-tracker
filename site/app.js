@@ -7,7 +7,7 @@
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const money = (n) => (n == null || n === "" ? "—" : "$" + Number(n).toLocaleString("zh-TW"));
   const dayOf = (ts) => (ts || "").slice(0, 10);
-  const PAGE = 50;
+  const PAGE = 10;
 
   let D = null;
   let byUrl = {};
@@ -15,6 +15,8 @@
   let current = "";
   let tab = "new";
   let listLimit = PAGE;
+  let dayLimit = PAGE;
+  let showAllModels = false;
   let modelSort = { key: "listed", asc: false };
 
   fetch("data.json", { cache: "no-cache" })
@@ -40,12 +42,15 @@
     document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
       tab = b.dataset.tab;
       document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("on", x === b));
+      dayLimit = PAGE;
       renderDayList();
     }));
     $("#model-q").addEventListener("input", renderModels);
     $("#status-f").addEventListener("change", () => { listLimit = PAGE; renderAll(); });
     $("#list-q").addEventListener("input", () => { listLimit = PAGE; renderAll(); });
     $("#more").addEventListener("click", () => { listLimit += PAGE; renderAll(); });
+    $("#day-more").addEventListener("click", () => { dayLimit += PAGE; renderDayList(); });
+    $("#models-more").addEventListener("click", () => { showAllModels = !showAllModels; renderModels(); });
 
     renderModels();
     renderAll();
@@ -60,6 +65,7 @@
 
   function select(date) {
     current = date;
+    dayLimit = PAGE;
     $("#day").value = date;
     const i = dayIdx[date];
     $("#prev-day").disabled = !(i > 0);
@@ -141,22 +147,24 @@
   function renderDayList() {
     const date = current;
     $("#day-title").textContent = date ? date + " 動態" : "當日動態";
-    let html = "";
+    let items = [];  // 每項是一個回傳 HTML 的函式，只畫出要顯示的那幾篇
     if (tab === "new") {
-      const rows = D.listings.filter((r) => dayOf(r.post_time) === date);
-      html = rows.map((r) => itemHtml(r)).join("");
+      items = D.listings.filter((r) => dayOf(r.post_time) === date).map((r) => () => itemHtml(r));
     } else if (tab === "sold") {
-      const rows = D.listings.filter((r) => r.status === "已售出" && dayOf(r.sold_at) === date);
-      html = rows.map((r) => itemHtml(r, r.days_to_sell != null ? "上架 " + r.days_to_sell + " 天後售出" : "售出天數未知（回訪間隔太長）")).join("");
+      items = D.listings.filter((r) => r.status === "已售出" && dayOf(r.sold_at) === date)
+        .map((r) => () => itemHtml(r, r.days_to_sell != null ? "上架 " + r.days_to_sell + " 天後售出" : "售出天數未知（回訪間隔太長）"));
     } else {
-      const evs = D.events.filter((e) => dayOf(e.time) === date && (e.event === "價格變動" || /已刪除$/.test(e.detail)));
-      html = evs.map((e) => {
-        const r = byUrl[e.url] || { url: e.url, post_time: "", status: "", title: e.url };
-        const what = e.event === "價格變動" ? "改價 " + e.detail.replace(/(\d+)/g, (n) => money(n)) : "刪文";
-        return itemHtml(r, e.time.slice(11, 16) + " " + what);
-      }).join("");
+      items = D.events.filter((e) => dayOf(e.time) === date && (e.event === "價格變動" || /已刪除$/.test(e.detail)))
+        .map((e) => () => {
+          const r = byUrl[e.url] || { url: e.url, post_time: "", status: "", title: e.url };
+          const what = e.event === "價格變動" ? "改價 " + e.detail.replace(/(\d+)/g, (n) => money(n)) : "刪文";
+          return itemHtml(r, e.time.slice(11, 16) + " " + what);
+        });
     }
-    $("#day-list").innerHTML = html ? `<div class="items">${html}</div>` : '<p class="empty">這天沒有紀錄</p>';
+    $("#day-list").innerHTML = items.length
+      ? `<div class="items">${items.slice(0, dayLimit).map((f) => f()).join("")}</div>`
+      : '<p class="empty">這天沒有紀錄</p>';
+    setMore("#day-more", items.length - dayLimit);
   }
 
   // ---------- 型號行情 ----------
@@ -168,7 +176,10 @@
 
   function renderModels() {
     const q = $("#model-q").value.trim().toLowerCase();
-    const rows = D.models.filter((m) => !q || (m.model + " " + m.storage).toLowerCase().includes(q));
+    const matched = D.models.filter((m) => !q || (m.model + " " + m.storage).toLowerCase().includes(q));
+    // 只有 1 篇刊登的型號參考價值低，預設收起來；搜尋時照樣列出
+    const hidden = q ? 0 : matched.filter((m) => m.listed <= 1).length;
+    const rows = showAllModels || q ? matched : matched.filter((m) => m.listed > 1);
     const { key, asc } = modelSort;
     rows.sort((a, b) => {
       const x = a[key], y = b[key];
@@ -190,6 +201,9 @@
       modelSort = { key: k, asc: modelSort.key === k ? !modelSort.asc : k === "model" || k === "storage" };
       renderModels();
     }));
+    const btn = $("#models-more");
+    btn.hidden = hidden === 0;
+    btn.textContent = showAllModels ? "收起只有 1 篇刊登的型號" : "顯示更多（另有 " + hidden + " 個只有 1 篇刊登的型號）";
   }
 
   // ---------- 全部文章 ----------
@@ -201,6 +215,12 @@
     $("#all-list").innerHTML = rows.length
       ? `<div class="items">${rows.slice(0, listLimit).map((r) => itemHtml(r)).join("")}</div>`
       : '<p class="empty">沒有符合的文章</p>';
-    $("#more").hidden = rows.length <= listLimit;
+    setMore("#more", rows.length - listLimit);
+  }
+
+  function setMore(sel, rest) {
+    const btn = $(sel);
+    btn.hidden = rest <= 0;
+    btn.textContent = "顯示更多（還有 " + rest + " 篇）";
   }
 })();
