@@ -1,3 +1,5 @@
 requests
+curl_cffi
 beautifulsoup4
-ollama
+# 選用：本機用 --extractor ollama 時才需要
+# ollama

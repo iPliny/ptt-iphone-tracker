@@ -1,50 +1,42 @@
-# iPhone 二手機成交追蹤 v2
+# PTT MacShop iPhone 二手機成交追蹤
 
-## 這版改了什麼
-| 問題（v1） | v2 做法 |
-|---|---|
-| 只看最新 2 頁，文章被擠下去就不再回訪，所以永遠抓不到「已售出」（現有 11 筆全是「否」） | 每次執行都把 45 天內仍在售的文章逐篇重新打開，只用關鍵字判斷售出／交易中／已刪除，不耗 LLM |
-| CSV 是附加寫入，同一篇被編輯會出現兩列 | `listings.csv` 每篇一列、保存最新狀態；變動另記在 `events.csv`（新刊登、改價、售出、刪文） |
-| 雜湊包含推文，有人推文就重跑 LLM | 只對「本文」算雜湊，推文不觸發重新解析 |
-| 固定翻 2 頁 | 翻到 `--days` 天前為止（預設 3 天，上限 30 頁） |
-| 型號寫法不一（iphone 11 pro / iPhone 17 pro max） | 統一成 `iPhone 11 Pro`、`iPhone 15 Pro Max`，也吃 `15pm`、`i14` 等縮寫 |
-| 內文任何「售出」都算已售 | 只認標題、或本文中單獨一行的「已售出」；「售出後…」這類版規句不算 |
-| 沒有彙整 | `market_summary.csv`：各型號×容量的刊登數、售出率、刊登價／已售標價中位數、售出天數中位數 |
+每 6 小時由 GitHub Actions 自動掃描 PTT MacShop 版的 iPhone 販售文，回訪還在賣的文章判斷是否已售出，結果 commit 回 `data/`。不需要開電腦。
 
-LLM 萃取提示詞與 v1 相同，另外把標題也一併送進去。
+## 怎麼運作
+1. **掃描**：往回翻看板，收集 `--days` 天內標題含 `[販售]` 與 iPhone 的文章。
+2. **萃取**：新文章（或本文被編輯的文章）依 MacShop 發文範本（`[型號]`、`[規格]`、`[保固]`、`[售價]`…）用規則抓出型號、容量、價格、電池、保固、是否全新未拆。一篇賣多支、只賣配件的文章會被略過。
+3. **回訪**：45 天內仍在售的文章逐篇重新打開，標題或本文出現「已售出」就記為已售出並算出售出天數；文章被刪記為已刪除。
+4. **彙整**：輸出各型號 × 容量的行情。
 
-## 檔案結構
+ptt.cc 前面有 Cloudflare，雲端主機用一般 `requests` 會拿到 403，所以抓取改用 `curl_cffi` 模擬瀏覽器。
+
+## 資料
 ```
-tracker.py               主程式（掃描 → LLM 萃取 → 回訪追蹤 → 行情彙整）
-data/listings.csv        每篇文章一列的最新狀態
-data/events.csv          變動紀錄（新刊登、改價、售出、刪文；第一次執行後產生）
-data/market_summary.csv  各型號 × 容量行情
+data/listings.csv        每篇文章一列的最新狀態（主鍵 source_url）
+data/events.csv          變動紀錄：新刊登、價格變動、狀態變更
+data/market_summary.csv  各型號 × 容量：刊登數、售出率、刊登價／已售標價中位數、售出天數中位數
 data/macshop_raw_data_v1.csv  v1 原始資料（已匯入 listings.csv）
-legacy/master_pipeline_v1.py  v1 程式，保留參考
-tests/                   離線測試（假 PTT 頁面 + 假 LLM）
 ```
+`status`：在售／交易中／已售出／已刪除／略過（非單一 iPhone 或抓不到單機價格）。
 
-## 執行
+## 排程與手動執行
+- 排程：`.github/workflows/track.yml`，台灣時間 02、08、14、20 點。
+- 手動：GitHub 上 Actions → Track PTT listings → Run workflow，可調 `days`（往回掃幾天）與 `track_days`（回訪幾天內的文章）。
+
+本機也能跑：
 ```bash
 pip install -r requirements.txt
-
-# 一次性：3 月那 11 篇超過 45 天追蹤期，手動放寬回訪一次看賣掉沒
-python tracker.py --no-llm --track-days 400
-
-# 之後每天跑（需開 Ollama，模型 qwen2.5:32b）
-python tracker.py
-
-# 測試
-python -m unittest
-```
-
-售出天數的精準度取決於你多久跑一次；兩次檢查間隔超過 3 天就不計算天數（只記錄已售出）。
-建議每天固定跑，例如 `crontab -e` 加一行（路徑改成你的）：
-```
-0 */6 * * * cd ~/ptt-iphone-tracker && /usr/bin/python3 tracker.py >> run.log 2>&1
+python tracker.py                      # 完整執行（規則萃取）
+python tracker.py --extractor ollama   # 改用本機 Ollama qwen2.5:32b 萃取（需另外 pip install ollama）
+python tracker.py --track-only         # 只回訪既有文章
+python tracker.py --report-only        # 只重算行情
+python -m unittest                     # 離線測試
 ```
 
 ## 限制
 - PTT 沒有真實成交價，「成交價」是售出時最後的標價。
-- 賣家若直接刪文，記為「已刪除」，不算進售出數。
-- v1 的 `scraping_history.json` 已不再使用（雜湊改存在 listings.csv）。
+- 賣家直接刪文記為「已刪除」，不算進售出數。
+- 售出天數的精準度約等於排程間隔（6 小時）；兩次檢查間隔超過 3 天就不計天數。
+- 規則萃取依發文範本，賣家亂寫格式時可能抓不到而被略過；遇到時把文章網址丟進 issue，補一條測試再修規則。
+
+`legacy/master_pipeline_v1.py` 是原本的 v1 程式，留作參考。

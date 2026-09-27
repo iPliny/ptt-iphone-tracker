@@ -1,0 +1,51 @@
+name: Track PTT listings
+
+# 每 6 小時（台灣時間 02/08/14/20 點）掃描 MacShop、回訪在售文章，結果 commit 回 data/
+on:
+  schedule:
+    - cron: "0 0,6,12,18 * * *"
+  workflow_dispatch:
+    inputs:
+      track_days:
+        description: "在售文章發文後持續回訪幾天"
+        default: "45"
+      days:
+        description: "掃描看板時往回看幾天"
+        default: "3"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: track
+  cancel-in-progress: false
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Scan and track
+        run: python tracker.py --days "${{ inputs.days || '3' }}" --track-days "${{ inputs.track_days || '45' }}"
+      - name: Commit data
+        run: |
+          git config user.name "ptt-tracker-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "資料沒有變動。"
+            exit 0
+          fi
+          git commit -m "資料更新 $(TZ=Asia/Taipei date '+%F %H:%M')"
+          # 期間若有人推送，rebase 後重試
+          for attempt in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep 15
+          done
+          echo "推送失敗" >&2
+          exit 1
