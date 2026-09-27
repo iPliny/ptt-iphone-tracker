@@ -55,7 +55,20 @@ def day_of(ts):
         return None
 
 
+def sold_time(r):
+    """售出時間：有售出天數（觀測或推估）就用發文時間加天數，否則退回偵測到售出的時間。"""
+    days = to_float(r.get("days_to_sell"))
+    try:
+        posted = datetime.strptime((r.get("post_time") or "").strip(), "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        posted = None
+    if days is not None and posted is not None:
+        return (posted + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    return r.get("sold_detected_at", "")
+
+
 def clean_listing(r):
+    sold = r.get("status") == "已售出"
     return {
         "url": r.get("source_url", ""),
         "post_time": r.get("post_time", ""),
@@ -69,8 +82,10 @@ def clean_listing(r):
         "first_price": to_int(r.get("first_price")),
         "warranty": r.get("warranty", ""),
         "notes": r.get("notes", ""),
-        "sold_at": r.get("sold_detected_at", ""),
+        "sold_at": sold_time(r) if sold else "",
+        "sold_detected_at": r.get("sold_detected_at", ""),
         "days_to_sell": to_float(r.get("days_to_sell")),
+        "days_basis": r.get("days_to_sell_basis", ""),  # 觀測／推估／無法推估；舊資料為空
         "first_seen": r.get("first_seen", ""),
         "last_checked": r.get("last_checked", ""),
     }
@@ -139,7 +154,8 @@ def model_stats(listings):
     for (model, storage), items in sorted(groups.items()):
         prices = [r["price"] for r in items]
         sold = [r for r in items if r["status"] == "已售出"]
-        days = [r["days_to_sell"] for r in sold if r["days_to_sell"] is not None]
+        timed = [r for r in sold if r["days_to_sell"] is not None]
+        days = [r["days_to_sell"] for r in timed]
         out.append({
             "model": model, "storage": storage,
             "listed": len(items),
@@ -149,6 +165,8 @@ def model_stats(listings):
             "median_sold_price": int(statistics.median([r["price"] for r in sold])) if sold else None,
             "min_price": min(prices), "max_price": max(prices),
             "median_days": round(statistics.median(days), 1) if days else None,
+            "days_estimated": sum(1 for r in timed if r["days_basis"] == "推估"),
+            "days_samples": len(timed),
         })
     return out
 

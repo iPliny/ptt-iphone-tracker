@@ -12,7 +12,7 @@ import build_site as S  # noqa: E402
 
 LISTING_HEADER = ["source_url", "post_time", "title", "status", "sold_detected_at", "days_to_sell",
                   "model", "storage", "全新未拆封機", "battery_health", "price", "first_price",
-                  "warranty", "notes", "model_raw", "first_seen", "last_checked", "body_hash"]
+                  "warranty", "notes", "model_raw", "first_seen", "last_checked", "body_hash", "days_to_sell_basis"]
 
 
 def write_csv(path, header, rows):
@@ -81,6 +81,21 @@ class BuildSiteTest(unittest.TestCase):
             self.assertTrue(os.path.exists(os.path.join(out, name)), name)
         with open(os.path.join(out, "data.json"), encoding="utf-8") as f:
             self.assertIn("days", json.load(f))
+
+    def test_estimated_sold_date(self):
+        """推估的售出天數要把售出算回發文日＋天數那天，而不是偵測到的那天。"""
+        path = os.path.join(self.dir, "listings.csv")
+        row = listing("u5", "2026-09-01 12:00:00", status="已售出", sold_at="2026-09-03 10:00:00", days="0.5")
+        row["days_to_sell_basis"] = "推估"
+        with open(path, "a", encoding="utf-8", newline="") as f:
+            csv.DictWriter(f, fieldnames=LISTING_HEADER).writerow(row)
+        data = S.build_data(self.dir)
+        days = {d["date"]: d for d in data["days"]}
+        self.assertEqual((days["2026-09-02"]["sold"], days["2026-09-03"]["sold"]), (2, 0))
+        (m,) = data["models"]
+        self.assertEqual((m["days_estimated"], m["days_samples"]), (1, 2))
+        u5 = next(r for r in data["listings"] if r["url"] == "u5")
+        self.assertEqual((u5["sold_at"], u5["days_basis"]), ("2026-09-02 00:00:00", "推估"))
 
     def test_real_data_builds(self):
         """repo 內現有的 data/ 也要能建置成功。"""

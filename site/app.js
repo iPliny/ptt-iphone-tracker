@@ -87,7 +87,7 @@
     };
     const cards = [
       ["新刊登", d.new, diff("new")],
-      ["偵測售出", d.sold, diff("sold")],
+      ["售出", d.sold, diff("sold")],
       ["刪文", d.deleted, diff("deleted")],
       ["改價", d.price_changes, diff("price_changes")],
       ["日終在架", d.on_shelf, diff("on_shelf")],
@@ -152,7 +152,7 @@
       items = D.listings.filter((r) => dayOf(r.post_time) === date).map((r) => () => itemHtml(r));
     } else if (tab === "sold") {
       items = D.listings.filter((r) => r.status === "已售出" && dayOf(r.sold_at) === date)
-        .map((r) => () => itemHtml(r, r.days_to_sell != null ? "上架 " + r.days_to_sell + " 天後售出" : "售出天數未知（回訪間隔太長）"));
+        .map((r) => () => itemHtml(r, soldNote(r)));
     } else {
       items = D.events.filter((e) => dayOf(e.time) === date && (e.event === "價格變動" || /已刪除$/.test(e.detail)))
         .map((e) => () => {
@@ -165,6 +165,11 @@
       ? `<div class="items">${items.slice(0, dayLimit).map((f) => f()).join("")}</div>`
       : '<p class="empty">這天沒有紀錄</p>';
     setMore("#day-more", items.length - dayLimit);
+  }
+
+  function soldNote(r) {
+    if (r.days_to_sell == null) return "已售出，售出時間無法推估（依偵測日 " + dayOf(r.sold_detected_at) + " 計）";
+    return "上架 " + r.days_to_sell + " 天後售出" + (r.days_basis === "推估" ? "（推估，依最後編輯時間）" : "");
   }
 
   // ---------- 型號行情 ----------
@@ -189,11 +194,18 @@
       const c = typeof x === "number" ? x - y : String(x).localeCompare(String(y), "zh-Hant", { numeric: true });
       return asc ? c : -c;
     });
-    const fmt = (k, v) => (v == null ? "—" : /price/.test(k) ? money(v) : v);
+    const fmt = (k, v, m) => {
+      if (v == null) return "—";
+      if (/price/.test(k)) return money(v);
+      if (k === "median_days" && m.days_estimated) {
+        return v + (m.days_estimated === m.days_samples ? "（推估）" : "（" + m.days_estimated + "/" + m.days_samples + " 推估）");
+      }
+      return v;
+    };
     const head = "<tr>" + MODEL_COLS.map(([k, label, num]) =>
       `<th data-k="${k}" class="${num ? "num " : ""}${k === key ? "sorted" + (asc ? " asc" : "") : ""}">${label}</th>`).join("") + "</tr>";
     const body = rows.map((m) => "<tr>" + MODEL_COLS.map(([k, , num]) =>
-      `<td${num ? ' class="num"' : ""}>${esc(fmt(k, m[k]))}</td>`).join("") + "</tr>").join("");
+      `<td${num ? ' class="num"' : ""}>${esc(fmt(k, m[k], m))}</td>`).join("") + "</tr>").join("");
     $("#models").innerHTML = "<thead>" + head + "</thead><tbody>" +
       (body || `<tr><td colspan="${MODEL_COLS.length}" class="empty">沒有符合的型號</td></tr>`) + "</tbody>";
     $("#models").querySelectorAll("th").forEach((th) => th.addEventListener("click", () => {
