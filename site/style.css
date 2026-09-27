@@ -100,3 +100,4 @@ td.notes { white-space: normal; color: var(--muted); font-size: 13px; min-width:
 .empty { color: var(--muted); padding: 18px 0; text-align: center; }
 .more { display: block; margin: 12px auto 0; }
 .foot { color: var(--muted); font-size: 13px; padding-bottom: 32px; }
+[hidden] { display: none !important; }
