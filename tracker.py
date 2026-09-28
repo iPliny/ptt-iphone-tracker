@@ -783,7 +783,7 @@ def migrate(v1_csv, listings):
 def main():
     ap = argparse.ArgumentParser(description="PTT MacShop iPhone 成交追蹤")
     ap.add_argument("--days", type=int, default=3, help="掃描看板時往回看幾天的新文章（預設 3）")
-    ap.add_argument("--max-pages", type=int, default=30, help="掃描看板最多翻幾頁（預設 30）")
+    ap.add_argument("--max-pages", type=int, default=50, help="掃描看板最多翻幾頁（預設 50）")
     ap.add_argument("--track-days", type=int, default=45, help="在售文章發文後持續回訪幾天（預設 45）")
     ap.add_argument("--extractor", choices=["rules", "ollama"], default="rules",
                     help="欄位萃取方式：rules＝依發文範本（預設，雲端可跑）；ollama＝本機 LLM")
