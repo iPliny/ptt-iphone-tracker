@@ -12,6 +12,10 @@ on:
       days:
         description: "掃描看板時往回看幾天"
         default: "3"
+      reparse:
+        description: "萃取規則改過後勾選：追蹤期內文章全部重新萃取"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -32,7 +36,7 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       - name: Scan and track
-        run: python tracker.py --days "${{ inputs.days || '3' }}" --track-days "${{ inputs.track_days || '45' }}"
+        run: python tracker.py --days "${{ inputs.days || '3' }}" --track-days "${{ inputs.track_days || '45' }}" ${{ inputs.reparse && '--reparse' || '' }}
       - name: Commit data and redeploy site
         env:
           GH_TOKEN: ${{ github.token }}

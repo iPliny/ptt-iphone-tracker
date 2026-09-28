@@ -319,6 +319,32 @@ def split_template(body):
     return fields
 
 
+def split_blocks(body):
+    """
+    一篇賣多樣商品時，賣家常把整份範本重複貼好幾次（iPhone 一段、Apple Watch 一段）。
+    同一個欄位名再次出現就視為新的一段；回傳 [{欄位名: 內容}, ...]。
+    """
+    blocks, fields, key = [], {}, None
+    for line in body.splitlines():
+        m = _FIELD_RE.match(line)
+        if m:
+            key = m.group(1).strip()
+            if key in fields:
+                blocks.append(fields)
+                fields = {}
+            fields[key] = m.group(2).strip()
+        elif key is not None:
+            fields[key] = (fields[key] + "\n" + line.strip()).strip()
+    if fields or not blocks:
+        blocks.append(fields)
+    return blocks
+
+
+def _looks_like_iphone(fields):
+    text = _field(fields, "型號", "品名", "物品") + "\n" + _field(fields, "規格", "容量", "顏色")
+    return bool(re.search(r"i\s*phone|愛鳳", text, re.I) or re.match(r"\s*i?\s*1\d", text, re.I))
+
+
 def _field(fields, *names):
     for k, v in fields.items():
         if any(n in k for n in names):
@@ -387,7 +413,10 @@ def parse_warranty(text):
 def rule_extract(title, body):
     """回傳與 LLM 相同格式的 dict；無法確定是單一 iPhone 時 model 為 None。"""
     body = strip_signature(body)
-    fields = split_template(body)
+    blocks = split_blocks(body)
+    iphone_blocks = [b for b in blocks if _looks_like_iphone(b)]
+    # 有 iPhone 那段就只用那段的欄位，避免被後面其他商品的售價、電池覆蓋
+    fields = iphone_blocks[0] if iphone_blocks else blocks[0]
     model_text = _field(fields, "型號", "品名", "物品")
     spec = _field(fields, "規格", "容量", "顏色")
     price_text = _field(fields, "售價", "價格", "價錢")
@@ -406,11 +435,11 @@ def rule_extract(title, body):
         if cand.startswith("iPhone") and len(numbers) <= 1 and not _ACCESSORY_RE.search(source):
             model = cand
             break
-    if multi:
+    if multi or len(iphone_blocks) > 1:  # 分段賣兩支以上 iPhone，同樣略過
         model = None
 
     battery = None
-    m = _BATTERY_RE.search(body)
+    m = _BATTERY_RE.search("\n".join(fields.values()) if len(blocks) > 1 else body)
     if m and 50 <= int(m.group(1)) <= 100:
         battery = int(m.group(1))
 
@@ -624,6 +653,13 @@ def process_article(url, listings, use_llm, stats):
     h = body_hash(art["body"])
     status = detect_status(art["title"], art["body"])
 
+    first_seen = None
+    if REPARSE and use_llm and row is not None and row.get("status") == "略過":
+        # 規則改進後，先前略過的文章當成新文章重新判斷，但保留第一次看到的時間
+        first_seen = row.get("first_seen")
+        del listings[url]
+        row = None
+
     if row is None:
         if not use_llm:
             return  # 新文章要等有 LLM 時才解析
@@ -634,7 +670,7 @@ def process_article(url, listings, use_llm, stats):
             listings[url] = {"source_url": url, "post_time": post_time_from_url(url), "title": art["title"],
                              "status": "略過", "first_seen": now_str(), "last_checked": now_str(), "body_hash": h}
             return
-        row = {"source_url": url, "post_time": post_time_from_url(url), "first_seen": now_str(),
+        row = {"source_url": url, "post_time": post_time_from_url(url), "first_seen": first_seen or now_str(),
                "status": STATUS_ACTIVE, "first_price": fields["price"], **fields}
         listings[url] = row
         stats["new"] += 1
@@ -642,14 +678,21 @@ def process_article(url, listings, use_llm, stats):
     elif row.get("status") == "略過":
         row["last_checked"] = now_str()
         return
-    elif row.get("body_hash") and row["body_hash"] != h and use_llm:
-        print("    [UPDATE] 本文被編輯，重新解析。")
+    elif use_llm and ((row.get("body_hash") and row["body_hash"] != h) or REPARSE):
+        edited = bool(row.get("body_hash")) and row["body_hash"] != h
+        print("    [UPDATE] 本文被編輯，重新解析。" if edited else "    [REPARSE] 依新規則重新解析。")
         fields = safe_extract(art, stats)
         if fields:
             old_price = to_int(row.get("price"))
             if old_price and fields["price"] != old_price:
-                log_event(url, "價格變動", f"{old_price} → {fields['price']}")
-                stats["price_changes"] += 1
+                if edited:
+                    log_event(url, "價格變動", f"{old_price} → {fields['price']}")
+                    stats["price_changes"] += 1
+                else:
+                    # 本文沒變、只是舊規則抓錯：連首次標價一起更正，不記成價格變動
+                    log_event(url, "重新解析修正", f"{old_price} → {fields['price']}")
+                    if to_int(row.get("first_price")) == old_price:
+                        row["first_price"] = fields["price"]
             row.update(fields)
 
     # 新文章沒有上次檢查時間：第一次看到就已售出時，無從得知何時賣掉，不計售出天數
@@ -669,6 +712,7 @@ def process_article(url, listings, use_llm, stats):
 
 
 EXTRACTOR = "rules"
+REPARSE = False  # --reparse：追蹤期內所有文章都用目前的規則重新萃取
 
 
 def safe_extract(art, stats):
@@ -790,6 +834,8 @@ def main():
     ap.add_argument("--no-llm", "--track-only", dest="no_llm", action="store_true",
                     help="不解析新文章，只回訪既有文章更新狀態")
     ap.add_argument("--report-only", action="store_true", help="只重算行情彙整")
+    ap.add_argument("--reparse", action="store_true",
+                    help="萃取規則改過後使用：追蹤期內所有文章（含已售出、略過）重新萃取欄位")
     ap.add_argument("--migrate", metavar="V1_CSV", help="匯入 v1 的 macshop_raw_data.csv")
     args = ap.parse_args()
 
@@ -802,16 +848,18 @@ def main():
     if not args.report_only and not args.migrate:
         stats = {"new": 0, "sold": 0, "deleted": 0, "price_changes": 0, "errors": 0}
         use_llm = not args.no_llm  # 是否解析新文章／被編輯的文章
-        global EXTRACTOR
+        global EXTRACTOR, REPARSE
         EXTRACTOR = args.extractor
+        REPARSE = args.reparse
 
         print("=" * 60 + "\n[INFO] 第一階段：掃描看板\n" + "=" * 60)
         targets = [] if not use_llm else scan_board(args.days, args.max_pages)
         print(f"[INFO] 看板上找到 {len(targets)} 篇 iPhone 販售文。")
 
         track_cutoff = (datetime.now() - timedelta(days=args.track_days)).timestamp()
+        revisit_statuses = OPEN_STATUSES | ({STATUS_SOLD, "略過"} if args.reparse else set())
         revisit = [u for u, r in listings.items()
-                   if r.get("status") in OPEN_STATUSES and (url_timestamp(u) or 0) >= track_cutoff]
+                   if r.get("status") in revisit_statuses and (url_timestamp(u) or 0) >= track_cutoff]
         backfill = [u for u, r in listings.items() if needs_days_backfill(r)]
         queue = list(dict.fromkeys([t["link"] for t in targets] + revisit + backfill))
         print(f"[INFO] 另有 {len(revisit)} 篇在售文章需回訪、{len(backfill)} 篇已售出文章補算售出天數，"
