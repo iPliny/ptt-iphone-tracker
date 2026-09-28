@@ -160,6 +160,60 @@ class RealPostRegressionTest(unittest.TestCase):
         self.assertEqual(T.detect_status("[販售] 台北 全新iPhone 18 Pro Max 256G 銀", body), T.STATUS_ACTIVE)
 
 
+MULTI_PRODUCT_POST = """[型號]
+iPhone 16 pro max
+
+[規格]
+256g 金色
+
+[保固]
+已過保
+
+[售價]
+$25,000
+
+[商品照/補充說明]
+1.輕微使用痕跡
+2.電池健康度92%
+3.無維修過
+
+
+
+[型號]
+Apple Watch S10 GPS 46mm
+
+[規格]
+46mm GPS 黑色
+
+[保固]
+過保
+
+[盒裝配件]
+完整盒裝+充電線
+電池健康度89%
+
+[售價］
+7000"""
+
+
+class MultiProductPostTest(unittest.TestCase):
+    """2026-09-28 回報：M.1790391324.A.30C 同篇另賣 Apple Watch，售價被 Watch 的 7000 覆蓋。"""
+
+    def test_uses_iphone_block_only(self):
+        f = T.build_fields(T.rule_extract("[販售]  台南 Iphone 16 pro max 256g", MULTI_PRODUCT_POST))
+        self.assertEqual((f["model"], f["storage"], f["price"], f["battery_health"]),
+                         ("iPhone 16 Pro Max", "256GB", 25000, 92))
+
+    def test_iphone_after_other_product(self):
+        watch, phone = MULTI_PRODUCT_POST.split("\n\n\n\n")
+        f = T.build_fields(T.rule_extract("[販售] 台南 Apple Watch + iPhone 16 Pro Max", phone and watch + "\n\n" + phone))
+        self.assertEqual((f["model"], f["price"]), ("iPhone 16 Pro Max", 25000))
+
+    def test_two_iphone_blocks_skipped(self):
+        body = "[型號] iPhone 15\n[售價] 15000\n\n[型號] iPhone 14\n[售價] 9000"
+        self.assertIsNone(T.build_fields(T.rule_extract("[販售] iPhone 15 / iPhone 14", body)))
+
+
 class DaysToSellTest(unittest.TestCase):
     def setUp(self):
         self.now = T.datetime.now()
@@ -207,7 +261,7 @@ class PipelineTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.orig = {k: getattr(T, k) for k in ("LISTINGS_FILE", "EVENTS_FILE", "SUMMARY_FILE",
-                                                  "fetch", "llm_extract", "polite_sleep")}
+                                                  "fetch", "llm_extract", "polite_sleep", "REPARSE")}
         T.LISTINGS_FILE = os.path.join(self.tmp.name, "listings.csv")
         T.EVENTS_FILE = os.path.join(self.tmp.name, "events.csv")
         T.SUMMARY_FILE = os.path.join(self.tmp.name, "summary.csv")
@@ -277,6 +331,18 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(second[b]["price"], "8500")
         self.assertEqual(second[b]["first_price"], "9000")
         self.assertEqual(second[d]["status"], T.STATUS_DELETED)
+
+    def test_reparse_fixes_old_wrong_price(self):
+        a = T.BASE_URL + self.paths[0]
+        rows = self.run_main()
+        rows[a]["price"] = rows[a]["first_price"] = "7000"  # 模擬舊規則抓錯
+        T.save_listings(rows)
+        self.listed = set()
+        rows = self.run_main("--reparse")
+        self.assertEqual((rows[a]["price"], rows[a]["first_price"]), ("25000", "25000"))
+        events = open(T.EVENTS_FILE, encoding="utf-8-sig").read()
+        self.assertIn("重新解析修正", events)
+        self.assertNotIn("價格變動", events)
 
     def test_sold_on_first_sight_has_no_days(self):
         pa = self.paths[0]

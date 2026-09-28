@@ -31,6 +31,7 @@ python tracker.py                      # 完整執行（規則萃取）
 python tracker.py --extractor ollama   # 改用本機 Ollama qwen2.5:32b 萃取（需另外 pip install ollama）
 python tracker.py --track-only         # 只回訪既有文章
 python tracker.py --report-only        # 只重算行情
+python tracker.py --reparse            # 萃取規則改過後：追蹤期內所有文章（含已售出）重新萃取欄位；Actions 手動執行時勾選 reparse
 python -m unittest                     # 離線測試
 ```
 
