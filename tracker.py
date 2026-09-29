@@ -30,7 +30,7 @@ import random
 import re
 import statistics
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import requests
 from bs4 import BeautifulSoup
@@ -58,11 +58,14 @@ LISTING_FIELDS = [
     "warranty", "notes", "model_raw", "first_seen", "last_checked", "body_hash",
     "days_to_sell_basis",  # 觀測＝兩次檢查之間偵測到售出；推估＝用最後編輯時間推算；無法推估
     "private_msg_count",
+    "last_edit_at", "price_checked_at",  # ISO 8601，台灣時間；不回填舊事件
 ]
 BASIS_OBSERVED = "觀測"
 BASIS_ESTIMATED = "推估"
 BASIS_UNKNOWN = "無法推估"
 EVENT_FIELDS = ["time", "source_url", "event", "detail"]
+PRICE_EVENT_FIELDS = ["time", "source_url", "detail", "occurred_at", "detected_at", "time_basis"]
+TAIPEI = timezone(timedelta(hours=8))
 
 STATUS_ACTIVE = "在售"
 STATUS_PENDING = "交易中"
@@ -102,6 +105,18 @@ SYSTEM_PROMPT = """
 # ==========================================
 def now_str():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def taipei_now():
+    return datetime.now(TAIPEI).replace(microsecond=0)
+
+
+def parse_aware_time(value):
+    try:
+        dt = datetime.fromisoformat(value)
+        return dt.astimezone(TAIPEI) if dt.tzinfo is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 def url_timestamp(url):
@@ -285,7 +300,10 @@ def last_edit_time(text):
     stamps = _EDIT_RE.findall(text)
     if not stamps:
         return None
-    return datetime.strptime(stamps[-1], "%m/%d/%Y %H:%M:%S")
+    try:
+        return datetime.strptime(stamps[-1], "%m/%d/%Y %H:%M:%S")
+    except ValueError:
+        return None  # 最後一筆格式錯誤時，不誤用更早的編輯紀錄
 
 
 def body_hash(body):
@@ -558,15 +576,41 @@ def save_listings(listings, path=None):
     os.replace(tmp, path)
 
 
-def log_event(url, event, detail="", path=None):
+def log_event(url, event, detail="", path=None, *, event_time=None):
     path = path or EVENTS_FILE
     new = not os.path.exists(path)
     with open(path, "a", encoding="utf-8-sig", newline="") as f:
         w = csv.DictWriter(f, fieldnames=EVENT_FIELDS)
         if new:
             w.writeheader()
-        w.writerow({"time": now_str(), "source_url": url, "event": event, "detail": detail})
+        w.writerow({"time": event_time or now_str(), "source_url": url, "event": event, "detail": detail})
     print(f"    [EVENT] {event} {detail}")
+
+
+def log_price_change(row, new_price, last_edit, detected_at):
+    """價格確實變動才呼叫；保存本次頁面的編輯時間，不再隨後續編輯變動。"""
+    url = row["source_url"]
+    detail = f"{to_int(row.get('price'))} → {new_price}"
+    edit = last_edit.replace(tzinfo=TAIPEI) if last_edit is not None else None
+    previous = parse_aware_time(row.get("price_checked_at"))
+    posted_ts = url_timestamp(url)
+    posted = datetime.fromtimestamp(posted_ts, TAIPEI) if posted_ts is not None else None
+    edit_ok = (edit is not None and edit <= detected_at
+               and (posted is None or posted <= edit)
+               and (previous is None or previous < edit))
+    occurred_at = edit if edit_ok else detected_at
+    event_time = now_str()  # 保留 events.csv 原有的偵測時間格式與語意
+    path = os.path.join(os.path.dirname(EVENTS_FILE), "price_event_times.csv")
+    new = not os.path.exists(path) or os.path.getsize(path) == 0
+    # 先保存時間依據再寫主事件；網站只連結已有主事件的紀錄，忽略未完成的寫入。
+    with open(path, "a", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=PRICE_EVENT_FIELDS)
+        if new:
+            w.writeheader()
+        w.writerow({"time": event_time, "source_url": url, "detail": detail,
+                    "occurred_at": occurred_at.isoformat(), "detected_at": detected_at.isoformat(),
+                    "time_basis": "ptt_edit" if edit_ok else "detected"})
+    log_event(url, "價格變動", detail, event_time=event_time)
 
 
 MAX_CHECK_GAP_DAYS = 3  # 兩次檢查間隔超過這麼久，售出天數誤差太大，不採計
@@ -679,8 +723,10 @@ def process_article(url, listings, use_llm, stats):
     art = parse_article(html)
     if art is None:
         return
+    checked_at = taipei_now()
     h = body_hash(art["body"])
     status = detect_status(art["title"], art["body"])
+    price_confirmed = bool(row and row.get("body_hash") == h)
 
     first_seen = None
     if REPARSE and use_llm and row is not None and row.get("status") == "略過":
@@ -701,21 +747,23 @@ def process_article(url, listings, use_llm, stats):
             return
         row = {"source_url": url, "post_time": post_time_from_url(url), "first_seen": first_seen or now_str(),
                "status": STATUS_ACTIVE, "first_price": fields["price"], **fields}
+        price_confirmed = True
         listings[url] = row
         stats["new"] += 1
         log_event(url, "新刊登", f"{fields['model']} {fields['storage']} ${fields['price']}")
     elif row.get("status") == "略過":
         row["last_checked"] = now_str()
         return
-    elif use_llm and ((row.get("body_hash") and row["body_hash"] != h) or REPARSE):
+    elif use_llm and (row.get("body_hash") != h or REPARSE):
         edited = bool(row.get("body_hash")) and row["body_hash"] != h
         print("    [UPDATE] 本文被編輯，重新解析。" if edited else "    [REPARSE] 依新規則重新解析。")
         fields = safe_extract(art, stats)
+        price_confirmed = fields is not None
         if fields:
             old_price = to_int(row.get("price"))
             if old_price and fields["price"] != old_price:
                 if edited:
-                    log_event(url, "價格變動", f"{old_price} → {fields['price']}")
+                    log_price_change(row, fields["price"], art["last_edit"], checked_at)
                     stats["price_changes"] += 1
                 else:
                     # 本文沒變、只是舊規則抓錯：連首次標價一起更正，不記成價格變動
@@ -727,8 +775,14 @@ def process_article(url, listings, use_llm, stats):
     # 新文章沒有上次檢查時間：第一次看到就已售出時，無從得知何時賣掉，不計售出天數
     prev_checked = row.get("last_checked", "")
     row["title"] = art["title"]
-    row["body_hash"] = h
+    # 解析失敗或僅查狀態時，不消耗尚未確認的本文改動與價格時間區間。
+    if price_confirmed:
+        row["body_hash"] = h
     row["last_checked"] = now_str()
+    row["last_edit_at"] = (art["last_edit"].replace(tzinfo=TAIPEI).isoformat()
+                           if art["last_edit"] is not None else "")
+    if price_confirmed:
+        row["price_checked_at"] = checked_at.isoformat()
     before = row.get("status")
     if before == STATUS_SOLD and needs_days_backfill(row):
         if row.get("days_to_sell") not in ("", None) and not sold_on_first_sight(row):
