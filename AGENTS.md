@@ -25,6 +25,10 @@
 - 價格不變而新增編輯紀錄時，只更新文章資訊，不新增改價事件、不覆寫任何歷史改價時間，也不據此推定交易中。萃取失敗保留上次價格、hash 與確認時間供下次重試。
 - 網站將新改價時間統一轉台灣時間，用於顯示、排序及每日統計；提示保留完整秒數、時間依據與偵測時間。舊事件／缺快照的事件標示「發現改價」，不拿文章目前的編輯時間回填。其他既有時間欄位的語意維持原樣。
 
+### 2026-09-29 時區
+- CSV 裡不帶時區的時間（`post_time`、`first_seen`、`last_checked`、`sold_detected_at`、`events.csv` 的 `time` 等）一律是台灣時間。`tracker.py` 開頭強制 `TZ=Asia/Taipei`，workflow 也設了 `TZ`。
+- 在這之前 Actions 主機是 UTC，舊資料慢 8 小時；`migrate_timezone` 在每次執行開頭、寫入新事件前檢查，發現發文時間仍是 UTC 的列就一次改正，並扣回用編輯時間推估的售出天數多算的 8 小時。這是唯一一次改寫 `events.csv`，`price_event_times.csv` 的 `time` 一起改以維持連結。
+
 ## 開發規則
 - 修改後必須跑 `python -m unittest`，測試不需網路也不需 Ollama（`fetch`、`llm_extract` 皆被替換成假的）。
 - 改動售出判斷（`detect_status`）或規則萃取（`rule_extract`、`is_brand_new`）時，把觸發問題的實際文章本文精簡後加進 `tests/test_tracker.py` 當回歸測試。

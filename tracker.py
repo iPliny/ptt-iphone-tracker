@@ -41,6 +41,11 @@ try:
 except ImportError:
     cffi_requests = None
 
+# 所有不帶時區的時間欄位一律是台灣時間；GitHub Actions 主機預設是 UTC，
+# 不設的話 now_str()、發文時間都會比 PTT 的編輯時間慢 8 小時。
+os.environ["TZ"] = "Asia/Taipei"
+time.tzset()
+
 BASE_URL = "https://www.ptt.cc"
 INDEX_URL = BASE_URL + "/bbs/MacShop/index.html"
 HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
@@ -880,6 +885,58 @@ def build_summary(listings, path=None):
 # ==========================================
 # v1 資料匯入
 # ==========================================
+def _shift(value, hours):
+    t = _parse_time(value)
+    return (t + timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S") if t else value
+
+
+def migrate_timezone(listings, events_path=None):
+    """
+    一次性修正：2026-09-29 以前在 Actions（UTC）產生的時間都慢 8 小時，全部改成台灣時間。
+    每次執行開頭都會呼叫；只改發文時間等於網址換算 UTC 的列，所以重複執行不會再加一次。
+    """
+    def utc_post_time(url):
+        ts = url_timestamp(url)
+        return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%d %H:%M:%S") if ts else None
+
+    rows = [r for r in listings.values()
+            if r.get("post_time") and r["post_time"] == utc_post_time(r["source_url"])]
+    if not rows:
+        return False
+    for r in rows:
+        old_post = _parse_time(r.get("post_time"))
+        r["post_time"] = post_time_from_url(r["source_url"])
+        old_sold = _parse_time(r.get("sold_detected_at"))
+        for k in ("first_seen", "last_checked", "sold_detected_at"):
+            r[k] = _shift(r.get(k), 8)
+        # 售出天數：用「偵測時間 − 發文時間」算的兩邊同樣慢 8 小時，不受影響；
+        # 用 PTT 編輯時間（本來就是台灣時間）算的多算了 8 小時，扣回來。
+        try:
+            days = float(r.get("days_to_sell"))
+        except (TypeError, ValueError):
+            continue
+        by_detection = (old_post and old_sold
+                        and abs((old_sold - old_post).total_seconds() / 86400 - days) < 0.06)
+        if r.get("days_to_sell_basis") == BASIS_ESTIMATED or (
+                r.get("days_to_sell_basis") == BASIS_OBSERVED and not by_detection):
+            r["days_to_sell"] = max(0.0, round(days - 8 / 24, 1))
+    events_path = events_path or EVENTS_FILE
+    for path in (events_path, os.path.join(os.path.dirname(events_path), "price_event_times.csv")):
+        if not os.path.exists(path):
+            continue
+        with open(path, encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            fields, data = reader.fieldnames, list(reader)
+        for e in data:
+            e["time"] = _shift(e.get("time"), 8)  # price_event_times 用 time 連結 events，要一起改
+        with open(path, "w", encoding="utf-8-sig", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=fields)
+            w.writeheader()
+            w.writerows(data)
+    print(f"[MIGRATE-TZ] 已把 {len(rows)} 篇文章與事件時間改成台灣時間。")
+    return True
+
+
 def migrate(v1_csv, listings):
     with open(v1_csv, encoding="utf-8-sig", newline="") as f:
         for r in csv.DictReader(f):
@@ -926,6 +983,9 @@ def main():
 
     os.makedirs(DATA_DIR, exist_ok=True)
     listings = load_listings()
+    # 必須在寫入任何新事件之前做，否則新的台灣時間事件也會被加 8 小時
+    if migrate_timezone(listings):
+        save_listings(listings)
     if args.migrate:
         migrate(args.migrate, listings)
         save_listings(listings)

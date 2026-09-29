@@ -19,6 +19,9 @@ permissions:
   pages: write
   id-token: write
 
+env:
+  TZ: Asia/Taipei  # 網站的「更新時間」用台灣時間
+
 concurrency:
   group: pages
   cancel-in-progress: true
