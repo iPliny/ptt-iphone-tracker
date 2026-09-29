@@ -408,7 +408,8 @@ class PipelineTest(unittest.TestCase):
         self.assertIsNone(rows["old"].get("private_msg_count"))
         T.save_listings(rows)
         self.assertEqual(T.load_listings()["old"]["private_msg_count"], "")
-        self.assertEqual(T.LISTING_FIELDS[-2:], ["days_to_sell_basis", "private_msg_count"])
+        self.assertEqual(T.LISTING_FIELDS[-4:],
+                         ["days_to_sell_basis", "private_msg_count", "last_edit_at", "price_checked_at"])
 
     def test_reparse_fixes_old_wrong_price(self):
         a = T.BASE_URL + self.paths[0]

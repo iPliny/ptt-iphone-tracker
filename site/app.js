@@ -133,7 +133,7 @@
   }
 
   // ---------- 當日清單 ----------
-  function itemHtml(r, extra) {
+  function itemHtml(r, extra, extraTitle = "") {
     const pm = (r.status === "在售" || r.status === "交易中") && r.pm_count >= 1
       ? `<span class="chip pm" title="${esc(r.pm_count)} 位網友推文表示已私訊">私${esc(r.pm_count)}</span>` : "";
     const tags = [r.storage, r.brand_new ? "全新未拆" : "", r.battery ? "電池 " + r.battery + "%" : "", r.warranty]
@@ -141,7 +141,7 @@
     return `<div class="item">
       <div><a class="name" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.model || r.title || "（未解析）")}</a> ${pm}${tags}</div>
       <div class="price">${money(r.price)}</div>
-      <div class="meta">${esc(extra || r.notes || "")}</div>
+      <div class="meta"${extraTitle ? ` title="${esc(extraTitle)}"` : ""}>${esc(extra || r.notes || "")}</div>
       <div class="meta side"><span class="st-${esc(r.status)}">${esc(r.status)}</span> · ${esc(r.post_time.slice(5, 16))}</div>
     </div>`;
   }
@@ -160,8 +160,13 @@
         (tab === "price" ? e.event === "價格變動" : /已刪除$/.test(e.detail)))
         .map((e) => () => {
           const r = byUrl[e.url] || { url: e.url, post_time: "", status: "", title: e.url };
-          const what = tab === "price" ? "改價 " + e.detail.replace(/(\d+)/g, (n) => money(n)) : "刪文";
-          return itemHtml(r, e.time.slice(11, 16) + " " + what);
+          const estimated = e.time_basis === "ptt_edit";
+          const what = tab === "price" ? (estimated ? "改價 " : "發現改價 ") +
+            e.detail.replace(/(\d+)/g, (n) => money(n)) : "刪文";
+          const explanation = tab === "price" ? (estimated ?
+            `${e.time}（台灣時間），依當次 PTT 最新編輯時間推估；系統發現時間：${e.detected_at}` :
+            `系統發現時間：${e.detected_at || e.time}；沒有可用的當次編輯時間`) : "";
+          return itemHtml(r, e.time.slice(11, 16) + " " + what, explanation);
         });
     }
     $("#day-list").innerHTML = items.length

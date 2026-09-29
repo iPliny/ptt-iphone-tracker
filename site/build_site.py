@@ -12,13 +12,14 @@ import json
 import os
 import shutil
 import statistics
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SITE_DIR = os.path.join(ROOT, "site")
 DATA_DIR = os.path.join(ROOT, "data")
 STATIC_FILES = ["index.html", "app.js", "style.css"]
-CSV_FILES = ["listings.csv", "events.csv", "market_summary.csv"]
+CSV_FILES = ["listings.csv", "events.csv", "market_summary.csv", "price_event_times.csv"]
+TAIPEI = timezone(timedelta(hours=8))
 
 TRACKED_STATUSES = {"在售", "交易中", "已售出", "已刪除"}
 MAX_DAYS = 90       # 每日序列最多保留幾天
@@ -89,7 +90,34 @@ def clean_listing(r):
         "days_basis": r.get("days_to_sell_basis", ""),  # 觀測／推估／無法推估；舊資料為空
         "first_seen": r.get("first_seen", ""),
         "last_checked": r.get("last_checked", ""),
+        "last_edit_at": r.get("last_edit_at", ""),
     }
+
+
+def attach_price_times(events, times):
+    """只使用該次改價保存的時間；不能以 listings 最新編輯時間改寫舊事件。"""
+    def key(row):
+        return (row.get("time"), row.get("source_url"), row.get("detail"))
+
+    snapshots = {key(row): row for row in times}
+    out = []
+    for original in events:
+        e = dict(original)
+        if e.get("event") == "價格變動":
+            e.update(detected_at=e.get("time", ""), time_basis="detected")
+            saved = snapshots.get(key(original), {})
+            try:
+                occurred = datetime.fromisoformat(saved.get("occurred_at", ""))
+                detected = datetime.fromisoformat(saved.get("detected_at", ""))
+                if (occurred.tzinfo is not None and detected.tzinfo is not None
+                        and occurred <= detected and saved.get("time_basis") in ("ptt_edit", "detected")):
+                    e.update(time=occurred.astimezone(TAIPEI).strftime("%Y-%m-%d %H:%M:%S"),
+                             detected_at=detected.astimezone(TAIPEI).isoformat(),
+                             time_basis=saved["time_basis"])
+            except (TypeError, ValueError):
+                pass  # 舊檔缺少時間快照或資料無效時，保留原偵測紀錄
+        out.append(e)
+    return out
 
 
 def deleted_dates(events):
@@ -175,6 +203,7 @@ def model_stats(listings):
 def build_data(data_dir=DATA_DIR, now=None):
     raw = read_csv(os.path.join(data_dir, "listings.csv"))
     events = read_csv(os.path.join(data_dir, "events.csv"))
+    events = attach_price_times(events, read_csv(os.path.join(data_dir, "price_event_times.csv")))
     listings = [clean_listing(r) for r in raw if r.get("status") in TRACKED_STATUSES]
     listings.sort(key=lambda r: r["post_time"], reverse=True)
 
@@ -184,7 +213,8 @@ def build_data(data_dir=DATA_DIR, now=None):
     checked = [r["last_checked"] for r in listings if r["last_checked"]]
     events_out = sorted(
         ({"time": e.get("time", ""), "url": e.get("source_url", ""),
-          "event": e.get("event", ""), "detail": e.get("detail", "")} for e in events),
+          "event": e.get("event", ""), "detail": e.get("detail", ""),
+          "detected_at": e.get("detected_at", ""), "time_basis": e.get("time_basis", "")} for e in events),
         key=lambda e: e["time"], reverse=True)[:MAX_EVENTS]
 
     return {
