@@ -57,6 +57,7 @@ LISTING_FIELDS = [
     "model", "storage", "全新未拆封機", "battery_health", "price", "first_price",
     "warranty", "notes", "model_raw", "first_seen", "last_checked", "body_hash",
     "days_to_sell_basis",  # 觀測＝兩次檢查之間偵測到售出；推估＝用最後編輯時間推算；無法推估
+    "private_msg_count",
 ]
 BASIS_OBSERVED = "觀測"
 BASIS_ESTIMATED = "推估"
@@ -228,24 +229,52 @@ _SOLD_LINE_RE = re.compile(r"^[\s\[\(【（]*" + _SOLD_KW_RE + r"(?![後前時])
 _SOLD_TAIL_RE = re.compile(_SOLD_KW_RE + r"[\s\W]*(謝謝.*|感謝.*)?$", re.I)
 
 
+PM_KEYWORD_RE = re.compile(r"私|站內|密你|已密")
+PM_NOISE = ("私密", "私人", "隱私", "自私", "私下", "私心", "公私", "勿私", "不私", "別私", "不要私")
+
+
+def count_private_msgs(pushes, author):
+    """推文以 (ID, 內容) 傳入；排除原 PO 與誤判詞，同一人只計一次。"""
+    buyers = set()
+    for userid, content in pushes:
+        if not userid or userid == author:
+            continue
+        for noise in PM_NOISE:
+            content = content.replace(noise, "")
+        if PM_KEYWORD_RE.search(content):
+            buyers.add(userid)
+    return len(buyers)
+
+
 def parse_article(html):
-    """回傳 dict(title, body)。body 為本文（不含推文、發信站資訊），用來算 hash 與送 LLM。"""
+    """回傳標題、本文、最後編輯時間與私訊人數；本文不含推文，供 hash 與 LLM 使用。"""
     soup = BeautifulSoup(html, "html.parser")
     main = soup.find(id="main-content")
     if main is None:
         return None
     title = ""
+    author = ""
     for line in main.find_all("div", class_="article-metaline"):
         tag = line.find("span", class_="article-meta-tag")
         val = line.find("span", class_="article-meta-value")
         if tag and val and tag.text.strip() == "標題":
             title = val.text.strip()
+        if tag and val and tag.text.strip() == "作者":
+            parts = val.text.split()
+            author = parts[0] if parts else ""
+    pushes = []
+    for push in main.find_all("div", class_="push"):
+        userid = push.find("span", class_="push-userid")
+        content = push.find("span", class_="push-content")
+        if userid and content:
+            pushes.append((userid.text.strip(), re.sub(r"^:\s*", "", content.text.strip())))
+    pm_count = count_private_msgs(pushes, author)
     for cls in ("article-metaline", "article-metaline-right", "push"):
         for tag in main.find_all("div", class_=cls):
             tag.decompose()
     text = main.get_text()
     body = re.split(r"\n--\n※ 發信站|※ 發信站", text)[0].strip()
-    return {"title": title, "body": body, "last_edit": last_edit_time(text)}
+    return {"title": title, "body": body, "last_edit": last_edit_time(text), "pm_count": pm_count}
 
 
 _EDIT_RE = re.compile(r"※ 編輯: \S+ \([^)]*\), (\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2})")
@@ -707,6 +736,8 @@ def process_article(url, listings, use_llm, stats):
         else:
             set_days_to_sell(row, "", art["last_edit"])
     mark_status(row, status, prev_checked, art["last_edit"])
+    if row["status"] in OPEN_STATUSES:
+        row["private_msg_count"] = art["pm_count"]
     if status == STATUS_SOLD and before != STATUS_SOLD:
         stats["sold"] += 1
 

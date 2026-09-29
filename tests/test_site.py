@@ -29,6 +29,24 @@ def listing(url, post, status="在售", price="10000", sold_at="", days="", mode
 
 
 class BuildSiteTest(unittest.TestCase):
+    def test_clean_listing_private_messages(self):
+        for raw, expected in (("2", 2), ("0", 0), ("", None), (None, None)):
+            with self.subTest(raw=raw):
+                actual = S.clean_listing({"private_msg_count": raw})["pm_count"]
+                self.assertEqual(actual, expected)
+                if expected is not None:
+                    self.assertIsInstance(actual, int)
+        self.assertIsNone(S.clean_listing({})["pm_count"])
+
+    def test_build_private_messages_from_csv(self):
+        row = listing("pm", "2026-09-03 08:00:00")
+        row["private_msg_count"] = "2"
+        write_csv(os.path.join(self.dir, "listings.csv"), LISTING_HEADER + ["private_msg_count"], [row])
+        out = os.path.join(self.dir, "pm-site")
+        S.build(out, self.dir)
+        with open(os.path.join(out, "data.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["listings"][0]["pm_count"], 2)
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = self.tmp.name

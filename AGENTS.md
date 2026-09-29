@@ -15,6 +15,7 @@
 - `.github/workflows/track.yml`：每 6 小時在 GitHub Actions 執行，把 `data/` commit 回 main 後觸發 `pages.yml` 重新部署網站；`ci.yml` 跑測試
 - `data/` 的 CSV 欄位是網站的介面，改欄位名稱或意義時要在這裡註明並同步改網站
   - 2026-09-27 新增 `listings.csv` 的 `days_to_sell_basis`（觀測／推估／無法推估）與 `market_summary.csv` 的 `售出天數樣本(觀測/推估)`，都加在最後一欄。推估＝第一次看到就已售出時，用文末最後一筆「※ 編輯」時間減發文時間
+  - 2026-09-29：`listings.csv` 新增 `private_msg_count`，加在最後一欄（`days_to_sell_basis` 之後）。正常回訪時只更新在售／交易中文章；排除原 PO、移除私密／私人／隱私／自私／私下／私心／公私／勿私／不私／別私／不要私後，含「私」「站內」「密你」「已密」的推文按 ID 去重計人數，推／噓／→ 都算。空白＝未計算、0＝已計算但無人私訊；售出或刪除後保留最後值，網站不顯示。
 - `legacy/`：v1 程式，只供參考，不要修改
 
 ## 開發規則
