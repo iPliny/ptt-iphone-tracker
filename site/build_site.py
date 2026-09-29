@@ -79,6 +79,7 @@ def clean_listing(r):
         "brand_new": r.get("全新未拆封機", "") == "是",
         "battery": to_int(r.get("battery_health")),
         "price": to_int(r.get("price")),
+        "pm_count": to_int(r.get("private_msg_count")),
         "first_price": to_int(r.get("first_price")),
         "warranty": r.get("warranty", ""),
         "notes": r.get("notes", ""),

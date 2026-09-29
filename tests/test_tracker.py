@@ -4,9 +4,51 @@ import re
 import sys
 import tempfile
 import unittest
+from html import escape
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import tracker as T  # noqa: E402
+
+
+def push_html(userid, content, tag="推"):
+    return (f'<div class="push"><span class="hl push-tag">{tag} </span>'
+            f'<span class="f3 hl push-userid">{escape(userid)}</span>'
+            f'<span class="f3 push-content">: {escape(content)}</span>'
+            '<span class="push-ipdatetime"> 09/28 12:34</span></div>')
+
+
+class PrivateMsgTest(unittest.TestCase):
+    def article(self, pushes=""):
+        return T.parse_article('<div id="main-content"><div class="article-metaline">'
+                               '<span class="article-meta-tag">作者</span>'
+                               '<span class="article-meta-value">seller (暱稱)</span></div>'
+                               '本文\n--\n※ 發信站: x\n' + pushes + '</div>')
+
+    def test_keywords_and_tags(self):
+        words = ["私", "已私", "私訊", "私信", "私你", "私了", "站內", "站內信", "已站內", "密你", "已密"]
+        for tag in ("推", "噓", "→"):
+            with self.subTest(tag=tag):
+                art = self.article("".join(push_html(f"buyer{i}", word, tag) for i, word in enumerate(words)))
+                self.assertEqual(art["pm_count"], len(words))
+
+    def test_unique_buyers_and_author(self):
+        art = self.article(push_html("buyer1", "私") + push_html("buyer1", "私", "→") +
+                           push_html("seller", "已回站內") + push_html("seller", "私訊已回"))
+        self.assertEqual(art["pm_count"], 1)
+
+    def test_noise(self):
+        for word in ("私密", "私人", "隱私", "自私", "私下", "私心", "公私", "勿私", "不私", "別私", "不要私"):
+            with self.subTest(word=word):
+                self.assertEqual(self.article(push_html("buyer", word))["pm_count"], 0)
+        self.assertEqual(self.article(push_html("buyer", "隱私，已站內"))["pm_count"], 1)
+
+    def test_no_pushes_and_body_hash(self):
+        empty = self.article()
+        pushed = self.article(push_html("buyer", "私"))
+        self.assertEqual(empty["pm_count"], 0)
+        self.assertEqual(empty["body"], "本文")
+        self.assertEqual(T.body_hash(empty["body"]), T.body_hash(pushed["body"]))
 
 
 class NormalizeTest(unittest.TestCase):
@@ -270,7 +312,7 @@ class PipelineTest(unittest.TestCase):
         self.paths = [f"/bbs/MacShop/M.{now - n * 3600}.A.{n:03d}.html" for n in range(1, 5)]
         a, b, c, d = self.paths
         self.arts = {
-            a: ("[販售] 台北 iPhone 15 pro 256", "[物品型號]: iphone15 pro\n[交易價格]: 25000", "推 x"),
+            a: ("[販售] 台北 iPhone 15 pro 256", "[物品型號]: iphone15 pro\n[交易價格]: 25000", push_html("buyer1", "私")),
             b: ("[販售] 新北 iPhone 14", "[物品型號]: i14\n[交易價格]: 9000", ""),
             c: ("[販售] 台中 iPhone 殼", "[物品型號]: 手機殼\n[交易價格]: 300", ""),
             d: ("[販售] 高雄 iphone 13", "[物品型號]: iphone 13\n[交易價格]: 8000", ""),
@@ -296,9 +338,11 @@ class PipelineTest(unittest.TestCase):
         if art is None:
             return 404, ""
         title, body, push = art
-        return 200, ('<div id="main-content"><div class="article-metaline"><span class="article-meta-tag">標題'
+        return 200, ('<div id="main-content"><div class="article-metaline"><span class="article-meta-tag">作者</span>'
+                     '<span class="article-meta-value">seller (暱稱)</span></div>'
+                     '<div class="article-metaline"><span class="article-meta-tag">標題'
                      f'</span><span class="article-meta-value">{title}</span></div>{body}\n--\n※ 發信站: x\n'
-                     f'<div class="push">{push}</div></div>')
+                     f'{push}</div>')
 
     @staticmethod
     def fake_llm(title, body):
@@ -321,8 +365,8 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(first[c]["status"], "略過")
 
         pa, pb, _, pd = self.paths
-        self.arts[pa] = ("[販售] 台北 iPhone 15 pro 256 已售出", self.arts[pa][1], "推 x\n推 y")
-        self.arts[pb] = ("[販售] 新北 iPhone 14", self.arts[pb][1].replace("9000", "8500"), "推 z")
+        self.arts[pa] = ("[販售] 台北 iPhone 15 pro 256 已售出", self.arts[pa][1], push_html("buyer1", "私") + push_html("buyer2", "私"))
+        self.arts[pb] = ("[販售] 新北 iPhone 14", self.arts[pb][1].replace("9000", "8500"), push_html("buyer3", "私"))
         self.arts[pd] = None
         self.listed = set()
         second = self.run_main()
@@ -331,6 +375,40 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(second[b]["price"], "8500")
         self.assertEqual(second[b]["first_price"], "9000")
         self.assertEqual(second[d]["status"], T.STATUS_DELETED)
+        self.assertEqual(second[d]["private_msg_count"], "0")
+        self.assertEqual(second[c]["private_msg_count"], "")
+
+    def test_private_messages_update_without_edit_events(self):
+        pa = self.paths[0]
+        url = T.BASE_URL + pa
+        first = self.run_main()
+        self.assertEqual(first[url]["private_msg_count"], "1")
+        with open(T.EVENTS_FILE, encoding="utf-8-sig") as f:
+            events = f.read()
+        title, body, pushes = self.arts[pa]
+        self.arts[pa] = (title, body, pushes + push_html("buyer2", "已私", "→"))
+        self.listed = set()  # 只靠既有回訪，不新增抓取
+        with patch.object(T, "safe_extract", side_effect=AssertionError("推文變動不得重新萃取")) as extract:
+            second = self.run_main()
+        extract.assert_not_called()
+        self.assertEqual(second[url]["private_msg_count"], "2")
+        self.assertEqual(second[url]["body_hash"], first[url]["body_hash"])
+        with open(T.EVENTS_FILE, encoding="utf-8-sig") as f:
+            self.assertEqual(f.read(), events)
+        self.arts[pa] = (title + " 已售出", body, self.arts[pa][2] + push_html("buyer3", "私訊"))
+        third = self.run_main()
+        self.assertEqual(third[url]["status"], T.STATUS_SOLD)
+        self.assertEqual(third[url]["private_msg_count"], "2")
+        self.assertEqual(self.run_main()[url]["private_msg_count"], "2")
+
+    def test_old_csv_without_private_message_column(self):
+        with open(T.LISTINGS_FILE, "w", encoding="utf-8") as f:
+            f.write("source_url,status\nold,已售出\n")
+        rows = T.load_listings()
+        self.assertIsNone(rows["old"].get("private_msg_count"))
+        T.save_listings(rows)
+        self.assertEqual(T.load_listings()["old"]["private_msg_count"], "")
+        self.assertEqual(T.LISTING_FIELDS[-2:], ["days_to_sell_basis", "private_msg_count"])
 
     def test_reparse_fixes_old_wrong_price(self):
         a = T.BASE_URL + self.paths[0]
@@ -349,6 +427,7 @@ class PipelineTest(unittest.TestCase):
         self.arts[pa] = ("[販售] 台北 iPhone 15 pro 256 已售出", self.arts[pa][1], "")
         rows = self.run_main()
         row = rows[T.BASE_URL + pa]
+        self.assertEqual(row["private_msg_count"], "")
         # 假頁面沒有「※ 編輯」紀錄 → 無法推估
         self.assertEqual((row["status"], row["days_to_sell"], row["days_to_sell_basis"]),
                          (T.STATUS_SOLD, "", T.BASIS_UNKNOWN))
