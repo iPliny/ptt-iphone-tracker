@@ -27,7 +27,7 @@
 
 ### 2026-09-29 時區
 - CSV 裡不帶時區的時間（`post_time`、`first_seen`、`last_checked`、`sold_detected_at`、`events.csv` 的 `time` 等）一律是台灣時間。`tracker.py` 開頭強制 `TZ=Asia/Taipei`，workflow 也設了 `TZ`。
-- 在這之前 Actions 主機是 UTC，舊資料慢 8 小時；`migrate_timezone` 在每次執行開頭、寫入新事件前檢查，發現發文時間仍是 UTC 的列就一次改正，並扣回用編輯時間推估的售出天數多算的 8 小時。這是唯一一次改寫 `events.csv`，`price_event_times.csv` 的 `time` 一起改以維持連結。
+- 在這之前 Actions 主機是 UTC：PR #10 合併前寫入的這些時間都比台灣時間慢 8 小時。POYU 決定不回頭修正舊資料（2026-09-29），所以舊列的 `post_time` 仍是 UTC；發文時間在切換前的文章，之後算出的售出天數，以及舊的用編輯時間推估的售出天數，都會多算約 0.3 天。
 
 ## 開發規則
 - 修改後必須跑 `python -m unittest`，測試不需網路也不需 Ollama（`fetch`、`llm_extract` 皆被替換成假的）。

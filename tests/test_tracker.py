@@ -440,36 +440,10 @@ if __name__ == "__main__":
     unittest.main()
 
 
-class TimezoneMigrationTest(unittest.TestCase):
-    """2026-09-29 以前 Actions 主機是 UTC，時間都慢 8 小時；migrate_timezone 一次改成台灣時間。"""
-    URL = T.BASE_URL + "/bbs/MacShop/M.1790391324.A.30C.html"  # UTC 2026-09-26 02:55:24
 
-    def test_host_timezone_is_taipei(self):
-        self.assertEqual(T.post_time_from_url(self.URL), "2026-09-26 10:55:24")
+class TimezoneTest(unittest.TestCase):
+    """Actions 主機是 UTC；tracker.py 強制台灣時間，發文時間才會和 PTT 的編輯時間一致。"""
 
-    def test_shift_once(self):
-        with tempfile.TemporaryDirectory() as d:
-            events = os.path.join(d, "events.csv")
-            times = os.path.join(d, "price_event_times.csv")
-            with open(events, "w", encoding="utf-8-sig") as f:
-                f.write("time,source_url,event,detail\n2026-09-29 02:59:34,u,價格變動,11000 → 10000\n")
-            with open(times, "w", encoding="utf-8-sig") as f:
-                f.write("time,source_url,detail,occurred_at,detected_at,time_basis\n"
-                        "2026-09-29 02:59:34,u,11000 → 10000,2026-09-29T10:53:46+08:00,"
-                        "2026-09-29T10:59:34+08:00,ptt_edit\n")
-            listings = {self.URL: {
-                "source_url": self.URL, "post_time": "2026-09-26 02:55:24", "status": "已售出",
-                "first_seen": "2026-09-27 16:13:08", "last_checked": "2026-09-29 03:02:41",
-                "sold_detected_at": "2026-09-27 16:13:08",
-                "days_to_sell": "1.0", "days_to_sell_basis": T.BASIS_ESTIMATED}}
-            self.assertTrue(T.migrate_timezone(listings, events))
-            row = listings[self.URL]
-            self.assertEqual(row["post_time"], "2026-09-26 10:55:24")
-            self.assertEqual(row["first_seen"], "2026-09-28 00:13:08")
-            self.assertEqual(row["days_to_sell"], 0.7)  # 用編輯時間推估的多算了 8 小時
-            for path in (events, times):
-                with open(path, encoding="utf-8-sig") as f:
-                    self.assertIn("2026-09-29 10:59:34,u,", f.read())
-            self.assertFalse(T.migrate_timezone(listings, events))  # 第二次不再加
-            with open(events, encoding="utf-8-sig") as f:
-                self.assertIn("2026-09-29 10:59:34,u,", f.read())
+    def test_post_time_is_taipei(self):
+        url = T.BASE_URL + "/bbs/MacShop/M.1790391324.A.30C.html"  # UTC 2026-09-26 02:55:24
+        self.assertEqual(T.post_time_from_url(url), "2026-09-26 10:55:24")
