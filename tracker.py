@@ -41,6 +41,11 @@ try:
 except ImportError:
     cffi_requests = None
 
+# 所有不帶時區的時間欄位一律是台灣時間；GitHub Actions 主機預設是 UTC，
+# 不設的話 now_str()、發文時間都會比 PTT 的編輯時間慢 8 小時。
+os.environ["TZ"] = "Asia/Taipei"
+time.tzset()
+
 BASE_URL = "https://www.ptt.cc"
 INDEX_URL = BASE_URL + "/bbs/MacShop/index.html"
 HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}

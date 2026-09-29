@@ -438,3 +438,12 @@ class PipelineTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class TimezoneTest(unittest.TestCase):
+    """Actions 主機是 UTC；tracker.py 強制台灣時間，發文時間才會和 PTT 的編輯時間一致。"""
+
+    def test_post_time_is_taipei(self):
+        url = T.BASE_URL + "/bbs/MacShop/M.1790391324.A.30C.html"  # UTC 2026-09-26 02:55:24
+        self.assertEqual(T.post_time_from_url(url), "2026-09-26 10:55:24")
