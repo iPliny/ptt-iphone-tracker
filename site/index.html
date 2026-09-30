@@ -12,6 +12,7 @@
     <div class="wrap">
       <h1>PTT每日交易觀測</h1>
       <p class="sub">MacShop 版 iPhone 二手機 · <span id="updated">載入中…</span></p>
+      <a class="watch-shortcut" href="#watchlist">我的收藏 <span id="watch-count">0</span></a>
     </div>
   </header>
 
@@ -48,6 +49,14 @@
       <button id="day-more" type="button" class="ghost more" hidden>顯示更多</button>
     </section>
 
+    <section class="card" id="watchlist" aria-labelledby="watch-title">
+      <div class="card-head"><h2 id="watch-title">我的收藏</h2><span class="hint">免登入</span></div>
+      <p class="hint">收藏查價條件，下次用最新載入的資料查看。只存於這個瀏覽器，不會跨裝置同步；清除網站資料後會消失，也不會發送通知。</p>
+      <p id="watch-notice" class="hint" role="status" hidden></p>
+      <div id="watch-list"><p class="empty">載入收藏中…</p></div>
+      <p id="watch-feedback" class="hint" role="status" aria-live="polite"></p>
+    </section>
+
     <section class="card">
       <div class="card-head">
         <h2>型號行情</h2>
@@ -58,16 +67,21 @@
       <p class="hint">「成交價」是偵測到售出時的最後標價，PTT 沒有真實成交價。售出天數標「推估」的，是第一次看到就已售出的文章，用賣家最後編輯文章的時間推算。</p>
     </section>
 
-    <section class="card">
+    <section class="card" id="listings-section" aria-labelledby="listings-title">
       <div class="card-head">
-        <h2>所有追蹤中的文章</h2>
+        <h2 id="listings-title" tabindex="-1">所有追蹤中的文章</h2>
         <div class="filters">
-          <select id="status-f">
+          <select id="status-f" aria-label="文章狀態">
             <option value="">全部狀態</option>
             <option>在售</option><option>交易中</option><option>已售出</option><option>已刪除</option>
           </select>
-          <input id="list-q" type="search" placeholder="搜尋型號或備註">
+          <input id="list-q" type="search" maxlength="200" aria-label="搜尋型號或備註" placeholder="搜尋型號或備註">
         </div>
+      </div>
+      <div class="watch-filter-bar">
+        <span id="watch-scope" class="hint" hidden></span>
+        <button id="clear-watch-scope" type="button" class="ghost" hidden>清除機型限制</button>
+        <button id="save-filter" type="button" class="ghost" disabled>收藏目前條件</button>
       </div>
       <div id="all-list"></div>
       <button id="more" type="button" class="ghost more" hidden>顯示更多</button>
@@ -79,6 +93,7 @@
     下載原始資料：<a href="data/listings.csv">listings.csv</a> · <a href="data/events.csv">events.csv</a> · <a href="data/market_summary.csv">market_summary.csv</a></p>
   </footer>
 
+  <script src="watchlist.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -100,5 +100,24 @@ td.notes { white-space: normal; color: var(--muted); font-size: 13px; min-width:
 .st-在售 { color: var(--new); } .st-交易中 { color: var(--shelf); } .st-已售出 { color: var(--sold); } .st-已刪除 { color: var(--del); }
 .empty { color: var(--muted); padding: 18px 0; text-align: center; }
 .more { display: block; margin: 12px auto 0; }
+.watch-shortcut { display: inline-block; margin-top: 10px; font-size: 14px; }
+.watch-shortcut span { display: inline-block; min-width: 24px; padding: 0 6px; border-radius: 999px; background: var(--chip); text-align: center; }
+.watch-entry { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.watch-entry > div:first-child { min-width: 0; overflow-wrap: anywhere; }
+.watch-entry .hint { margin-top: 3px; }
+.watch-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.watch-actions button, .watch-filter-bar button { min-height: 44px; }
+.watch-filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+.watch-filter-bar .hint { margin: 0; overflow-wrap: anywhere; }
+th.watch-column { cursor: default; }
+.watch-model { white-space: nowrap; min-height: 44px; font-size: 13px; }
+.watch-model[aria-pressed="true"] { color: var(--accent); }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+#watchlist, #listings-section { scroll-margin-top: 16px; }
+#watch-feedback:not(:empty) { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 5; max-width: calc(100% - 32px); width: max-content; margin: 0; padding: 12px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); box-shadow: 0 4px 20px #0002; pointer-events: none; }
+@media (max-width: 540px) {
+  .watch-entry { align-items: flex-start; flex-direction: column; }
+  .watch-actions { align-self: flex-end; }
+}
 .foot { color: var(--muted); font-size: 13px; padding-bottom: 32px; }
 [hidden] { display: none !important; }
