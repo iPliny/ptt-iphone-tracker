@@ -267,11 +267,11 @@
       }
       return v;
     };
-    const head = '<tr><th class="watch-column">收藏</th>' + MODEL_COLS.map(([k, label, num]) =>
+    const head = '<tr><th class="watch-column" aria-label="收藏"></th>' + MODEL_COLS.map(([k, label, num]) =>
       `<th data-k="${k}" class="${num ? "num " : ""}${k === key ? "sorted" + (asc ? " asc" : "") : ""}">${label}</th>`).join("") + "</tr>";
     const body = rows.map((m) => {
       const saved = watchlist.has({ model: m.model, storage: m.storage });
-      return `<tr><td class="watch-column"><button type="button" class="ghost watch-model" data-watch-model="${esc(m.model)}" data-watch-storage="${esc(m.storage)}" aria-label="${saved ? "取消收藏" : "收藏"} ${esc(m.model)} ${esc(m.storage || "容量未提供")}" aria-pressed="${saved}">${saved ? "★ 已收藏" : "☆ 收藏"}</button></td>` + MODEL_COLS.map(([k, , num]) =>
+      return `<tr><td class="watch-column"><button type="button" class="ghost watch-model" data-watch-model="${esc(m.model)}" data-watch-storage="${esc(m.storage)}" aria-label="${saved ? "取消收藏" : "收藏"} ${esc(m.model)} ${esc(m.storage || "容量未提供")}" title="${saved ? "取消收藏" : "收藏"}" aria-pressed="${saved}">${saved ? "★" : "☆"}</button></td>` + MODEL_COLS.map(([k, , num]) =>
         `<td${num ? ' class="num"' : ""}>${esc(fmt(k, m[k], m))}</td>`).join("") + "</tr>";
     }).join("");
     $("#models").innerHTML = "<thead>" + head + "</thead><tbody>" +

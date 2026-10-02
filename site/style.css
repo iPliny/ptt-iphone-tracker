@@ -110,7 +110,7 @@ td.notes { white-space: normal; color: var(--muted); font-size: 13px; min-width:
 .watch-filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
 .watch-filter-bar .hint { margin: 0; overflow-wrap: anywhere; }
 th.watch-column { cursor: default; }
-.watch-model { white-space: nowrap; min-height: 44px; font-size: 13px; }
+.watch-model { white-space: nowrap; min-width: 44px; min-height: 44px; font-size: 20px; line-height: 1; padding: 0; border: 0; }
 .watch-model[aria-pressed="true"] { color: var(--accent); }
 button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 #watchlist, #listings-section { scroll-margin-top: 16px; }
