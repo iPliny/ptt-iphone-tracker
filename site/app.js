@@ -18,6 +18,41 @@
   let dayLimit = PAGE;
   let showAllModels = false;
   let modelSort = { key: "listed", asc: false };
+  const watchlist = PttWatchlist.createStore(() => window.localStorage);
+  let watchScope = { model: null, storage: null };
+  let watchFeedbackTimer;
+
+  // 收藏的讀取與移除不依賴市場資料成功載入。
+  renderWatchlist();
+  $("#watch-list").addEventListener("click", (e) => {
+    const button = e.target.closest("button[data-watch-action]");
+    if (!button) return;
+    const savedKey = button.dataset.watchKey;
+    const f = watchlist.list().find((item) => PttWatchlist.key(item) === savedKey);
+    if (!f) return;
+    if (button.dataset.watchAction === "remove") {
+      watchlist.remove(savedKey);
+      updateWatchUi();
+      announceWatchRemoval();
+      const nextButton = $("#watch-list button[data-watch-action='remove']");
+      (nextButton || $(".watch-shortcut")).focus();
+    } else if (D) {
+      watchScope = { model: f.model, storage: f.storage };
+      $("#status-f").value = f.status;
+      $("#list-q").value = f.q;
+      listLimit = PAGE;
+      renderAll();
+      $("#listings-title").focus();
+      $("#listings-section").scrollIntoView({ block: "start" });
+    }
+  });
+  window.addEventListener("storage", (e) => {
+    if (e.key !== null && e.key !== PttWatchlist.STORAGE_KEY) return;
+    // sessionStorage 的同名事件不應改動 localStorage 收藏。
+    try { if (e.storageArea !== window.localStorage) return; } catch (_) { return; }
+    watchlist.reload();
+    updateWatchUi();
+  });
 
   fetch("data.json", { cache: "no-cache" })
     .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
@@ -51,7 +86,29 @@
     $("#more").addEventListener("click", () => { listLimit += PAGE; renderAll(); });
     $("#day-more").addEventListener("click", () => { dayLimit += PAGE; renderDayList(); });
     $("#models-more").addEventListener("click", () => { showAllModels = !showAllModels; renderModels(); });
+    $("#save-filter").addEventListener("click", () => saveWatch(currentFilters()));
+    $("#clear-watch-scope").addEventListener("click", () => {
+      watchScope = { model: null, storage: null };
+      listLimit = PAGE;
+      renderAll();
+      $("#list-q").focus();
+    });
+    $("#models").addEventListener("click", (e) => {
+      const button = e.target.closest("button[data-watch-model]");
+      if (!button) return;
+      const f = { model: button.dataset.watchModel, storage: button.dataset.watchStorage, status: "", q: "" };
+      if (watchlist.has(f)) {
+        watchlist.remove(PttWatchlist.key(f));
+        updateWatchUi();
+        announceWatchRemoval();
+      } else saveWatch(f);
+      // 更新表格後，把鍵盤焦點留在同一個收藏按鈕。
+      const next = Array.from($("#models").querySelectorAll("button[data-watch-model]")).find((b) =>
+        b.dataset.watchModel === f.model && b.dataset.watchStorage === f.storage);
+      if (next) next.focus({ preventScroll: true });
+    });
 
+    renderWatchlist();
     renderModels();
     renderAll();
     select(days.length ? days[days.length - 1] : "");
@@ -210,13 +267,16 @@
       }
       return v;
     };
-    const head = "<tr>" + MODEL_COLS.map(([k, label, num]) =>
+    const head = '<tr><th class="watch-column" aria-label="收藏"></th>' + MODEL_COLS.map(([k, label, num]) =>
       `<th data-k="${k}" class="${num ? "num " : ""}${k === key ? "sorted" + (asc ? " asc" : "") : ""}">${label}</th>`).join("") + "</tr>";
-    const body = rows.map((m) => "<tr>" + MODEL_COLS.map(([k, , num]) =>
-      `<td${num ? ' class="num"' : ""}>${esc(fmt(k, m[k], m))}</td>`).join("") + "</tr>").join("");
+    const body = rows.map((m) => {
+      const saved = watchlist.has({ model: m.model, storage: m.storage });
+      return `<tr><td class="watch-column"><button type="button" class="ghost watch-model" data-watch-model="${esc(m.model)}" data-watch-storage="${esc(m.storage)}" aria-label="${saved ? "取消收藏" : "收藏"} ${esc(m.model)} ${esc(m.storage || "容量未提供")}" title="${saved ? "取消收藏" : "收藏"}" aria-pressed="${saved}">${saved ? "★" : "☆"}</button></td>` + MODEL_COLS.map(([k, , num]) =>
+        `<td${num ? ' class="num"' : ""}>${esc(fmt(k, m[k], m))}</td>`).join("") + "</tr>";
+    }).join("");
     $("#models").innerHTML = "<thead>" + head + "</thead><tbody>" +
-      (body || `<tr><td colspan="${MODEL_COLS.length}" class="empty">沒有符合的型號</td></tr>`) + "</tbody>";
-    $("#models").querySelectorAll("th").forEach((th) => th.addEventListener("click", () => {
+      (body || `<tr><td colspan="${MODEL_COLS.length + 1}" class="empty">沒有符合的型號</td></tr>`) + "</tbody>";
+    $("#models").querySelectorAll("th[data-k]").forEach((th) => th.addEventListener("click", () => {
       const k = th.dataset.k;
       modelSort = { key: k, asc: modelSort.key === k ? !modelSort.asc : k === "model" || k === "storage" };
       renderModels();
@@ -228,14 +288,85 @@
 
   // ---------- 全部文章 ----------
   function renderAll() {
-    const st = $("#status-f").value;
-    const q = $("#list-q").value.trim().toLowerCase();
-    const rows = D.listings.filter((r) => (!st || r.status === st) &&
-      (!q || [r.model, r.storage, r.notes, r.title].join(" ").toLowerCase().includes(q)));
+    const rows = matchingListings(currentFilters());
     $("#all-list").innerHTML = rows.length
       ? `<div class="items">${rows.slice(0, listLimit).map((r) => itemHtml(r)).join("")}</div>`
       : '<p class="empty">沒有符合的文章</p>';
     setMore("#more", rows.length - listLimit);
+    renderFilterState();
+  }
+
+  // ---------- 免登入收藏：保存條件，使用本次載入的資料 ----------
+  function currentFilters() {
+    return PttWatchlist.normalize({ ...watchScope, status: $("#status-f").value, q: $("#list-q").value });
+  }
+
+  function matchingListings(f) {
+    if (!D || !f) return [];
+    return D.listings.filter((r) =>
+      (f.model === null || r.model === f.model) &&
+      (f.storage === null || r.storage === f.storage) &&
+      (!f.status || r.status === f.status) &&
+      (!f.q || [r.model, r.storage, r.notes, r.title].join(" ").toLowerCase().includes(f.q.toLowerCase())));
+  }
+
+  function watchLabel(f) {
+    return [f.model === null ? "" : f.model || "型號未提供",
+      f.storage === null ? "" : f.storage || "容量未提供",
+      f.status, f.q ? "搜尋「" + f.q + "」" : ""].filter(Boolean).join(" · ");
+  }
+
+  function renderWatchlist() {
+    const saved = watchlist.list();
+    $("#watch-count").textContent = saved.length;
+    $("#watch-notice").hidden = !watchlist.notice();
+    $("#watch-notice").textContent = watchlist.notice();
+    $("#watch-list").innerHTML = saved.length ? saved.map((f) => {
+      const label = watchLabel(f);
+      const count = D ? matchingListings(f).length : null;
+      const detail = count === null ? "市場資料尚未載入，仍可移除收藏" :
+        count ? "本次載入資料符合 " + count + " 篇" : "本次載入資料沒有符合的文章，收藏仍保留";
+      const savedKey = esc(PttWatchlist.key(f));
+      return `<div class="watch-entry"><div><strong>${esc(label)}</strong><p class="hint">${esc(detail)}</p></div><div class="watch-actions"><button type="button" data-watch-action="view" data-watch-key="${savedKey}" aria-label="查看 ${esc(label)}"${D ? "" : " disabled"}>查看</button><button type="button" class="ghost" data-watch-action="remove" data-watch-key="${savedKey}" aria-label="移除 ${esc(label)}">移除</button></div></div>`;
+    }).join("") : '<p class="empty">尚無收藏。可在型號行情按「收藏」，或篩選文章後收藏目前條件。</p>';
+  }
+
+  function renderFilterState() {
+    const f = currentFilters();
+    const scoped = watchScope.model !== null || watchScope.storage !== null;
+    $("#watch-scope").hidden = !scoped;
+    $("#watch-scope").textContent = scoped ? "限定：" + watchLabel({ ...watchScope, status: "", q: "" }) : "";
+    $("#clear-watch-scope").hidden = !scoped;
+    $("#save-filter").disabled = !f || (!scoped && !f.status && !f.q);
+    $("#save-filter").textContent = watchlist.has(f) ? "✓ 目前條件已收藏" : "收藏目前條件";
+  }
+
+  function updateWatchUi() {
+    renderWatchlist();
+    if (D) { renderModels(); renderFilterState(); }
+  }
+
+  function saveWatch(f) {
+    const result = watchlist.add(f);
+    updateWatchUi();
+    const messages = {
+      added: watchlist.mode() === "memory" ? "已加入本頁暫存收藏；瀏覽器無法永久儲存。" : "已收藏，只儲存在這個瀏覽器。",
+      duplicate: "這組條件已收藏，不會重複加入。",
+      empty: "請先選擇型號、文章狀態或輸入搜尋條件。",
+      invalid: "這組條件無法收藏，請調整後再試。",
+      full: "最多可收藏 " + PttWatchlist.MAX_ITEMS + " 組條件；請先移除不需要的項目。",
+    };
+    announceWatch(messages[result]);
+  }
+
+  function announceWatchRemoval() {
+    announceWatch(watchlist.mode() === "memory" ? "已從本頁暫存移除；瀏覽器無法儲存變更。" : "已移除收藏。");
+  }
+
+  function announceWatch(message) {
+    clearTimeout(watchFeedbackTimer);
+    $("#watch-feedback").textContent = message;
+    watchFeedbackTimer = setTimeout(() => { $("#watch-feedback").textContent = ""; }, 7000);
   }
 
   function setMore(sel, rest) {
