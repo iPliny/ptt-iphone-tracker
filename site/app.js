@@ -3,10 +3,7 @@
   "use strict";
 
   const $ = (s) => document.querySelector(s);
-  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const money = (n) => (n == null || n === "" ? "—" : "$" + Number(n).toLocaleString("zh-TW"));
-  const dayOf = (ts) => (ts || "").slice(0, 10);
+  const { esc, money, dayOf, modelUrl, itemHtml, soldNote, priceEventText } = PttCommon;
   const PAGE = 10;
 
   let D = null;
@@ -190,19 +187,6 @@
   }
 
   // ---------- 當日清單 ----------
-  function itemHtml(r, extra, extraTitle = "") {
-    const pm = (r.status === "在售" || r.status === "交易中") && r.pm_count >= 1
-      ? `<span class="chip pm" title="${esc(r.pm_count)} 位網友推文表示已私訊">私${esc(r.pm_count)}</span>` : "";
-    const tags = [r.storage, r.brand_new ? "全新未拆" : "", r.battery ? "電池 " + r.battery + "%" : "", r.warranty]
-      .filter(Boolean).map((t) => `<span class="chip">${esc(t)}</span>`).join("");
-    return `<div class="item">
-      <div><a class="name" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.model || r.title || "（未解析）")}</a> ${pm}${tags}</div>
-      <div class="price">${money(r.price)}</div>
-      <div class="meta"${extraTitle ? ` title="${esc(extraTitle)}"` : ""}>${esc(extra || r.notes || "")}</div>
-      <div class="meta side"><span class="st-${esc(r.status)}">${esc(r.status)}</span> · ${esc(r.post_time.slice(5, 16))}</div>
-    </div>`;
-  }
-
   function renderDayList() {
     const date = current;
     $("#day-title").textContent = date ? date + " 動態" : "當日動態";
@@ -217,12 +201,7 @@
         (tab === "price" ? e.event === "價格變動" : /已刪除$/.test(e.detail)))
         .map((e) => () => {
           const r = byUrl[e.url] || { url: e.url, post_time: "", status: "", title: e.url };
-          const estimated = e.time_basis === "ptt_edit";
-          const what = tab === "price" ? (estimated ? "改價 " : "發現改價 ") +
-            e.detail.replace(/(\d+)/g, (n) => money(n)) : "刪文";
-          const explanation = tab === "price" ? (estimated ?
-            `${e.time}（台灣時間），依當次 PTT 最新編輯時間推估；系統發現時間：${e.detected_at}` :
-            `系統發現時間：${e.detected_at || e.time}；沒有可用的當次編輯時間`) : "";
+          const { what, explanation } = tab === "price" ? priceEventText(e) : { what: "刪文", explanation: "" };
           return itemHtml(r, e.time.slice(11, 16) + " " + what, explanation);
         });
     }
@@ -230,11 +209,6 @@
       ? `<div class="items">${items.slice(0, dayLimit).map((f) => f()).join("")}</div>`
       : '<p class="empty">這天沒有紀錄</p>';
     setMore("#day-more", items.length - dayLimit);
-  }
-
-  function soldNote(r) {
-    if (r.days_to_sell == null) return "已售出，售出時間無法推估（依偵測日 " + dayOf(r.sold_detected_at) + " 計）";
-    return "上架 " + r.days_to_sell + " 天後售出" + (r.days_basis === "推估" ? "（推估，依最後編輯時間）" : "");
   }
 
   // ---------- 型號行情 ----------
@@ -271,8 +245,9 @@
       `<th data-k="${k}" class="${num ? "num " : ""}${k === key ? "sorted" + (asc ? " asc" : "") : ""}">${label}</th>`).join("") + "</tr>";
     const body = rows.map((m) => {
       const saved = watchlist.has({ model: m.model, storage: m.storage });
+      const link = `<a href="${esc(modelUrl(m.model, m.storage))}" title="查看 ${esc(m.model)} 機型頁">`;
       return `<tr><td class="watch-column"><button type="button" class="ghost watch-model" data-watch-model="${esc(m.model)}" data-watch-storage="${esc(m.storage)}" aria-label="${saved ? "取消收藏" : "收藏"} ${esc(m.model)} ${esc(m.storage || "容量未提供")}" title="${saved ? "取消收藏" : "收藏"}" aria-pressed="${saved}">${saved ? "★" : "☆"}</button></td>` + MODEL_COLS.map(([k, , num]) =>
-        `<td${num ? ' class="num"' : ""}>${esc(fmt(k, m[k], m))}</td>`).join("") + "</tr>";
+        `<td${num ? ' class="num"' : ""}>${k === "model" ? link + esc(m.model) + "</a>" : esc(fmt(k, m[k], m))}</td>`).join("") + "</tr>";
     }).join("");
     $("#models").innerHTML = "<thead>" + head + "</thead><tbody>" +
       (body || `<tr><td colspan="${MODEL_COLS.length + 1}" class="empty">沒有符合的型號</td></tr>`) + "</tbody>";
@@ -370,8 +345,6 @@
   }
 
   function setMore(sel, rest) {
-    const btn = $(sel);
-    btn.hidden = rest <= 0;
-    btn.textContent = "顯示更多（還有 " + rest + " 篇）";
+    PttCommon.setMore($(sel), rest);
   }
 })();
