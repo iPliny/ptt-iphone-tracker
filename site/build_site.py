@@ -17,7 +17,8 @@ from datetime import date, datetime, timedelta, timezone
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SITE_DIR = os.path.join(ROOT, "site")
 DATA_DIR = os.path.join(ROOT, "data")
-STATIC_FILES = ["index.html", "model.html", "common.js", "app.js", "model.js", "watchlist.js", "style.css"]
+STATIC_FILES = ["index.html", "model.html", "common.js", "app.js", "model.js", "watchlist.js", "style.css",
+                "prices.html", "prices.js", "prices.css", "official-prices.json"]
 CSV_FILES = ["listings.csv", "events.csv", "market_summary.csv", "price_event_times.csv"]
 TAIPEI = timezone(timedelta(hours=8))
 
