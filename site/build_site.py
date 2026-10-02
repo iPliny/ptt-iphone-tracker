@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta, timezone
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SITE_DIR = os.path.join(ROOT, "site")
 DATA_DIR = os.path.join(ROOT, "data")
-STATIC_FILES = ["index.html", "app.js", "watchlist.js", "style.css"]
+STATIC_FILES = ["index.html", "model.html", "common.js", "app.js", "model.js", "watchlist.js", "style.css"]
 CSV_FILES = ["listings.csv", "events.csv", "market_summary.csv", "price_event_times.csv"]
 TAIPEI = timezone(timedelta(hours=8))
 
@@ -173,31 +173,42 @@ def daily_series(listings, events, max_days=MAX_DAYS):
     return out
 
 
+def group_stats(items):
+    """一組刊登（已確定有價格）的價格與售出統計。"""
+    prices = [r["price"] for r in items]
+    sold = [r for r in items if r["status"] == "已售出"]
+    timed = [r for r in sold if r["days_to_sell"] is not None]
+    days = [r["days_to_sell"] for r in timed]
+    return {
+        "listed": len(items),
+        "active": sum(1 for r in items if r["status"] in ("在售", "交易中")),
+        "sold": len(sold),
+        "median_price": int(statistics.median(prices)),
+        "median_sold_price": int(statistics.median([r["price"] for r in sold])) if sold else None,
+        "min_price": min(prices), "max_price": max(prices),
+        "median_days": round(statistics.median(days), 1) if days else None,
+        "days_estimated": sum(1 for r in timed if r["days_basis"] == "推估"),
+        "days_samples": len(timed),
+    }
+
+
 def model_stats(listings):
     """各型號×容量（不分全新與否）在售／已售的價格統計，供網頁的型號篩選使用。"""
     groups = {}
     for r in listings:
         if r["price"] and r["model"]:
             groups.setdefault((r["model"], r["storage"]), []).append(r)
-    out = []
-    for (model, storage), items in sorted(groups.items()):
-        prices = [r["price"] for r in items]
-        sold = [r for r in items if r["status"] == "已售出"]
-        timed = [r for r in sold if r["days_to_sell"] is not None]
-        days = [r["days_to_sell"] for r in timed]
-        out.append({
-            "model": model, "storage": storage,
-            "listed": len(items),
-            "active": sum(1 for r in items if r["status"] in ("在售", "交易中")),
-            "sold": len(sold),
-            "median_price": int(statistics.median(prices)),
-            "median_sold_price": int(statistics.median([r["price"] for r in sold])) if sold else None,
-            "min_price": min(prices), "max_price": max(prices),
-            "median_days": round(statistics.median(days), 1) if days else None,
-            "days_estimated": sum(1 for r in timed if r["days_basis"] == "推估"),
-            "days_samples": len(timed),
-        })
-    return out
+    return [{"model": model, "storage": storage, **group_stats(items)}
+            for (model, storage), items in sorted(groups.items())]
+
+
+def model_totals(listings):
+    """各型號不分容量的合計統計，給機型頁的「全部容量」分頁使用。"""
+    groups = {}
+    for r in listings:
+        if r["price"] and r["model"]:
+            groups.setdefault(r["model"], []).append(r)
+    return [{"model": model, **group_stats(items)} for model, items in sorted(groups.items())]
 
 
 def build_data(data_dir=DATA_DIR, now=None):
@@ -223,6 +234,7 @@ def build_data(data_dir=DATA_DIR, now=None):
         "counts": {"total": len(listings), **counts},
         "days": daily_series(listings, events),
         "models": model_stats(listings),
+        "model_totals": model_totals(listings),
         "summary": read_csv(os.path.join(data_dir, "market_summary.csv")),
         "listings": listings,
         "events": events_out,

@@ -121,3 +121,22 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outlin
 }
 .foot { color: var(--muted); font-size: 13px; padding-bottom: 32px; }
 [hidden] { display: none !important; }
+
+/* 機型頁 */
+.back { font-size: 14px; }
+.model-title { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
+.storage-tabs { margin: 18px 0 12px; }
+.storage-tabs button { min-height: 40px; padding: 4px 14px; }
+.storage-tabs .count { color: var(--muted); font-size: 12px; margin-left: 2px; }
+.storage-tabs button.on .count { color: inherit; opacity: .85; }
+#model-main .kpis { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 720px) { #model-main .kpis { grid-template-columns: repeat(2, 1fr); } }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-left: 6px; background: currentColor; }
+#model-main .chart svg { height: 240px; }
+.chart .pt { fill: currentColor; fill-opacity: .75; stroke: var(--card); stroke-width: 1; }
+.chart a:hover .pt { fill-opacity: 1; stroke: var(--ink); }
+.chart .median { stroke: var(--muted); stroke-dasharray: 4 4; }
+.linkish { border: 0; padding: 0; background: none; color: var(--accent); }
+.linkish:hover { text-decoration: underline; }
+#compare tr.current td { background: var(--chip); }
+#compare th { cursor: default; }

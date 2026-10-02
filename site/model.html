@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>機型行情 · PTT每日交易觀測</title>
+  <meta name="description" content="PTT MacShop 版單一 iPhone 機型的二手行情、各容量價格與刊登文章。">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="back" href="./">← PTT每日交易觀測</a>
+      <div class="model-title">
+        <h1 id="model-name">載入中…</h1>
+        <button id="watch-model" type="button" class="ghost watch-model" hidden aria-pressed="false">☆</button>
+      </div>
+      <p class="sub"><span id="updated">載入中…</span></p>
+    </div>
+  </header>
+
+  <main class="wrap" id="model-main" hidden>
+    <nav class="tabs storage-tabs" id="storage-tabs" aria-label="容量"></nav>
+
+    <section class="kpis" id="kpis"></section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>價格分布</h2>
+        <div class="legend"><span class="dot st-在售"></span>在售 <span class="dot st-交易中"></span>交易中 <span class="dot st-已售出"></span>已售出 <span class="dot st-已刪除"></span>已刪除</div>
+      </div>
+      <div id="chart" class="chart"></div>
+      <p class="hint">每一點是一篇文章，橫軸是發文日，縱軸是目前標價。點圓點可開啟 PTT 原文。</p>
+    </section>
+
+    <section class="card" id="compare-card">
+      <div class="card-head"><h2>各容量比較</h2></div>
+      <div class="scroll"><table id="compare"></table></div>
+      <p class="hint">「成交價」是偵測到售出時的最後標價，PTT 沒有真實成交價。售出天數標「推估」的，是第一次看到就已售出的文章，用賣家最後編輯文章的時間推算。</p>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2 id="list-title">文章</h2>
+        <div class="filters">
+          <select id="status-f" aria-label="文章狀態">
+            <option value="">全部狀態</option>
+            <option>在售</option><option>交易中</option><option>已售出</option><option>已刪除</option>
+          </select>
+          <select id="sort-f" aria-label="排序">
+            <option value="time">最新發文</option>
+            <option value="price-asc">價格低到高</option>
+            <option value="price-desc">價格高到低</option>
+          </select>
+        </div>
+      </div>
+      <div id="list"></div>
+      <button id="more" type="button" class="ghost more" hidden>顯示更多</button>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>最近改價</h2></div>
+      <div id="events"></div>
+    </section>
+  </main>
+
+  <main class="wrap" id="model-missing" hidden>
+    <section class="card"><p class="empty" id="missing-text">找不到這個機型。</p></section>
+  </main>
+
+  <p id="watch-feedback" class="hint" role="status" aria-live="polite"></p>
+
+  <footer class="wrap foot">
+    <p>資料來源：PTT MacShop 版標題含「[販售]」與 iPhone 的文章，由 <a href="https://github.com/iPliny/ptt-iphone-tracker">ptt-iphone-tracker</a> 每日回訪整理。</p>
+  </footer>
+
+  <script src="common.js"></script>
+  <script src="watchlist.js"></script>
+  <script src="model.js"></script>
+</body>
+</html>

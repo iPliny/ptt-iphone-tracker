@@ -86,6 +86,22 @@ class BuildSiteTest(unittest.TestCase):
         self.assertEqual((m["listed"], m["active"], m["sold"]), (3, 1, 1))
         self.assertEqual((m["median_price"], m["median_sold_price"], m["median_days"]), (12000, 20000, 0.9))
 
+    def test_model_totals_merge_storages(self):
+        """機型頁的「全部容量」要把同機型不同容量合在一起，不同機型分開。"""
+        path = os.path.join(self.dir, "listings.csv")
+        with open(path, "a", encoding="utf-8", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=LISTING_HEADER)
+            w.writerow(listing("u6", "2026-09-03 10:00:00", price="30000", storage="256GB"))
+            w.writerow(listing("u7", "2026-09-03 11:00:00", price="50000", model="iPhone 15 Pro"))
+        data = S.build_data(self.dir)
+        self.assertEqual(len(data["models"]), 3)
+        totals = {m["model"]: m for m in data["model_totals"]}
+        self.assertEqual(sorted(totals), ["iPhone 15", "iPhone 15 Pro"])
+        t = totals["iPhone 15"]
+        self.assertEqual((t["listed"], t["active"], t["sold"]), (4, 2, 1))
+        self.assertEqual((t["median_price"], t["min_price"], t["max_price"]), (16000, 10000, 30000))
+        self.assertNotIn("storage", t)
+
     def test_missing_events_file(self):
         os.remove(os.path.join(self.dir, "events.csv"))
         data = S.build_data(self.dir)
