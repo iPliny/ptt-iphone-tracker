@@ -1,6 +1,6 @@
 // Google Analytics 4 流量監測。
 // 只要改這一行：填入 GA4 的評估 ID（G- 開頭）；留空就完全不載入 Google 的程式。
-const GA_MEASUREMENT_ID = "";
+const GA_MEASUREMENT_ID = "G-G3GH12TQSZ";
 
 (function () {
   if (!/^G-[A-Z0-9]+$/.test(GA_MEASUREMENT_ID)) return;
