@@ -19,7 +19,7 @@ from datetime import date, datetime, timedelta, timezone
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SITE_DIR = os.path.join(ROOT, "site")
 DATA_DIR = os.path.join(ROOT, "data")
-STATIC_FILES = ["index.html", "model.html", "analytics.js", "common.js", "app.js", "model.js", "watchlist.js", "style.css"]
+STATIC_FILES = ["index.html", "model.html", "common.js", "app.js", "model.js", "watchlist.js", "style.css"]
 CSV_FILES = ["listings.csv", "events.csv", "market_summary.csv", "price_event_times.csv"]
 TAIPEI = timezone(timedelta(hours=8))
 SITE_URL = "https://ipliny.github.io/ptt-iphone-tracker/"  # sitemap.xml 用的正式網址
