@@ -111,10 +111,21 @@ class BuildSiteTest(unittest.TestCase):
     def test_build_writes_site(self):
         out = os.path.join(self.dir, "out")
         S.build(out, self.dir)
-        for name in S.STATIC_FILES + ["data.json", "data/listings.csv"]:
+        for name in S.STATIC_FILES + ["data.json", "data/listings.csv", "sitemap.xml"]:
             self.assertTrue(os.path.exists(os.path.join(out, name)), name)
         with open(os.path.join(out, "data.json"), encoding="utf-8") as f:
             self.assertIn("days", json.load(f))
+
+    def test_sitemap_lists_home_and_model_pages(self):
+        from datetime import date
+        from xml.etree import ElementTree
+        data = {"model_totals": [{"model": "iPhone 15 Pro"}, {"model": "iPhone 16e"}]}
+        root = ElementTree.fromstring(S.sitemap_xml(data, today=date(2026, 10, 4)))
+        ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+        locs = [e.text for e in root.findall("s:url/s:loc", ns)]
+        self.assertEqual(locs, [S.SITE_URL, S.SITE_URL + "model.html?m=iPhone+15+Pro",
+                                S.SITE_URL + "model.html?m=iPhone+16e"])
+        self.assertEqual({e.text for e in root.findall("s:url/s:lastmod", ns)}, {"2026-10-04"})
 
     def test_estimated_sold_date(self):
         """推估的售出天數要把售出算回發文日＋天數那天，而不是偵測到的那天。"""

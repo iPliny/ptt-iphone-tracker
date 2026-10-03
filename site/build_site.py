@@ -12,6 +12,8 @@ import json
 import os
 import shutil
 import statistics
+from urllib.parse import urlencode
+from xml.sax.saxutils import escape
 from datetime import date, datetime, timedelta, timezone
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -20,6 +22,7 @@ DATA_DIR = os.path.join(ROOT, "data")
 STATIC_FILES = ["index.html", "model.html", "analytics.js", "common.js", "app.js", "model.js", "watchlist.js", "style.css"]
 CSV_FILES = ["listings.csv", "events.csv", "market_summary.csv", "price_event_times.csv"]
 TAIPEI = timezone(timedelta(hours=8))
+SITE_URL = "https://ipliny.github.io/ptt-iphone-tracker/"  # sitemap.xml 用的正式網址
 
 TRACKED_STATUSES = {"在售", "交易中", "已售出", "已刪除"}
 MAX_DAYS = 90       # 每日序列最多保留幾天
@@ -241,6 +244,15 @@ def build_data(data_dir=DATA_DIR, now=None):
     }
 
 
+def sitemap_xml(data, today=None):
+    """首頁加上每個機型頁，網址和網站內連結相同（model.html?m=...）。"""
+    lastmod = (today or datetime.now(TAIPEI).date()).isoformat()
+    urls = [SITE_URL] + [SITE_URL + "model.html?" + urlencode({"m": m["model"]}) for m in data["model_totals"]]
+    items = "".join(f"  <url><loc>{escape(u)}</loc><lastmod>{lastmod}</lastmod></url>\n" for u in urls)
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + items + "</urlset>\n")
+
+
 def build(out_dir, data_dir=DATA_DIR):
     os.makedirs(out_dir, exist_ok=True)
     for name in STATIC_FILES:
@@ -254,6 +266,8 @@ def build(out_dir, data_dir=DATA_DIR):
     data = build_data(data_dir)
     with open(os.path.join(out_dir, "data.json"), "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+    with open(os.path.join(out_dir, "sitemap.xml"), "w", encoding="utf-8") as f:
+        f.write(sitemap_xml(data))
     return data
 
 
