@@ -187,6 +187,9 @@ def normalize_model(raw):
     s = re.sub(r"[^\da-z\s]", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
     s = re.sub(r"^i\s*(?=\d)", "", s)  # i15 → 15
+    s = s.replace("promax", " pro max")
+    s = re.sub(r"(\d)(?=[a-z])|(pro|max|plus)(?=\d)", r"\1\2 ", s)  # 18pro → 18 pro、pro256g → pro 256 g
+    s = re.sub(r"\s+", " ", s).strip()
 
     # 縮寫：15pm / 15 pm → 15 pro max，15p → 15 pro
     s = re.sub(r"(\d+)\s*pm\b", r"\1 pro max", s)
@@ -462,6 +465,10 @@ def parse_warranty(text):
     return t.splitlines()[0][:30]
 
 
+_CANONICAL_MODEL_RE = re.compile(
+    r"iPhone (?:(?:\d{1,2}e?|SE\d?|Air)(?: Pro Max| Pro| Plus| mini)?|X|XR|XS(?: Max)?)")
+
+
 def rule_extract(title, body):
     """回傳與 LLM 相同格式的 dict；無法確定是單一 iPhone 時 model 為 None。"""
     body = strip_signature(body)
@@ -479,12 +486,15 @@ def rule_extract(title, body):
     multi = len(_NUMBERED_LINE_RE.findall(model_text)) >= 2
     model = None
     # 型號欄常只寫 A2633、MG6K4ZP/A 這類料號，依序改用規格欄、標題
-    for source in (model_text, spec, bare_title):
+    # 型號欄只看第一行：下一行常是「可憑商品序號至 Apple官網查詢」之類的附註
+    model_line = next((l for l in model_text.splitlines() if l.strip()), "")
+    for source in (model_line, spec, bare_title):
         if not source or not re.search(r"i\s*phone|愛鳳", title + source, re.I):
             continue
         numbers = set(re.findall(r"(?<![\d.])(1[0-9]|[4-9])(?:\s*(?:pro|plus|mini|max|e)\b|\b)", source, re.I))
         cand = normalize_model(source)
-        if cand.startswith("iPhone") and len(numbers) <= 1 and not _ACCESSORY_RE.search(source):
+        # 沒寫代數（iPhone Pro Max）或不存在的組合（iPhone X Pro）→ 改看下一個來源
+        if _CANONICAL_MODEL_RE.fullmatch(cand) and len(numbers) <= 1 and not _ACCESSORY_RE.search(source):
             model = cand
             break
     if multi or len(iphone_blocks) > 1:  # 分段賣兩支以上 iPhone，同樣略過
