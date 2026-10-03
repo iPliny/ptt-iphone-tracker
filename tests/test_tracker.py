@@ -447,3 +447,36 @@ class TimezoneTest(unittest.TestCase):
     def test_post_time_is_taipei(self):
         url = T.BASE_URL + "/bbs/MacShop/M.1790391324.A.30C.html"  # UTC 2026-09-26 02:55:24
         self.assertEqual(T.post_time_from_url(url), "2026-09-26 10:55:24")
+
+
+class ModelFieldRegressionTest(unittest.TestCase):
+    """型號欄下一行接了序號查詢連結、或型號欄沒寫代數時，不能把整段文字當型號。"""
+    SERIAL = "可憑商品序號至 Apple官網查詢 https://apple.co/3l6By0R\n"
+
+    def post(self, model_field):
+        return ("[型號]：" + model_field + "\n" + self.SERIAL +
+                "[規格]：512G\n[保固]：無\n[售價]：36,700\n[交易方式/地點]：面交\n")
+
+    def test_missing_generation_falls_back_to_title(self):
+        # M.1790766521.A.A2D
+        f = T.rule_extract("[販售] 高雄 iPhone 17 Pro Max 512G 橘色", self.post("iPhone Pro Max"))
+        self.assertEqual(f["model"], "iPhone 17 Pro Max")
+
+    def test_glued_promax_and_serial_line(self):
+        # M.1790564568.A.B4C
+        f = T.rule_extract("[販售] 台中 iPhone18Promax 1T 冰川藍", self.post("iPhone18promax 1T藍"))
+        self.assertEqual(f["model"], "iPhone 18 Pro Max")
+
+    def test_model_without_generation_uses_title(self):
+        # M.1790710945.A.7BE
+        f = T.rule_extract("[販售] 桃園 iPhone 15 pro max 256g", self.post("iPhone pro max 256g"))
+        self.assertEqual(f["model"], "iPhone 15 Pro Max")
+
+    def test_nonexistent_model_is_not_recorded(self):
+        # M.1790607432.A.D59：標題只有 [販售]，型號寫 iPhone X Pro（不存在）
+        self.assertIsNone(T.rule_extract("[販售]", self.post("iPhone X Pro"))["model"])
+
+    def test_glued_names(self):
+        for raw, want in [("iPhone16pro256G金", "iPhone 16 Pro"), ("iPhone 17ProMax 256G", "iPhone 17 Pro Max"),
+                          ("Mac mini m4 iPhone 16 pro", "iPhone 16 Pro")]:
+            self.assertEqual(T.normalize_model(raw), want)
