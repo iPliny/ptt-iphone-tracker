@@ -59,6 +59,10 @@ class ColumnTest(unittest.TestCase):
         self.assertEqual(C.parse_price_change("42000 → 39,500"), (42000, 39500))
         self.assertIsNone(C.parse_price_change("在售 → 已售出"))
         self.assertIsNone(C.parse_price_change(""))
+        # 2026/9/27 那期的 iPhone 14 Pro 25000 → 10000 是價格抓錯，不算降價
+        self.assertIsNone(C.parse_price_change("25000 → 10000"))
+        self.assertIsNone(C.parse_price_change("9000 → 19000"))
+        self.assertEqual(C.parse_price_change("20000 → 10000"), (20000, 10000))
 
     def test_compute_issue_counts(self):
         i = C.compute_issue(self.dir, self.start, self.end)
