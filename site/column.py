@@ -39,12 +39,14 @@ def median_int(values):
 
 
 def parse_price_change(detail):
-    """'42000 → 39500' → (42000, 39500)；格式不對回傳 None。"""
+    """'42000 → 39500' → (42000, 39500)；格式不對，或降幅超過一半、漲幅超過一倍（多半是價格抓錯）回傳 None。"""
     try:
         a, b = (S.to_int(x) for x in (detail or "").split("→"))
     except ValueError:
         return None
-    return (a, b) if a and b else None
+    if not (a and b) or b < a * 0.5 or b > a * 2:
+        return None
+    return a, b
 
 
 def load_tracked(data_dir):
