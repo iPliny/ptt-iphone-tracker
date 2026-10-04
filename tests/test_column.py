@@ -15,10 +15,10 @@ from tests.test_site import LISTING_HEADER, S_EVENT_HEADER, write_csv  # noqa: E
 
 
 def row(url, post, status="在售", price="20000", model="iPhone 15", storage="128GB", new="否",
-        sold_at="", days="", first_seen="2026-09-01 00:00:00"):
+        sold_at="", days="", first_seen="2026-09-01 00:00:00", battery=""):
     return {"source_url": url, "post_time": post, "status": status, "sold_detected_at": sold_at,
             "days_to_sell": days, "model": model, "storage": storage, "全新未拆封機": new,
-            "price": price, "first_price": price, "first_seen": first_seen, "last_checked": "2026-10-04 12:00:00"}
+            "price": price, "first_price": price, "first_seen": first_seen, "battery_health": battery, "last_checked": "2026-10-04 12:00:00"}
 
 
 class ColumnTest(unittest.TestCase):
@@ -30,9 +30,9 @@ class ColumnTest(unittest.TestCase):
             row("p1", "2026-09-21 10:00:00", price="19000"),
             row("p2", "2026-09-22 10:00:00", price="19000"),
             # 本週（9/27–10/3）
-            row("a1", "2026-09-27 10:00:00", price="20000", status="已售出", sold_at="2026-09-28 10:00:00", days="1.0"),
+            row("a1", "2026-09-27 10:00:00", price="20000", status="已售出", sold_at="2026-09-28 10:00:00", days="1.0", battery="95"),
             row("a2", "2026-09-28 10:00:00", price="21000", status="已售出", sold_at="2026-09-30 10:00:00", days="2.0"),
-            row("a3", "2026-09-29 10:00:00", price="22000"),
+            row("a3", "2026-09-29 10:00:00", price="22000", battery="85"),
             row("b1", "2026-09-30 10:00:00", price="30000", model="iPhone 15 Pro", status="已刪除"),
             row("n1", "2026-10-01 10:00:00", price="50000", model="iPhone 17 Pro", storage="256GB", new="是"),
             # 下一週，不算
@@ -90,8 +90,26 @@ class ColumnTest(unittest.TestCase):
         self.assertIn("PTT MacShop", a["title"])
         self.assertIn("二手 iPhone", a["title"])
         self.assertIn("2026/9/27–10/3", a["title"])
+        self.assertIn("battery", [s["id"] for s in a["sections"]])
+        self.assertIn("從 $24,000 降到 $22,000", a["sections"][-2]["body"][0])
         text = a["lead"] + "".join(p for s in a["sections"] for p in s["body"])
-        self.assertTrue(450 <= len(text) <= 1000, len(text))
+        self.assertTrue(600 <= len(text) <= C.MAX_CHARS, len(text))
+
+    def test_article_max_length(self):
+        """每段都寫滿、型號名稱很長時，內文也不超過 1000 字。"""
+        g = {"model": "iPhone 17 Pro Max", "storage": "1TB", "listed": 99, "median_price": 123456,
+             "min_price": 100000, "max_price": 150000, "sold": 99, "median_sold_price": 120000}
+        issue = {"week_start": "2026-12-27", "week_end": "2027-01-02", "generated_at": "2027-01-03 20:00:00",
+                 "new": 999, "sold": 999, "deleted": 999, "brand_new": 999, "price_changes": 999,
+                 "price_cuts": 999, "price_raises": 999, "avg_cut_pct": 12.3, "on_shelf": 999,
+                 "median_days": 12.5, "days_samples": 999, "groups": [g] * 8, "new_groups": [g] * 3,
+                 "fast": [{"model": "iPhone 17 Pro Max", "n": 99, "median_days": 12.5}] * 5,
+                 "battery_listed": 88, "battery_sold": 91,
+                 "biggest_cut": {"model": "iPhone 17 Pro Max", "storage": "1TB", "from": 150000, "to": 100000},
+                 "prev": {"new": 1, "sold": 1, "medians": {"iPhone 17 Pro Max|1TB": 100000}}}
+        a = C.article(issue)
+        self.assertLessEqual(C.trim(a["lead"], a["sections"]), C.MAX_CHARS)
+        self.assertNotIn("battery", [s["id"] for s in a["sections"]])  # 先拿掉補充段落
 
     def test_write_issue_once(self):
         path, written = C.write_issue(self.dir, today=date(2026, 10, 4))

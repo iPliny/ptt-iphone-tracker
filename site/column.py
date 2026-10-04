@@ -21,6 +21,7 @@ COLUMN_TITLE = "二手 iPhone 行情週報"
 BRAND = "PTT每日交易觀測"
 GA_ID = "G-G3GH12TQSZ"
 TOP_GROUPS = 8      # 表格列出幾組型號×容量
+MAX_CHARS = 1000    # 內文（導言＋各段）字數上限
 FAST_MIN = 2        # 售出天數至少幾筆才列入「賣得最快」
 
 
@@ -118,6 +119,19 @@ def fast_models(sold):
     return out
 
 
+def biggest_cut(listings, events, start, end):
+    """本週降價金額最大的一次（型號、容量、原價、新價）。"""
+    by_url = {r["url"]: r for r in listings}
+    best = None
+    for ev in events:
+        if ev.get("event") != "價格變動" or not (start <= (S.day_of(ev.get("time")) or "") <= end):
+            continue
+        c, r = parse_price_change(ev.get("detail")), by_url.get(ev.get("source_url"))
+        if c and r and r["model"] and c[1] < c[0] and (best is None or c[0] - c[1] > best["from"] - best["to"]):
+            best = {"model": r["model"], "storage": r["storage"], "from": c[0], "to": c[1]}
+    return best
+
+
 def compute_issue(data_dir, start, end, now=None):
     """一期的統計快照。start／end 是 date（週日／週六）。"""
     listings, events, first_seen = load_tracked(data_dir)
@@ -134,6 +148,9 @@ def compute_issue(data_dir, start, end, now=None):
         "groups": price_groups(new, sold, brand_new=False)[:TOP_GROUPS],
         "new_groups": price_groups(new, sold, brand_new=True)[:3],
         "fast": fast_models(sold)[:5],
+        "battery_listed": median_int([r["battery"] for r in new if not r["brand_new"] and r["battery"]]),
+        "battery_sold": median_int([r["battery"] for r in sold if not r["brand_new"] and r["battery"]]),
+        "biggest_cut": biggest_cut(listings, events, s, e),
         "prev": None,
     }
     # 追蹤開始前的週次資料不完整，不拿來比較
@@ -221,8 +238,12 @@ def heat_comment(issue):
     return "售出不到新刊登的三成，架上選擇多、賣家競爭較激烈，買方議價空間相對大。"
 
 
+def trim(lead, sections):
+    return len(lead) + sum(len(p) for sec in sections for p in sec["body"])
+
+
 def article(issue):
-    """依統計快照產生一期的標題、摘要與各段內文（約 600 字）。"""
+    """依統計快照產生一期的標題、摘要與各段內文（1000 字以內）。"""
     label = week_label(issue)
     groups, fast, prev = issue["groups"], issue["fast"], issue["prev"]
     top = groups[0] if groups else None
@@ -247,6 +268,7 @@ def article(issue):
         points.append(f"賣家降價 {issue['price_cuts']} 次，平均降幅 {issue['avg_cut_pct']}%。")
 
     sections = []
+    optional = []  # 超過字數上限時依序拿掉的段落：(段落 id, 文字)
 
     # 1. 交易熱度
     p = [f"本週 MacShop 版新增 {issue['new']} 篇 iPhone 販售文，其中全新未拆封 {issue['brand_new']} 篇"
@@ -274,9 +296,16 @@ def article(issue):
         if moves:
             s += "和上週相比，" + "、".join(moves) + "。"
         body.append(s)
+        s = f"{name(top)} 本週刊登價從 {money(top['min_price'])} 到 {money(top['max_price'])} 都有"
+        if top["median_sold_price"]:
+            s += f"，已售出的 {top['sold']} 支成交標價中位數是 {money(top['median_sold_price'])}"
+        body.append(s + "，價差可能來自電池健康度、保固與外觀。")
+        optional.append(("models", body[-1]))
         ng = issue["new_groups"]
         if ng:
-            body.append(f"全新未拆封機則以 {name(ng[0])} 最多（{ng[0]['listed']} 篇），刊登價中位數 {money(ng[0]['median_price'])}。")
+            parts = [f"{name(g)}（{g['listed']} 篇，中位數 {money(g['median_price'])}）" for g in ng[:2]]
+            body.append("全新未拆封機則以 " + "、".join(parts) + "最多，價格明顯高於同型號二手機，比價時要分開看。")
+            optional.append(("models", body[-1]))
     else:
         body.append("本週沒有可以統計價格的二手刊登。")
     sections.append({"id": "models", "h": "哪些 iPhone 最多人賣？二手價多少？", "body": body, "table": bool(groups)})
@@ -291,11 +320,28 @@ def article(issue):
         s += f"全部 {issue['days_samples']} 支售出的中位數是發文後 {issue['median_days']} 天。"
     sections.append({"id": "speed", "h": "哪些機型賣得最快？", "body": [s]})
 
+    # 電池健康度
+    bl, bs = issue.get("battery_listed"), issue.get("battery_sold")
+    if bl and bs:
+        s = f"有標電池健康度的二手機中，本週新刊登的中位數是 {bl}%，本週售出的是 {bs}%。"
+        if bs > bl:
+            s += "售出的機子電池普遍比較好，想賣得快，電池狀況值得在文章裡寫清楚。"
+        elif bs < bl:
+            s += "售出機的電池反而略低，價格夠便宜時，電池差一點的機子一樣有人買。"
+        else:
+            s += "兩者差不多，這週電池健康度不是買家挑選的主要差別。"
+        sections.append({"id": "battery", "h": "電池健康度會影響好不好賣嗎？", "body": [s]})
+        optional.append(("battery", s))
+
     # 4. 降價
     if issue["price_changes"]:
         s = (f"本週偵測到 {issue['price_changes']} 次改價，其中降價 {issue['price_cuts']} 次、漲價 {issue['price_raises']} 次。")
         if issue["price_cuts"]:
-            s += f"降價的平均幅度是 {issue['avg_cut_pct']}%。想撿便宜的人，可以多留意剛降價的文章。"
+            s += f"降價的平均幅度是 {issue['avg_cut_pct']}%。"
+            b = issue.get("biggest_cut")
+            if b:
+                s += f"降最多的是一篇 {name(b)}，從 {money(b['from'])} 降到 {money(b['to'])}。"
+            s += "想撿便宜的人，可以多留意剛降價的文章。"
     else:
         s = "本週沒有偵測到改價，賣家大多維持原本的標價。"
     sections.append({"id": "price-cut", "h": "賣家有在降價嗎？", "body": [s]})
@@ -304,9 +350,17 @@ def article(issue):
     tips = []
     if top:
         tips.append(f"想買的人可以把上表的刊登價中位數當出價基準，例如 {name(top)} 低於 {money(top['median_price'])} 的文章就算不錯的價格；")
-    tips.append("想賣的人可以參考同型號、同容量的中位數訂價，標價明顯高於中位數時，可能要等比較久或需要降價。"
-                "電池健康度、保固與外觀也會影響價格，本週報只比較型號與容量，實際出價請再看個別文章。")
-    sections.append({"id": "tips", "h": "想買或想賣二手 iPhone，可以怎麼參考？", "body": ["".join(tips)]})
+    tips.append("想賣的人可以參考同型號、同容量的中位數訂價，標價明顯高於中位數時，可能要等比較久或需要降價。")
+    caveat = "電池健康度、保固與外觀也會影響價格，本週報只比較型號與容量，實際出價請再看個別文章。"
+    sections.append({"id": "tips", "h": "想買或想賣二手 iPhone，可以怎麼參考？", "body": ["".join(tips), caveat]})
+    optional.insert(0, ("tips", caveat))
+
+    for sec_id, text in optional:  # 字數上限：從最不重要的段落開始拿掉
+        if trim(lead, sections) <= MAX_CHARS:
+            break
+        sec = next(x for x in sections if x["id"] == sec_id)
+        sec["body"].remove(text)
+    sections = [x for x in sections if x["body"]]
 
     faq = []
     if top:
