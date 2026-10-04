@@ -244,10 +244,12 @@ def build_data(data_dir=DATA_DIR, now=None):
     }
 
 
-def sitemap_xml(data, today=None):
-    """首頁加上每個機型頁，網址和網站內連結相同（model.html?m=...）。"""
+def sitemap_xml(data, today=None, column_urls=()):
+    """首頁、每個機型頁（model.html?m=...，和網站內連結相同），以及每週專欄的入口與各期。"""
     lastmod = (today or datetime.now(TAIPEI).date()).isoformat()
     urls = [SITE_URL] + [SITE_URL + "model.html?" + urlencode({"m": m["model"]}) for m in data["model_totals"]]
+    if column_urls:
+        urls += [SITE_URL + "column/"] + list(column_urls)
     items = "".join(f"  <url><loc>{escape(u)}</loc><lastmod>{lastmod}</lastmod></url>\n" for u in urls)
     return ('<?xml version="1.0" encoding="UTF-8"?>\n'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + items + "</urlset>\n")
@@ -266,8 +268,10 @@ def build(out_dir, data_dir=DATA_DIR):
     data = build_data(data_dir)
     with open(os.path.join(out_dir, "data.json"), "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+    from column import render_column  # column.py 也會 import 這個檔，放在這裡避免循環
+    column_urls = render_column(out_dir, data_dir)
     with open(os.path.join(out_dir, "sitemap.xml"), "w", encoding="utf-8") as f:
-        f.write(sitemap_xml(data))
+        f.write(sitemap_xml(data, column_urls=column_urls))
     return data
 
 

@@ -1,0 +1,62 @@
+# 每週專欄「二手 iPhone 行情週報」：週日晚上產生上一週（週日～週六）的統計，commit 到 data/column/ 後重新部署網站。
+name: 每週專欄
+
+on:
+  schedule:
+    - cron: "0 12 * * 0"   # 每週日 UTC 12:00 = 日本時間 21:00 = 台灣時間 20:00
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "以這天（台灣時間，YYYY-MM-DD）為準產生上一個完整週；空白＝今天"
+        default: ""
+      force:
+        description: "這期已存在也重新產生"
+        type: boolean
+        default: false
+
+env:
+  TZ: Asia/Taipei
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: column
+  cancel-in-progress: false
+
+jobs:
+  column:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 產生本期統計
+        env:
+          INPUT_DATE: ${{ inputs.date }}
+          INPUT_FORCE: ${{ inputs.force && '--force' || '' }}
+        run: python site/column.py ${INPUT_DATE:+--date "$INPUT_DATE"} $INPUT_FORCE
+      - name: Commit 並重新部署網站
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "ptt-tracker-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/column/
+          if git diff --cached --quiet; then
+            echo "這期已存在，沒有變動。"
+            exit 0
+          fi
+          git commit -m "每週專欄 $(TZ=Asia/Taipei date '+%F')"
+          # 爬蟲排程可能同時推送，rebase 後重試
+          for attempt in 1 2 3; do
+            if git pull --rebase origin main && git push origin HEAD:main; then
+              gh workflow run pages.yml --ref main
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "推送失敗" >&2
+          exit 1
