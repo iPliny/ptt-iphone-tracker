@@ -1,0 +1,197 @@
+{
+ "week_start": "2026-09-27",
+ "week_end": "2026-10-03",
+ "generated_at": "2026-10-04 20:57:33",
+ "new": 329,
+ "sold": 55,
+ "deleted": 41,
+ "brand_new": 86,
+ "price_changes": 47,
+ "price_cuts": 42,
+ "price_raises": 5,
+ "avg_cut_pct": 5.2,
+ "on_shelf": 349,
+ "median_days": 1.4,
+ "days_samples": 48,
+ "groups": [
+  {
+   "model": "iPhone 17 Pro",
+   "storage": "256GB",
+   "listed": 20,
+   "median_price": 29500,
+   "min_price": 27000,
+   "max_price": 33000,
+   "sold": 6,
+   "median_sold_price": 29750
+  },
+  {
+   "model": "iPhone 15 Pro",
+   "storage": "256GB",
+   "listed": 17,
+   "median_price": 16000,
+   "min_price": 13000,
+   "max_price": 18800,
+   "sold": 3,
+   "median_sold_price": 16000
+  },
+  {
+   "model": "iPhone 16 Pro",
+   "storage": "256GB",
+   "listed": 17,
+   "median_price": 23000,
+   "min_price": 19000,
+   "max_price": 28000,
+   "sold": 1,
+   "median_sold_price": 23000
+  },
+  {
+   "model": "iPhone 15 Pro Max",
+   "storage": "256GB",
+   "listed": 16,
+   "median_price": 19250,
+   "min_price": 9500,
+   "max_price": 21000,
+   "sold": 4,
+   "median_sold_price": 19750
+  },
+  {
+   "model": "iPhone 17 Pro Max",
+   "storage": "256GB",
+   "listed": 12,
+   "median_price": 34250,
+   "min_price": 30000,
+   "max_price": 35000,
+   "sold": 2,
+   "median_sold_price": 37750
+  },
+  {
+   "model": "iPhone 18 Pro",
+   "storage": "256GB",
+   "listed": 11,
+   "median_price": 42500,
+   "min_price": 40000,
+   "max_price": 44500,
+   "sold": 1,
+   "median_sold_price": 42000
+  },
+  {
+   "model": "iPhone 17 Pro Max",
+   "storage": "512GB",
+   "listed": 10,
+   "median_price": 38000,
+   "min_price": 36700,
+   "max_price": 40000,
+   "sold": 2,
+   "median_sold_price": 38000
+  },
+  {
+   "model": "iPhone 16 Pro Max",
+   "storage": "256GB",
+   "listed": 10,
+   "median_price": 25250,
+   "min_price": 20000,
+   "max_price": 26000,
+   "sold": 0,
+   "median_sold_price": null
+  }
+ ],
+ "new_groups": [
+  {
+   "model": "iPhone 18 Pro Max",
+   "storage": "256GB",
+   "listed": 16,
+   "median_price": 49000,
+   "min_price": 48200,
+   "max_price": 49900,
+   "sold": 4,
+   "median_sold_price": 49150
+  },
+  {
+   "model": "iPhone 17",
+   "storage": "256GB",
+   "listed": 14,
+   "median_price": 29500,
+   "min_price": 28500,
+   "max_price": 29900,
+   "sold": 1,
+   "median_sold_price": 29900
+  },
+  {
+   "model": "iPhone 18 Pro",
+   "storage": "256GB",
+   "listed": 12,
+   "median_price": 42950,
+   "min_price": 42500,
+   "max_price": 44000,
+   "sold": 1,
+   "median_sold_price": 42500
+  }
+ ],
+ "fast": [
+  {
+   "model": "iPhone 18 Pro Max",
+   "n": 6,
+   "median_days": 0.6
+  },
+  {
+   "model": "iPhone 17 Pro",
+   "n": 7,
+   "median_days": 1.3
+  },
+  {
+   "model": "iPhone 14 Pro",
+   "n": 2,
+   "median_days": 1.4
+  },
+  {
+   "model": "iPhone 15 Pro",
+   "n": 4,
+   "median_days": 1.5
+  },
+  {
+   "model": "iPhone 18 Pro",
+   "n": 3,
+   "median_days": 1.6
+  }
+ ],
+ "battery_listed": 87,
+ "battery_sold": 90,
+ "biggest_cut": {
+  "model": "iPhone 14 Pro",
+  "storage": "256GB",
+  "from": 25000,
+  "to": 10000
+ },
+ "prev": {
+  "new": 120,
+  "sold": 13,
+  "deleted": 0,
+  "brand_new": 23,
+  "price_changes": 0,
+  "price_cuts": 0,
+  "price_raises": 0,
+  "avg_cut_pct": null,
+  "on_shelf": 116,
+  "medians": {
+   "iPhone 16 Pro Max|256GB": 25000,
+   "iPhone 16 Pro|256GB": 22500,
+   "iPhone 17 Pro Max|256GB": 35000,
+   "iPhone 15 Pro Max|256GB": 19250,
+   "iPhone 17|256GB": 24000,
+   "iPhone 15 Pro|256GB": 16500,
+   "iPhone 17 Pro|256GB": 30000,
+   "iPhone 18 Pro|256GB": 42750,
+   "iPhone 18 Pro Max|512GB": 55200,
+   "iPhone 17 Pro Max|512GB": 38000,
+   "iPhone 16 Pro Max|512GB": 30500,
+   "iPhone 18 Pro Max|256GB": 49000,
+   "iPhone 14 Pro Max|256GB": 14150,
+   "iPhone 13 Pro|256GB": 8750,
+   "iPhone 14 Pro|128GB": 10250,
+   "iPhone 14 Pro|256GB": 11000,
+   "iPhone 15 Pro|128GB": 14500,
+   "iPhone 16 Pro|128GB": 18500,
+   "iPhone 16 Pro|512GB": 25000
+  }
+ }
+}
