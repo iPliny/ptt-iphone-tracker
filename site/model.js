@@ -82,6 +82,7 @@
   function render() {
     renderTabs();
     renderWatch();
+    renderApple();
     renderKpis();
     renderChart();
     renderCompare();
@@ -96,6 +97,33 @@
       const on = key === "*" ? storage === null : storage === key;
       return `<button type="button" data-storage="${esc(key)}" class="${on ? "on" : ""}" aria-pressed="${on}">${esc(label)} <span class="count">${n}</span></button>`;
     }).join("");
+  }
+
+  // ---------- Apple 原廠：官網購買連結、官網現售價、上市建議售價 ----------
+  function renderApple() {
+    const a = (D.apple || {})[model];
+    $("#apple").hidden = !a;
+    if (!a) return;
+    const store = a.store || {}, launch = a.launch || {};
+    const hasLaunch = Object.keys(launch).length > 0;
+    const caps = storage !== null ? [storage]
+      : Array.from(new Set(Object.keys(store).concat(Object.keys(launch)))).sort(compareStorage);
+    const rows = caps.map((s) => {
+      const l = launch[s];
+      const launchText = l
+        ? `${money(l.amount)}<span class="muted">（${esc(l.date || "上市時")}${l.source ? `，<a href="${esc(l.source)}" target="_blank" rel="noopener">Apple 新聞稿</a>` : ""}）</span>`
+        : '<span class="muted">此容量待查核</span>';
+      return `<tr><td>${esc(storageLabel(s))}</td>` +
+        (a.buy_url ? `<td class="num">${store[s] ? money(store[s]) : '<span class="muted">官網無此容量</span>'}</td>` : "") +
+        (hasLaunch ? `<td class="num">${launchText}</td>` : "") + "</tr>";
+    }).join("");
+    const head = a.buy_url
+      ? `<div class="card-head"><h2>Apple 原廠</h2><a class="buy" href="${esc(a.buy_url)}" target="_blank" rel="noopener">到 Apple 官網購買 ↗</a></div>`
+      : `<div class="card-head"><h2>Apple 原廠</h2><span class="muted">官網已停售</span></div>`;
+    $("#apple").innerHTML = head +
+      `<div class="scroll"><table><thead><tr><th>容量</th>${a.buy_url ? '<th class="num">官網售價</th>' : ""}${hasLaunch ? '<th class="num">上市建議售價</th>' : ""}</tr></thead><tbody>${rows}</tbody></table></div>` +
+      `<p class="hint">${a.buy_url ? "官網售價為 " + esc(a.checked_at) + " 在 Apple 台灣官網查到的價格，購買前請以官網為準。" : ""}` +
+      (hasLaunch ? "上市建議售價是 Apple 台灣發表時公布的價格，只列有 Apple 原文佐證的容量。" : "") + "</p>";
   }
 
   function renderKpis() {
