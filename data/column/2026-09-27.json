@@ -1,15 +1,15 @@
 {
  "week_start": "2026-09-27",
  "week_end": "2026-10-03",
- "generated_at": "2026-10-04 20:57:33",
+ "generated_at": "2026-10-05 16:59:51",
  "new": 329,
  "sold": 55,
  "deleted": 41,
  "brand_new": 86,
- "price_changes": 47,
- "price_cuts": 42,
+ "price_changes": 46,
+ "price_cuts": 41,
  "price_raises": 5,
- "avg_cut_pct": 5.2,
+ "avg_cut_pct": 3.8,
  "on_shelf": 349,
  "median_days": 1.4,
  "days_samples": 48,
@@ -20,7 +20,7 @@
    "listed": 20,
    "median_price": 29500,
    "min_price": 27000,
-   "max_price": 33000,
+   "max_price": 32000,
    "sold": 6,
    "median_sold_price": 29750
   },
@@ -47,9 +47,9 @@
   {
    "model": "iPhone 15 Pro Max",
    "storage": "256GB",
-   "listed": 16,
-   "median_price": 19250,
-   "min_price": 9500,
+   "listed": 15,
+   "median_price": 19500,
+   "min_price": 15000,
    "max_price": 21000,
    "sold": 4,
    "median_sold_price": 19750
@@ -157,10 +157,10 @@
  "battery_listed": 87,
  "battery_sold": 90,
  "biggest_cut": {
-  "model": "iPhone 14 Pro",
-  "storage": "256GB",
-  "from": 25000,
-  "to": 10000
+  "model": "iPhone 17 Pro Max",
+  "storage": "512GB",
+  "from": 40000,
+  "to": 38000
  },
  "prev": {
   "new": 120,
