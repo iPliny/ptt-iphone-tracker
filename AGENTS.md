@@ -21,7 +21,7 @@
 
 ### 2026-10-05 異常價格不公開
 - POYU 指示明顯怪的價格「優先不要 po」。`parse_price` 先移除日期（如 AppleCare+ 到 2028/1/22），避免把年份當售價。
-- 網站與週報再加一層：`build_site.drop_price_outliers` 把和同型號×容量×全新與否中位數（不到 5 筆改用同型號）相比低於一半或高於兩倍的價格改成不公開；`implausible_price_change` 把降幅超過一半或漲幅超過一倍的改價事件排除。CSV 原始資料不改。
+- 網站與週報再加一層：`build_site.drop_price_outliers` 把和同型號×容量×全新與否中位數（不到 5 筆改用同型號）相比低於一半或高於兩倍的價格改成不公開；`implausible_price_change` 把降幅超過一半或漲幅超過一倍的改價事件排除。CSV 原始資料不改。被隱藏的價格與改價由 track.yml 每次寫進 `data/price_outliers.csv`（`build_site.py --outlier-report`，整檔覆寫，不放上網站），POYU 要「不發但手上記著」。
 
 ### 2026-09-29 改價時間
 - `listings.csv` 最後追加 `last_edit_at`、`price_checked_at`，均為帶 `+08:00` 的 ISO 8601 時間。前者是本次頁面最新編輯時間，後者是最近成功確認價格的時間；缺欄舊檔可直接讀取。

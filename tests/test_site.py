@@ -161,6 +161,24 @@ class BuildSiteTest(unittest.TestCase):
         data = S.build_data(self.dir)
         self.assertEqual([e["detail"] for e in data["events"] if e["event"] == "價格變動"], ["13000 → 12000"])
 
+    def test_outlier_report(self):
+        """異常價格不公開，但寫進 data/price_outliers.csv 留紀錄，網站輸出不含這個檔。"""
+        path = os.path.join(self.dir, "listings.csv")
+        with open(path, "a", encoding="utf-8", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=LISTING_HEADER)
+            for i, p in enumerate(["10000", "10500", "11000", "9500", "2028"]):
+                w.writerow(listing(f"o{i}", "2026-09-03 10:00:00", price=p))
+        with open(os.path.join(self.dir, "events.csv"), "a", encoding="utf-8", newline="") as f:
+            csv.DictWriter(f, fieldnames=S_EVENT_HEADER).writerow(
+                {"time": "2026-09-03 09:00:00", "source_url": "u3", "event": "價格變動", "detail": "25000 → 10000"})
+        self.assertEqual(S.write_outlier_report(self.dir), 2)
+        rows = S.read_csv(os.path.join(self.dir, S.OUTLIER_REPORT))
+        self.assertEqual([(r["kind"], r["source_url"], r["price"], r["detail"]) for r in rows],
+                         [("刊登價", "o4", "2028", ""), ("改價", "u3", "", "25000 → 10000")])
+        out = os.path.join(self.dir, "out")
+        S.build(out, self.dir)
+        self.assertFalse(os.path.exists(os.path.join(out, "data", S.OUTLIER_REPORT)))
+
     def test_real_data_builds(self):
         """repo 內現有的 data/ 也要能建置成功。"""
         data = S.build_data()
