@@ -40,6 +40,8 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Scan and track
         run: python tracker.py --days "${{ inputs.days || '3' }}" --track-days "${{ inputs.track_days || '45' }}" ${{ inputs.reparse && '--reparse' || '' }}
+      - name: 記錄不公開的異常價格
+        run: python site/build_site.py --outlier-report
       - name: Commit data and redeploy site
         env:
           GH_TOKEN: ${{ github.token }}

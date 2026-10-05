@@ -195,6 +195,17 @@ class RealPostRegressionTest(unittest.TestCase):
                         "[型號] iPhone 18 Pro 256GB 紅色\n[保固] 連網後開通，保固一年\n[盒裝配件] 全新未拆\n[售價] $42500")
         self.assertEqual((f["全新未拆封機"], f["price"]), ("是", 42500))
 
+    def test_date_in_price_field(self):
+        """2026-10-04 M.1791079626 被抓成售價 $2028（AppleCare+ 期限 2028/1/22）；本文依該列 notes 重建。"""
+        body = ("[型號] iPhone 17 Pro\n[規格] 256G 銀色\n[保固] 2026/10/22\n"
+                "[售價] 有 Apple care+ 到2028/1/22 31000\n[商品照/補充說明] 電池健康度93%")
+        f = self.fields("[販售] 雙北 iphone 17pro 銀色 256G", body)
+        self.assertEqual((f["model"], f["price"]), ("iPhone 17 Pro", 31000))
+        self.assertIsNone(T.parse_price("Apple care+到2028/1/22"))
+        self.assertIsNone(T.parse_price("保固到 2028年1月"))
+        self.assertEqual(T.parse_price("28000-29000"), 28000)
+        self.assertEqual(T.parse_price("$25,000."), 25000)
+
     def test_rule_text_in_price_field(self):
         body = "[型號]\nA3717\n[規格]\niPhone 18 Pro Max 256G\n[售價]\n不得超過台灣官方定價。\n售出後修改價格至不可視者水桶並劣退。\n48200"
         f = self.fields("[販售] 台北 全新iPhone 18 Pro Max 256G 銀", body)

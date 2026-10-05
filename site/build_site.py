@@ -97,6 +97,50 @@ def clean_listing(r):
     }
 
 
+OUTLIER_MIN_SAMPLES = 5   # 同組至少幾筆才判斷價格是否異常
+OUTLIER_LOW, OUTLIER_HIGH = 0.5, 2.0  # 低於中位數一半、高於兩倍視為抓錯
+
+
+def price_outliers(listings):
+    """明顯不合理的價格（多半是把日期、保固期限抓成售價）：回傳 [(文章, 參考中位數)]。
+    先和同型號、同容量、同為全新或二手的中位數比；那組不到 5 筆時改和同型號比。"""
+    def medians(key):
+        groups = {}
+        for r in listings:
+            if r["price"] and r["model"]:
+                groups.setdefault(key(r), []).append(r["price"])
+        return {k: statistics.median(v) for k, v in groups.items() if len(v) >= OUTLIER_MIN_SAMPLES}
+
+    fine = medians(lambda r: (r["model"], r["storage"], r["brand_new"]))
+    coarse = medians(lambda r: (r["model"], r["brand_new"]))
+    out = []
+    for r in listings:
+        if not (r["price"] and r["model"]):
+            continue
+        med = fine.get((r["model"], r["storage"], r["brand_new"])) or coarse.get((r["model"], r["brand_new"]))
+        if med and not (OUTLIER_LOW * med <= r["price"] <= OUTLIER_HIGH * med):
+            out.append((r, med))
+    return out
+
+
+def drop_price_outliers(listings):
+    """異常價格不公開：價格改為 None，不列入統計與圖表（紀錄見 write_outlier_report）。"""
+    for r, _ in price_outliers(listings):
+        r["price"] = None
+    return listings
+
+
+def implausible_price_change(e):
+    """降幅超過一半或漲幅超過一倍的改價，多半是某次價格抓錯，不公開。"""
+    if e.get("event") != "價格變動":
+        return False
+    try:
+        a, b = (to_int(x) for x in (e.get("detail") or "").split("→"))
+    except ValueError:
+        return False
+    return bool(a and b) and not (OUTLIER_LOW * a <= b <= OUTLIER_HIGH * a)
+
+
 def attach_price_times(events, times):
     """只使用該次改價保存的時間；不能以 listings 最新編輯時間改寫舊事件。"""
     def key(row):
@@ -218,7 +262,8 @@ def build_data(data_dir=DATA_DIR, now=None):
     raw = read_csv(os.path.join(data_dir, "listings.csv"))
     events = read_csv(os.path.join(data_dir, "events.csv"))
     events = attach_price_times(events, read_csv(os.path.join(data_dir, "price_event_times.csv")))
-    listings = [clean_listing(r) for r in raw if r.get("status") in TRACKED_STATUSES]
+    events = [e for e in events if not implausible_price_change(e)]
+    listings = drop_price_outliers([clean_listing(r) for r in raw if r.get("status") in TRACKED_STATUSES])
     listings.sort(key=lambda r: r["post_time"], reverse=True)
 
     counts = {s: 0 for s in ("在售", "交易中", "已售出", "已刪除")}
@@ -242,6 +287,33 @@ def build_data(data_dir=DATA_DIR, now=None):
         "listings": listings,
         "events": events_out,
     }
+
+
+OUTLIER_REPORT = "price_outliers.csv"
+OUTLIER_FIELDS = ["kind", "source_url", "title", "model", "storage", "brand_new", "price", "reference", "detail", "time"]
+
+
+def write_outlier_report(data_dir=DATA_DIR):
+    """把目前不公開的異常價格與改價寫成 data/price_outliers.csv（只留紀錄，不放上網站）。回傳筆數。"""
+    raw = read_csv(os.path.join(data_dir, "listings.csv"))
+    listings = [clean_listing(r) for r in raw if r.get("status") in TRACKED_STATUSES]
+    by_url = {r["url"]: r for r in listings}
+    rows = [{"kind": "刊登價", "source_url": r["url"], "title": r["title"], "model": r["model"],
+             "storage": r["storage"], "brand_new": "是" if r["brand_new"] else "否", "price": r["price"],
+             "reference": int(med), "detail": "", "time": r["post_time"]}
+            for r, med in price_outliers(listings)]
+    for e in read_csv(os.path.join(data_dir, "events.csv")):
+        if implausible_price_change(e):
+            r = by_url.get(e.get("source_url"), {})
+            rows.append({"kind": "改價", "source_url": e.get("source_url", ""), "title": r.get("title", ""),
+                         "model": r.get("model", ""), "storage": r.get("storage", ""),
+                         "brand_new": "是" if r.get("brand_new") else "否", "price": "",
+                         "reference": "", "detail": e.get("detail", ""), "time": e.get("time", "")})
+    with open(os.path.join(data_dir, OUTLIER_REPORT), "w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=OUTLIER_FIELDS)
+        w.writeheader()
+        w.writerows(rows)
+    return len(rows)
 
 
 def sitemap_xml(data, today=None, column_urls=()):
@@ -279,7 +351,12 @@ def main():
     ap = argparse.ArgumentParser(description="建置 PTT MacShop交易觀測網站")
     ap.add_argument("--out", default=os.path.join(ROOT, "_site"), help="輸出目錄（預設 _site/）")
     ap.add_argument("--data", default=DATA_DIR, help="CSV 所在目錄（預設 data/）")
+    ap.add_argument("--outlier-report", action="store_true",
+                    help="只把不公開的異常價格寫成 data/price_outliers.csv，不建置網站")
     args = ap.parse_args()
+    if args.outlier_report:
+        print(f"[SITE] 異常價格 {write_outlier_report(args.data)} 筆 → {OUTLIER_REPORT}")
+        return
     data = build(args.out, args.data)
     print(f"[SITE] 已輸出到 {args.out}：{data['counts']['total']} 篇、{len(data['days'])} 天、{len(data['events'])} 筆事件")
 
