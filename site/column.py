@@ -44,7 +44,7 @@ def parse_price_change(detail):
         a, b = (S.to_int(x) for x in (detail or "").split("→"))
     except ValueError:
         return None
-    if not (a and b) or b < a * 0.5 or b > a * 2:
+    if not (a and b) or not (S.OUTLIER_LOW * a <= b <= S.OUTLIER_HIGH * a):
         return None
     return a, b
 
@@ -53,7 +53,8 @@ def load_tracked(data_dir):
     raw = S.read_csv(os.path.join(data_dir, "listings.csv"))
     events = S.read_csv(os.path.join(data_dir, "events.csv"))
     events = S.attach_price_times(events, S.read_csv(os.path.join(data_dir, "price_event_times.csv")))
-    listings = [S.clean_listing(r) for r in raw if r.get("status") in S.TRACKED_STATUSES]
+    events = [e for e in events if not S.implausible_price_change(e)]
+    listings = S.drop_price_outliers([S.clean_listing(r) for r in raw if r.get("status") in S.TRACKED_STATUSES])
     first_seen = min((d for d in (S.day_of(r.get("first_seen")) for r in raw) if d), default=None)
     return listings, events, first_seen
 

@@ -410,6 +410,8 @@ def _field(fields, *names):
 def parse_price(text):
     """'41,500元'、'NT$ 20000'、'2.5萬' → int；取第一個合理的金額。"""
     text = text.replace(",", "").replace("，", "")
+    # 先拿掉日期，例如「Apple care+ 到 2028/1/22」的 2028 不是價格
+    text = re.sub(r"(?<!\d)(?:19|20)\d{2}\s*(?:年|[/／\-.]\s*\d{1,2}(?!\d))(?:\s*[/／\-.月]\s*\d{1,2}\s*日?)?", " ", text)
     for m in re.finditer(r"(\d+(?:\.\d+)?)\s*(萬|w|k|千)?", text, re.I):
         n, unit = float(m.group(1)), (m.group(2) or "").lower()
         n *= {"萬": 10000, "w": 10000, "k": 1000, "千": 1000}.get(unit, 1)

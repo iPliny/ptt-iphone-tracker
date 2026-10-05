@@ -97,6 +97,42 @@ def clean_listing(r):
     }
 
 
+OUTLIER_MIN_SAMPLES = 5   # 同組至少幾筆才判斷價格是否異常
+OUTLIER_LOW, OUTLIER_HIGH = 0.5, 2.0  # 低於中位數一半、高於兩倍視為抓錯
+
+
+def drop_price_outliers(listings):
+    """明顯不合理的價格（多半是把日期、保固期限抓成售價）不公開：價格改為 None，不列入統計與圖表。
+    先和同型號、同容量、同為全新或二手的中位數比；那組不到 5 筆時改和同型號比。"""
+    def medians(key):
+        groups = {}
+        for r in listings:
+            if r["price"] and r["model"]:
+                groups.setdefault(key(r), []).append(r["price"])
+        return {k: statistics.median(v) for k, v in groups.items() if len(v) >= OUTLIER_MIN_SAMPLES}
+
+    fine = medians(lambda r: (r["model"], r["storage"], r["brand_new"]))
+    coarse = medians(lambda r: (r["model"], r["brand_new"]))
+    for r in listings:
+        if not (r["price"] and r["model"]):
+            continue
+        med = fine.get((r["model"], r["storage"], r["brand_new"])) or coarse.get((r["model"], r["brand_new"]))
+        if med and not (OUTLIER_LOW * med <= r["price"] <= OUTLIER_HIGH * med):
+            r["price"] = None
+    return listings
+
+
+def implausible_price_change(e):
+    """降幅超過一半或漲幅超過一倍的改價，多半是某次價格抓錯，不公開。"""
+    if e.get("event") != "價格變動":
+        return False
+    try:
+        a, b = (to_int(x) for x in (e.get("detail") or "").split("→"))
+    except ValueError:
+        return False
+    return bool(a and b) and not (OUTLIER_LOW * a <= b <= OUTLIER_HIGH * a)
+
+
 def attach_price_times(events, times):
     """只使用該次改價保存的時間；不能以 listings 最新編輯時間改寫舊事件。"""
     def key(row):
@@ -218,7 +254,8 @@ def build_data(data_dir=DATA_DIR, now=None):
     raw = read_csv(os.path.join(data_dir, "listings.csv"))
     events = read_csv(os.path.join(data_dir, "events.csv"))
     events = attach_price_times(events, read_csv(os.path.join(data_dir, "price_event_times.csv")))
-    listings = [clean_listing(r) for r in raw if r.get("status") in TRACKED_STATUSES]
+    events = [e for e in events if not implausible_price_change(e)]
+    listings = drop_price_outliers([clean_listing(r) for r in raw if r.get("status") in TRACKED_STATUSES])
     listings.sort(key=lambda r: r["post_time"], reverse=True)
 
     counts = {s: 0 for s in ("在售", "交易中", "已售出", "已刪除")}

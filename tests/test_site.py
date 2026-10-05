@@ -142,6 +142,25 @@ class BuildSiteTest(unittest.TestCase):
         u5 = next(r for r in data["listings"] if r["url"] == "u5")
         self.assertEqual((u5["sold_at"], u5["days_basis"]), ("2026-09-02 00:00:00", "推估"))
 
+    def test_price_outliers_hidden(self):
+        """和同組中位數差太多的價格（如把 2028/1/22 抓成 $2028）不公開，也不列入統計。"""
+        rows = [{"url": f"u{i}", "model": "iPhone 17 Pro", "storage": "256GB", "brand_new": False, "price": p}
+                for i, p in enumerate([29000, 29500, 30000, 28500, 31000, 2028, 70000])]
+        rows.append({"url": "x", "model": "iPhone 8", "storage": "64GB", "brand_new": False, "price": 2000})  # 樣本太少不判斷
+        S.drop_price_outliers(rows)
+        self.assertEqual([r["price"] for r in rows], [29000, 29500, 30000, 28500, 31000, None, None, 2000])
+
+    def test_implausible_price_change_hidden(self):
+        bad = {"event": "價格變動", "detail": "25000 → 10000"}
+        self.assertTrue(S.implausible_price_change(bad))
+        self.assertFalse(S.implausible_price_change({"event": "價格變動", "detail": "25000 → 20000"}))
+        self.assertFalse(S.implausible_price_change({"event": "狀態變更", "detail": "在售 → 已售出"}))
+        with open(os.path.join(self.dir, "events.csv"), "a", encoding="utf-8", newline="") as f:
+            csv.DictWriter(f, fieldnames=S_EVENT_HEADER).writerow(
+                {"time": "2026-09-03 09:00:00", "source_url": "u3", **bad})
+        data = S.build_data(self.dir)
+        self.assertEqual([e["detail"] for e in data["events"] if e["event"] == "價格變動"], ["13000 → 12000"])
+
     def test_real_data_builds(self):
         """repo 內現有的 data/ 也要能建置成功。"""
         data = S.build_data()
