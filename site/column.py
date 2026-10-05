@@ -18,7 +18,7 @@ import build_site as S
 
 COLUMN_DIR = os.path.join(S.DATA_DIR, "column")
 COLUMN_TITLE = "二手 iPhone 行情週報"
-BRAND = "PTT每日交易觀測"
+BRAND = "PTT MacShop交易觀測"
 GA_ID = "G-G3GH12TQSZ"
 TOP_GROUPS = 8      # 表格列出幾組型號×容量
 MAX_CHARS = 1000    # 內文（導言＋各段）字數上限

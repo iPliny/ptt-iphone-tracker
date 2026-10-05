@@ -1,4 +1,4 @@
-# 建置並部署「PTT每日交易觀測」網站到 GitHub Pages。
+# 建置並部署「PTT MacShop交易觀測」網站到 GitHub Pages。
 # 爬蟲排程在另一個 workflow；這裡只讀 data/ 的 CSV。
 name: 網站部署
 

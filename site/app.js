@@ -1,4 +1,4 @@
-// PTT每日交易觀測：讀取 build_site.py 產生的 data.json 並繪製頁面，不依賴任何外部套件。
+// PTT MacShop交易觀測：讀取 build_site.py 產生的 data.json 並繪製頁面，不依賴任何外部套件。
 (function () {
   "use strict";
 
