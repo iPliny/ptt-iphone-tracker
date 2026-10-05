@@ -179,6 +179,46 @@ class BuildSiteTest(unittest.TestCase):
         S.build(out, self.dir)
         self.assertFalse(os.path.exists(os.path.join(out, "data", S.OUTLIER_REPORT)))
 
+    def test_apple_prices(self):
+        """機型頁的原廠資訊：官網現售價與購買連結、只採 A 級的上市價，沒追蹤到的機型不帶。"""
+        store = os.path.join(self.dir, "store.json")
+        official = os.path.join(self.dir, "official.json")
+        with open(store, "w", encoding="utf-8") as f:
+            json.dump({"checked_at": "2026-10-05", "models": {
+                "iPhone 17": {"url": "https://www.apple.com/tw/shop/buy-iphone/iphone-17", "prices": {"256GB": 32900}},
+                "iPhone 18": {"url": "https://www.apple.com/tw/shop/buy-iphone/iphone-18", "prices": {"256GB": 1}}}}, f)
+        cols = ["section", "year", "model", "storage", "amount", "evidence", "price_type",
+                "effective_date", "issuer", "source_id", "note"]
+        with open(official, "w", encoding="utf-8") as f:
+            json.dump({"columns": cols, "sources": {"A": "https://www.apple.com/tw/newsroom/x"}, "records": [
+                ["tw-launch", 2025, "iPhone 17", "256GB", 29900, "A", "上市定價", "2025-09-19", "Apple", "A", ""],
+                ["tw-launch", 2025, "iPhone 17", "512GB", None, "C", "上市定價", "2025-09-19", "Apple", "A", ""],
+                ["tw-launch", 2023, "iPhone 15", "128GB", 29900, "A", "上市定價", "2023-09-22", "Apple", "A", ""],
+                ["tw-later", 2023, "iPhone 15", "128GB", 25900, "A", "降價", "2024-09-10", "Apple", "A", ""],
+                ["tw-later", 2023, "iPhone 15", "256GB", 32900, "B", "電信", "", "台灣大哥大", "A", ""],
+                ["us", 2007, "iPhone 15", "4GB", 499, "A", "上市定價", "", "Apple", "A", ""]]}, f)
+        got = S.apple_prices(["iPhone 17", "iPhone 15", "iPhone 13"], store, official)
+        self.assertEqual(sorted(got), ["iPhone 15", "iPhone 17"])
+        self.assertEqual(got["iPhone 17"]["buy_url"], "https://www.apple.com/tw/shop/buy-iphone/iphone-17")
+        self.assertEqual(got["iPhone 17"]["store"], {"256GB": 32900})
+        self.assertEqual(got["iPhone 17"]["launch"], {"256GB": {
+            "amount": 29900, "date": "2025-09-19", "source": "https://www.apple.com/tw/newsroom/x"}})
+        self.assertNotIn("buy_url", got["iPhone 15"])  # 停售：沒有購買連結
+        self.assertEqual(list(got["iPhone 15"]["launch"]), ["128GB"])  # B 級與美國價不列，上市價優先
+        self.assertEqual(got["iPhone 15"]["launch"]["128GB"]["amount"], 29900)
+
+    def test_apple_store_snapshot(self):
+        """repo 內的官網清單：連結都在 Apple 台灣商店，價格是正整數。"""
+        with open(S.APPLE_STORE, encoding="utf-8") as f:
+            store = json.load(f)
+        self.assertRegex(store["checked_at"], r"^\d{4}-\d{2}-\d{2}$")
+        for model, info in store["models"].items():
+            self.assertTrue(info["url"].startswith("https://www.apple.com/tw/shop/buy-iphone/"), model)
+            for cap, price in info["prices"].items():
+                self.assertRegex(cap, r"^\d+(GB|TB)$")
+                self.assertIs(type(price), int)
+                self.assertGreater(price, 10000)
+
     def test_real_data_builds(self):
         """repo 內現有的 data/ 也要能建置成功。"""
         data = S.build_data()
