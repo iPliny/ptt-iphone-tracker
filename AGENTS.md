@@ -20,8 +20,8 @@
 - 每週專欄「二手 iPhone 行情週報」（2026-10-04）：`site/column.py` 為上一個完整週（週日～週六，台灣時間）算統計，存成 `data/column/<週日日期>.json`，每期只產生一次，之後資料變動不改舊期數字；`.github/workflows/column.yml` 每週日 UTC 12:00（日本 21:00／台灣 20:00）執行並觸發部署。內文 1000 字以內（`MAX_CHARS`，POYU 2026-10-04 指定），建置時由 `article()` 依統計套範本產生，改範本會一起改到舊期文字。頁面是靜態 HTML：`column/` 顯示最新一期全文（canonical 指向該期），`column/<週日日期>/` 為各期固定網址，都列入 sitemap.xml，`<head>` 要保留 GA 官方碼。
 
 ### 2026-10-05 機型頁的 Apple 原廠資訊
-- 機型頁顯示「Apple 原廠」區塊：`site/apple_store.json` 是人工查詢的 Apple 台灣官網現售機型、購買連結與各容量售價（附 `checked_at`），不在清單內的機型顯示「官網已停售」、不給連結；新機上市或官網調價時要手動更新這個檔。
-- 上市建議售價來自 Codex 的歷代官方價格快照 `site/official-prices.json`（來源與規則見 Codex 分支 `feat/official-prices-20261002` 的 `docs/official-prices.md`），只採台灣 A 級（Apple 原文）金額。`build_site.apple_prices` 把兩者合成 `data.json` 的 `apple`。
+- 機型頁顯示「Apple 原廠」區塊，資料是 `site/apple_prices.json`（人工查詢，`build_site.apple_prices` 轉成 `data.json` 的 `apple`）。POYU 指定：官網還在賣的放購買連結與現行官網價（`on_sale`，附 `checked_at`）；停售機型放停售前最後的官方建議售價（`discontinued`，附來源），不放上市價。
+- 新機上市、官網調價或機型下架時要手動更新：下架的機型從 `on_sale` 移到 `discontinued`，價格用下架前的官網價。查不到的容量填 null，網站顯示「查無官方價格」。
 
 ### 2026-10-05 異常價格不公開
 - POYU 指示明顯怪的價格「優先不要 po」。`parse_price` 先移除日期（如 AppleCare+ 到 2028/1/22），避免把年份當售價。

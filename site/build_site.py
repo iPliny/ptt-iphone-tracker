@@ -258,33 +258,26 @@ def model_totals(listings):
     return [{"model": model, **group_stats(items)} for model, items in sorted(groups.items())]
 
 
-APPLE_STORE = os.path.join(SITE_DIR, "apple_store.json")          # 官網現售機型與售價（人工查詢）
-OFFICIAL_PRICES = os.path.join(SITE_DIR, "official-prices.json")  # 歷代上市價（Codex 查核表快照）
+APPLE_PRICES = os.path.join(SITE_DIR, "apple_prices.json")  # Apple 台灣官網價格（人工查詢）
 
 
-def apple_prices(models, store_path=APPLE_STORE, official_path=OFFICIAL_PRICES):
-    """機型頁的原廠資訊：官網還在賣就給購買連結與現售價，另附查核過（A 級，Apple 原文）的台灣上市價。
+def apple_prices(models, path=APPLE_PRICES):
+    """機型頁的原廠資訊：官網還在賣的給購買連結與現行售價，停售的給停售前最後的官方售價。
 
-    只回傳 models 裡有的機型；兩份檔案都沒有資料的機型不列。"""
+    只回傳 models 裡有的機型；檔案裡沒有的機型不列。"""
     models = set(models)
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8") as f:
+        src = json.load(f)
     out = {}
-    if os.path.exists(store_path):
-        with open(store_path, encoding="utf-8") as f:
-            store = json.load(f)
-        for model, info in store["models"].items():
-            out[model] = {"buy_url": info["url"], "store": info["prices"], "checked_at": store["checked_at"]}
-    if os.path.exists(official_path):
-        with open(official_path, encoding="utf-8") as f:
-            official = json.load(f)
-        # 上市價優先，後增容量只補上市時沒有的容量；未查核（非 A）的金額本來就是 null
-        rows = [dict(zip(official["columns"], r)) for r in official["records"]]
-        rows.sort(key=lambda r: r["section"] != "tw-launch")
-        for r in rows:
-            if r["section"] not in ("tw-launch", "tw-later") or r["evidence"] != "A" or not r["amount"]:
-                continue
-            launch = out.setdefault(r["model"], {}).setdefault("launch", {})
-            launch.setdefault(r["storage"], {"amount": r["amount"], "date": r["effective_date"] or "",
-                                             "source": official["sources"].get(r["source_id"], "")})
+    for model, info in src["on_sale"].items():
+        out[model] = {"buy_url": info["url"], "prices": info["prices"], "checked_at": src["checked_at"]}
+    for model, info in src["discontinued"].items():
+        prices = {k: v for k, v in info["prices"].items() if v}
+        if prices and model not in out:
+            out[model] = {"prices": prices, "discontinued": info.get("discontinued", ""),
+                          "sources": info.get("sources", [])}
     return {m: v for m, v in out.items() if m in models}
 
 

@@ -99,31 +99,25 @@
     }).join("");
   }
 
-  // ---------- Apple 原廠：官網購買連結、官網現售價、上市建議售價 ----------
+  // ---------- Apple 原廠：在售給官網連結與現行售價，停售給最終官方售價 ----------
   function renderApple() {
     const a = (D.apple || {})[model];
     $("#apple").hidden = !a;
     if (!a) return;
-    const store = a.store || {}, launch = a.launch || {};
-    const hasLaunch = Object.keys(launch).length > 0;
-    const caps = storage !== null ? [storage]
-      : Array.from(new Set(Object.keys(store).concat(Object.keys(launch)))).sort(compareStorage);
-    const rows = caps.map((s) => {
-      const l = launch[s];
-      const launchText = l
-        ? `${money(l.amount)}<span class="muted">（${esc(l.date || "上市時")}${l.source ? `，<a href="${esc(l.source)}" target="_blank" rel="noopener">Apple 新聞稿</a>` : ""}）</span>`
-        : '<span class="muted">此容量待查核</span>';
-      return `<tr><td>${esc(storageLabel(s))}</td>` +
-        (a.buy_url ? `<td class="num">${store[s] ? money(store[s]) : '<span class="muted">官網無此容量</span>'}</td>` : "") +
-        (hasLaunch ? `<td class="num">${launchText}</td>` : "") + "</tr>";
-    }).join("");
-    const head = a.buy_url
-      ? `<div class="card-head"><h2>Apple 原廠</h2><a class="buy" href="${esc(a.buy_url)}" target="_blank" rel="noopener">到 Apple 官網購買 ↗</a></div>`
-      : `<div class="card-head"><h2>Apple 原廠</h2><span class="muted">官網已停售</span></div>`;
-    $("#apple").innerHTML = head +
-      `<div class="scroll"><table><thead><tr><th>容量</th>${a.buy_url ? '<th class="num">官網售價</th>' : ""}${hasLaunch ? '<th class="num">上市建議售價</th>' : ""}</tr></thead><tbody>${rows}</tbody></table></div>` +
-      `<p class="hint">${a.buy_url ? "官網售價為 " + esc(a.checked_at) + " 在 Apple 台灣官網查到的價格，購買前請以官網為準。" : ""}` +
-      (hasLaunch ? "上市建議售價是 Apple 台灣發表時公布的價格，只列有 Apple 原文佐證的容量。" : "") + "</p>";
+    const onSale = !!a.buy_url;
+    const caps = storage !== null ? [storage] : Object.keys(a.prices).sort(compareStorage);
+    const rows = caps.map((s) => `<tr><td>${esc(storageLabel(s))}</td><td class="num">${a.prices[s]
+      ? money(a.prices[s]) : `<span class="muted">${onSale ? "官網沒有這個容量" : "查無官方價格"}</span>`}</td></tr>`).join("");
+    const head = onSale
+      ? `<a class="buy" href="${esc(a.buy_url)}" target="_blank" rel="noopener">到 Apple 官網購買 ↗</a>`
+      : `<span class="muted">官網已停售${a.discontinued ? "（" + esc(a.discontinued) + "）" : ""}</span>`;
+    const sources = (a.sources || []).map((u, i) =>
+      `<a href="${esc(u)}" target="_blank" rel="noopener">來源${a.sources.length > 1 ? i + 1 : ""}</a>`).join("、");
+    $("#apple").innerHTML = `<div class="card-head"><h2>Apple 原廠</h2>${head}</div>` +
+      `<div class="scroll"><table><thead><tr><th>容量</th><th class="num">${onSale ? "官網售價" : "最終官方售價"}</th></tr></thead><tbody>${rows}</tbody></table></div>` +
+      `<p class="hint">${onSale
+        ? "官網售價為 " + esc(a.checked_at) + " 在 Apple 台灣官網查到的價格，購買前請以官網為準。"
+        : "最終官方售價是 Apple 台灣官網停售前最後的建議售價。" + (sources ? "（" + sources + "）" : "")}</p>`;
   }
 
   function renderKpis() {
