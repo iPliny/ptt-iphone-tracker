@@ -180,44 +180,39 @@ class BuildSiteTest(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(out, "data", S.OUTLIER_REPORT)))
 
     def test_apple_prices(self):
-        """機型頁的原廠資訊：官網現售價與購買連結、只採 A 級的上市價，沒追蹤到的機型不帶。"""
-        store = os.path.join(self.dir, "store.json")
-        official = os.path.join(self.dir, "official.json")
-        with open(store, "w", encoding="utf-8") as f:
-            json.dump({"checked_at": "2026-10-05", "models": {
+        """機型頁的原廠資訊：在售給連結與現行價，停售給最終官方價，沒追蹤到的機型與空白價格不帶。"""
+        path = os.path.join(self.dir, "apple.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"checked_at": "2026-10-05", "on_sale": {
                 "iPhone 17": {"url": "https://www.apple.com/tw/shop/buy-iphone/iphone-17", "prices": {"256GB": 32900}},
-                "iPhone 18": {"url": "https://www.apple.com/tw/shop/buy-iphone/iphone-18", "prices": {"256GB": 1}}}}, f)
-        cols = ["section", "year", "model", "storage", "amount", "evidence", "price_type",
-                "effective_date", "issuer", "source_id", "note"]
-        with open(official, "w", encoding="utf-8") as f:
-            json.dump({"columns": cols, "sources": {"A": "https://www.apple.com/tw/newsroom/x"}, "records": [
-                ["tw-launch", 2025, "iPhone 17", "256GB", 29900, "A", "上市定價", "2025-09-19", "Apple", "A", ""],
-                ["tw-launch", 2025, "iPhone 17", "512GB", None, "C", "上市定價", "2025-09-19", "Apple", "A", ""],
-                ["tw-launch", 2023, "iPhone 15", "128GB", 29900, "A", "上市定價", "2023-09-22", "Apple", "A", ""],
-                ["tw-later", 2023, "iPhone 15", "128GB", 25900, "A", "降價", "2024-09-10", "Apple", "A", ""],
-                ["tw-later", 2023, "iPhone 15", "256GB", 32900, "B", "電信", "", "台灣大哥大", "A", ""],
-                ["us", 2007, "iPhone 15", "4GB", 499, "A", "上市定價", "", "Apple", "A", ""]]}, f)
-        got = S.apple_prices(["iPhone 17", "iPhone 15", "iPhone 13"], store, official)
+                "iPhone 19": {"url": "https://www.apple.com/tw/shop/buy-iphone/iphone-19", "prices": {"256GB": 1}}},
+                "discontinued": {
+                "iPhone 15": {"discontinued": "2025-09", "prices": {"128GB": 22900, "256GB": None},
+                              "sources": ["https://example.com/a"]},
+                "iPhone 13": {"discontinued": "2025-02", "prices": {"128GB": None}}}}, f)
+        got = S.apple_prices(["iPhone 17", "iPhone 15", "iPhone 13", "iPhone 12"], path)
         self.assertEqual(sorted(got), ["iPhone 15", "iPhone 17"])
-        self.assertEqual(got["iPhone 17"]["buy_url"], "https://www.apple.com/tw/shop/buy-iphone/iphone-17")
-        self.assertEqual(got["iPhone 17"]["store"], {"256GB": 32900})
-        self.assertEqual(got["iPhone 17"]["launch"], {"256GB": {
-            "amount": 29900, "date": "2025-09-19", "source": "https://www.apple.com/tw/newsroom/x"}})
-        self.assertNotIn("buy_url", got["iPhone 15"])  # 停售：沒有購買連結
-        self.assertEqual(list(got["iPhone 15"]["launch"]), ["128GB"])  # B 級與美國價不列，上市價優先
-        self.assertEqual(got["iPhone 15"]["launch"]["128GB"]["amount"], 29900)
+        self.assertEqual(got["iPhone 17"], {"buy_url": "https://www.apple.com/tw/shop/buy-iphone/iphone-17",
+                                            "prices": {"256GB": 32900}, "checked_at": "2026-10-05"})
+        self.assertEqual(got["iPhone 15"], {"prices": {"128GB": 22900}, "discontinued": "2025-09",
+                                            "sources": ["https://example.com/a"]})
 
-    def test_apple_store_snapshot(self):
-        """repo 內的官網清單：連結都在 Apple 台灣商店，價格是正整數。"""
-        with open(S.APPLE_STORE, encoding="utf-8") as f:
-            store = json.load(f)
-        self.assertRegex(store["checked_at"], r"^\d{4}-\d{2}-\d{2}$")
-        for model, info in store["models"].items():
-            self.assertTrue(info["url"].startswith("https://www.apple.com/tw/shop/buy-iphone/"), model)
+    def test_apple_prices_file(self):
+        """repo 內的價格檔：在售連結都在 Apple 台灣商店，價格是正整數或 null，來源是 https。"""
+        with open(S.APPLE_PRICES, encoding="utf-8") as f:
+            src = json.load(f)
+        self.assertRegex(src["checked_at"], r"^\d{4}-\d{2}-\d{2}$")
+        self.assertFalse(set(src["on_sale"]) & set(src["discontinued"]))
+        for model, info in list(src["on_sale"].items()) + list(src["discontinued"].items()):
+            if "url" in info:
+                self.assertTrue(info["url"].startswith("https://www.apple.com/tw/shop/buy-iphone/"), model)
+            for u in info.get("sources", []):
+                self.assertTrue(u.startswith("https://"), model)
             for cap, price in info["prices"].items():
                 self.assertRegex(cap, r"^\d+(GB|TB)$")
-                self.assertIs(type(price), int)
-                self.assertGreater(price, 10000)
+                if price is not None:
+                    self.assertIs(type(price), int)
+                    self.assertGreater(price, 5000)
 
     def test_real_data_builds(self):
         """repo 內現有的 data/ 也要能建置成功。"""

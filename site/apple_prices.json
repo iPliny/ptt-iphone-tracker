@@ -1,0 +1,363 @@
+{
+ "checked_at": "2026-10-05",
+ "note": "Apple 台灣官網（apple.com/tw）iPhone 售價，人工查詢後更新。on_sale：目前在官網販售的機型與現行售價；discontinued：停售機型在官網下架前最後的建議售價。",
+ "on_sale": {
+  "iPhone 18 Pro": {
+   "url": "https://www.apple.com/tw/shop/buy-iphone/iphone-18-pro",
+   "prices": {
+    "256GB": 44900,
+    "512GB": 51900,
+    "1TB": 66900,
+    "2TB": 88900
+   }
+  },
+  "iPhone 18 Pro Max": {
+   "url": "https://www.apple.com/tw/shop/buy-iphone/iphone-18-pro",
+   "prices": {
+    "256GB": 49900,
+    "512GB": 56900,
+    "1TB": 71900,
+    "2TB": 93900
+   }
+  },
+  "iPhone Air": {
+   "url": "https://www.apple.com/tw/shop/buy-iphone/iphone-air",
+   "prices": {
+    "256GB": 39900,
+    "512GB": 46900,
+    "1TB": 61900
+   }
+  },
+  "iPhone 17": {
+   "url": "https://www.apple.com/tw/shop/buy-iphone/iphone-17",
+   "prices": {
+    "256GB": 32900,
+    "512GB": 39900
+   }
+  },
+  "iPhone 17e": {
+   "url": "https://www.apple.com/tw/shop/buy-iphone/iphone-17e",
+   "prices": {
+    "256GB": 25900,
+    "512GB": 32900
+   }
+  },
+  "iPhone 16": {
+   "url": "https://www.apple.com/tw/shop/buy-iphone/iphone-16",
+   "prices": {
+    "128GB": 29900
+   }
+  }
+ },
+ "discontinued": {
+  "iPhone XS": {
+   "discontinued": "2019-09",
+   "prices": {
+    "64GB": 35900,
+    "256GB": 41500,
+    "512GB": 48900
+   },
+   "sources": [
+    "https://www.nownews.com/news/2962779"
+   ]
+  },
+  "iPhone 8 Plus": {
+   "discontinued": "2020-04",
+   "prices": {
+    "64GB": 19900,
+    "128GB": 21900
+   },
+   "sources": [
+    "https://www.ettoday.net/news/20190911/1533014.htm",
+    "https://newtalk.tw/news/view/2019-09-11/297458"
+   ],
+   "note": "256GB 2019-09 前已停售，未列"
+  },
+  "iPhone 11 Pro": {
+   "discontinued": "2020-10",
+   "prices": {
+    "64GB": 35900,
+    "256GB": 41400,
+    "512GB": 48400
+   },
+   "sources": [
+    "https://www.sogi.com.tw/articles/apple_iphone_11/6253534"
+   ]
+  },
+  "iPhone 12 Pro": {
+   "discontinued": "2021-09",
+   "prices": {
+    "128GB": 33900,
+    "256GB": 37400,
+    "512GB": 44400
+   },
+   "sources": [
+    "https://applealmond.com/posts/79018"
+   ]
+  },
+  "iPhone 12 Pro Max": {
+   "discontinued": "2021-09",
+   "prices": {
+    "128GB": 37900,
+    "256GB": 41400,
+    "512GB": 48400
+   },
+   "sources": [
+    "https://applealmond.com/posts/79018"
+   ]
+  },
+  "iPhone 11": {
+   "discontinued": "2022-09",
+   "prices": {
+    "64GB": 16500,
+    "128GB": 18100,
+    "256GB": 25000
+   },
+   "sources": [
+    "https://news.tvbs.com.tw/life/1585556",
+    "https://finance.ettoday.net/news/1830517"
+   ],
+   "note": "256GB 於 2021-09 先停售"
+  },
+  "iPhone 12 mini": {
+   "discontinued": "2022-09",
+   "prices": {
+    "64GB": 19900,
+    "128GB": 21500,
+    "256GB": 25000
+   },
+   "sources": [
+    "https://www.tech-girlz.com/2021/09/iphone12-price-drop.html",
+    "https://finance.ettoday.net/news/2079960"
+   ]
+  },
+  "iPhone 13 Pro": {
+   "discontinued": "2022-09",
+   "prices": {
+    "128GB": 32900,
+    "256GB": 36400,
+    "512GB": 43400,
+    "1TB": 50400
+   },
+   "sources": [
+    "https://www.tech-girlz.com/2022/09/iphone13-price-drop.html"
+   ]
+  },
+  "iPhone 13 Pro Max": {
+   "discontinued": "2022-09",
+   "prices": {
+    "128GB": 36900,
+    "256GB": 40400,
+    "512GB": 47400,
+    "1TB": 54400
+   },
+   "sources": [
+    "https://www.tech-girlz.com/2022/09/iphone13-price-drop.html"
+   ]
+  },
+  "iPhone 12": {
+   "discontinued": "2023-09",
+   "prices": {
+    "64GB": 20900,
+    "128GB": 22500,
+    "256GB": 26000
+   },
+   "sources": [
+    "https://agirls.aotter.net/post/61224",
+    "https://applealmond.com/posts/202865"
+   ]
+  },
+  "iPhone 13 mini": {
+   "discontinued": "2023-09",
+   "prices": {
+    "128GB": 20900,
+    "256GB": 24400,
+    "512GB": 31400
+   },
+   "sources": [
+    "https://agirls.aotter.net/post/61224",
+    "https://applealmond.com/posts/202865"
+   ]
+  },
+  "iPhone 14 Pro": {
+   "discontinued": "2023-09",
+   "prices": {
+    "128GB": 34900,
+    "256GB": 38400,
+    "512GB": 45400,
+    "1TB": 52400
+   },
+   "sources": [
+    "https://www.ettoday.net/news/20220908/2333759.htm"
+   ]
+  },
+  "iPhone 14 Pro Max": {
+   "discontinued": "2023-09",
+   "prices": {
+    "128GB": 38900,
+    "256GB": 42400,
+    "512GB": 49400,
+    "1TB": 56400
+   },
+   "sources": [
+    "https://www.ettoday.net/news/20220908/2333759.htm"
+   ]
+  },
+  "iPhone 13": {
+   "discontinued": "2024-09",
+   "prices": {
+    "128GB": 21900,
+    "256GB": 25400,
+    "512GB": 32400
+   },
+   "sources": [
+    "https://applealmond.com/posts/202865",
+    "https://www.ctee.com.tw/news/20240910700649-430704"
+   ]
+  },
+  "iPhone 15 Pro": {
+   "discontinued": "2024-09-09",
+   "prices": {
+    "128GB": 36900,
+    "256GB": 40400,
+    "512GB": 47400,
+    "1TB": 54400
+   },
+   "sources": [
+    "https://www.businessweekly.com.tw/focus/blog/3016645"
+   ]
+  },
+  "iPhone 15 Pro Max": {
+   "discontinued": "2024-09-09",
+   "prices": {
+    "256GB": 44900,
+    "512GB": 51900,
+    "1TB": 58900
+   },
+   "sources": [
+    "https://www.businessweekly.com.tw/focus/blog/3016645"
+   ]
+  },
+  "iPhone 14": {
+   "discontinued": "2025-02",
+   "prices": {
+    "128GB": 21900,
+    "256GB": 25400,
+    "512GB": 32400
+   },
+   "sources": [
+    "https://m.eprice.com.tw/mobile/talk/4544/5812204/1",
+    "https://www.ctee.com.tw/news/20240910700649-430704"
+   ]
+  },
+  "iPhone 14 Plus": {
+   "discontinued": "2025-02",
+   "prices": {
+    "128GB": 25900,
+    "256GB": 29400,
+    "512GB": 36400
+   },
+   "sources": [
+    "https://m.eprice.com.tw/mobile/talk/4544/5812204/1",
+    "https://www.ctee.com.tw/news/20240910700649-430704"
+   ]
+  },
+  "iPhone 15": {
+   "discontinued": "2025-09-09",
+   "prices": {
+    "128GB": 25900,
+    "256GB": 29400,
+    "512GB": 36400
+   },
+   "sources": [
+    "https://www.businessweekly.com.tw/focus/blog/3016645",
+    "https://www.soft4fun.net/tech/iphone-16-price.htm"
+   ]
+  },
+  "iPhone 15 Plus": {
+   "discontinued": "2025-09-09",
+   "prices": {
+    "128GB": 29900,
+    "256GB": 33400,
+    "512GB": 40400
+   },
+   "sources": [
+    "https://www.businessweekly.com.tw/focus/blog/3016645",
+    "https://www.soft4fun.net/tech/iphone-16-price.htm"
+   ]
+  },
+  "iPhone 16 Pro": {
+   "discontinued": "2025-09-09",
+   "prices": {
+    "128GB": 36900,
+    "256GB": 40400,
+    "512GB": 47400,
+    "1TB": 54400
+   },
+   "sources": [
+    "https://applealmond.com/posts/248202"
+   ]
+  },
+  "iPhone 16 Pro Max": {
+   "discontinued": "2025-09-09",
+   "prices": {
+    "256GB": 44900,
+    "512GB": 51900,
+    "1TB": 58900
+   },
+   "sources": [
+    "https://applealmond.com/posts/248202"
+   ]
+  },
+  "iPhone 16e": {
+   "discontinued": "2026-03",
+   "prices": {
+    "128GB": 21900,
+    "256GB": 25400,
+    "512GB": 32400
+   },
+   "sources": [
+    "https://mrmad.com.tw/apple-iphone-17e-2026",
+    "https://wantrich.chinatimes.com/news/20250910900328-420501"
+   ]
+  },
+  "iPhone 16 Plus": {
+   "discontinued": "2026-09-10",
+   "prices": {
+    "128GB": 29900,
+    "256GB": 33400,
+    "512GB": 43400
+   },
+   "sources": [
+    "https://wantrich.chinatimes.com/news/20250910900328-420501",
+    "https://tech.udn.com/tech/story/124206/9743937"
+   ],
+   "note": "512GB 於 2025-09 先停售"
+  },
+  "iPhone 17 Pro": {
+   "discontinued": "2026-09-10",
+   "prices": {
+    "256GB": 39900,
+    "512GB": 46900,
+    "1TB": 53900
+   },
+   "sources": [
+    "https://tech.udn.com/tech/story/124206/9743937",
+    "https://3c.ltn.com.tw/news/67520"
+   ]
+  },
+  "iPhone 17 Pro Max": {
+   "discontinued": "2026-09-10",
+   "prices": {
+    "256GB": 44900,
+    "512GB": 51900,
+    "1TB": 58900,
+    "2TB": 72900
+   },
+   "sources": [
+    "https://tech.udn.com/tech/story/124206/9743937",
+    "https://mrmad.com.tw/iphone-17-price"
+   ]
+  }
+ }
+}
