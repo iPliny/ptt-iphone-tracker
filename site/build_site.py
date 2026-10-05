@@ -1,4 +1,4 @@
-"""PTT 每日交易觀測：把 data/ 的 CSV 整理成網站用的 data.json，並複製靜態檔到輸出目錄。
+"""PTT MacShop交易觀測：把 data/ 的 CSV 整理成網站用的 data.json，並複製靜態檔到輸出目錄。
 
 只用標準函式庫，不需網路。執行：
     python site/build_site.py            # 輸出到 _site/
@@ -276,7 +276,7 @@ def build(out_dir, data_dir=DATA_DIR):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="建置 PTT 每日交易觀測網站")
+    ap = argparse.ArgumentParser(description="建置 PTT MacShop交易觀測網站")
     ap.add_argument("--out", default=os.path.join(ROOT, "_site"), help="輸出目錄（預設 _site/）")
     ap.add_argument("--data", default=DATA_DIR, help="CSV 所在目錄（預設 data/）")
     args = ap.parse_args()

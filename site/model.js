@@ -17,7 +17,7 @@
   const watchlist = PttWatchlist.createStore(() => window.localStorage);
   let watchFeedbackTimer;
 
-  document.title = (model || "機型行情") + " · PTT每日交易觀測";
+  document.title = (model || "機型行情") + " · PTT MacShop交易觀測";
   $("#model-name").textContent = model || "未指定機型";
 
   fetch("data.json", { cache: "no-cache" })
