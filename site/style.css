@@ -169,3 +169,22 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outlin
 .apple .muted { color: var(--muted); font-size: 12px; }
 .apple .buy { font-weight: 600; text-decoration: none; }
 .apple .buy:hover { text-decoration: underline; }
+
+/* 顏色比較用文字標示，不以機身顏色作背景。 */
+.color-chip { border: 1px solid var(--line); color: var(--ink); white-space: normal; }
+.color-card table { width: 100%; min-width: 0; }
+.color-best { margin: 0 0 14px; font-weight: 600; }
+.relative-low { color: #16733c; font-weight: 650; }
+.relative-high { color: #b64025; font-weight: 650; }
+@media (prefers-color-scheme: dark) {
+  .relative-low { color: #79dda1; }
+  .relative-high { color: #ffab91; }
+}
+@media (max-width: 600px) {
+  .color-card thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .color-card table, .color-card tbody, .color-card tr { display: block; }
+  .color-card tr { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .color-card td { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; border: 0; white-space: normal; }
+  .color-card td::before { content: attr(data-label); color: var(--muted); font-weight: 400; text-align: left; }
+  .color-card td:first-child { font-weight: 650; }
+}

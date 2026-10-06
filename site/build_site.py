@@ -12,6 +12,7 @@ import json
 import os
 import shutil
 import statistics
+from decimal import Decimal, ROUND_HALF_UP
 from urllib.parse import urlencode
 from xml.sax.saxutils import escape
 from datetime import date, datetime, timedelta, timezone
@@ -82,6 +83,7 @@ def clean_listing(r):
         "status": r.get("status", ""),
         "model": r.get("model", ""),
         "storage": r.get("storage", ""),
+        "color": r.get("color", ""),
         "brand_new": r.get("全新未拆封機", "") == "是",
         "battery": to_int(r.get("battery_health")),
         "price": to_int(r.get("price")),
@@ -281,6 +283,41 @@ def model_totals(listings):
     return [{"model": model, **group_stats(items)} for model, items in sorted(groups.items())]
 
 
+COLOR_MIN_SAMPLES = 3
+
+
+def color_stats(listings):
+    """接收已隱藏異常價格的單支文章；先依容量與新舊校正，再合併顏色。"""
+    priced = [r for r in listings if r.get("price") and r["price"] > 0 and r.get("model")]
+    groups = {}
+    key = lambda r: (r["model"], r.get("storage", ""), r.get("brand_new", False))
+    for r in priced:
+        groups.setdefault(key(r), []).append(r["price"])
+    medians = {k: statistics.median(v) for k, v in groups.items() if len(v) >= COLOR_MIN_SAMPLES}
+    colors = {}
+    for r in priced:
+        if not r.get("color"):
+            continue
+        for storage in (r.get("storage", ""), None):
+            colors.setdefault((r["model"], storage, r["color"]), []).append(r)
+    out = []
+    for (model, storage, color), rows in colors.items():
+        ratios = [Decimal(str(r["price"])) / Decimal(str(medians[key(r)])) for r in rows if key(r) in medians]
+        enough = len(ratios) >= COLOR_MIN_SAMPLES
+        used = [r["price"] for r in rows if not r.get("brand_new")]
+        relative = None
+        if enough:
+            relative = float((statistics.median(ratios) - 1).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP))
+        out.append({"model": model, "storage": storage, "color": color,
+                    "listed": len(rows), "sold": sum(r.get("status") == "已售出" for r in rows),
+                    # 價格欄只看二手：全新機價格高，混在一起會讓全新比例高的顏色看起來比較貴
+                    "median_price": int(statistics.median(used)) if enough and len(used) >= COLOR_MIN_SAMPLES else None,
+                    "used": len(used),
+                    "relative": (relative or 0.0) if enough else None, "samples": len(ratios)})
+    return sorted(out, key=lambda r: (r["model"], r["storage"] or "", r["color"]))
+
+
 APPLE_PRICES = os.path.join(SITE_DIR, "apple_prices.json")  # Apple 台灣官網價格（人工查詢）
 
 
@@ -331,6 +368,7 @@ def build_data(data_dir=DATA_DIR, now=None):
         # 型號統計另外納入多品項文章拆出的 iPhone（只影響刊登數與刊登價）
         "models": model_stats(listings + multi),
         "model_totals": model_totals(listings + multi),
+        "colors": color_stats(listings),
         "summary": read_csv(os.path.join(data_dir, "market_summary.csv")),
         "listings": listings,
         "events": events_out,

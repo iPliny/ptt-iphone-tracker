@@ -67,6 +67,7 @@ LISTING_FIELDS = [
     "days_to_sell_basis",  # 觀測＝兩次檢查之間偵測到售出；推估＝用最後編輯時間推算；無法推估
     "private_msg_count",
     "last_edit_at", "price_checked_at",  # ISO 8601，台灣時間；不回填舊事件
+    "color",  # 空白＝無法確定機身顏色
 ]
 BASIS_OBSERVED = "觀測"
 BASIS_ESTIMATED = "推估"
@@ -440,6 +441,121 @@ def parse_storage(*texts):
     return None
 
 
+# Apple 台灣正式名稱，查證 2026-10-07：https://support.apple.com/zh-tw/108044
+# 別名只是文章寫法，並非 Apple 官方別名。完整對照與來源見 docs/colors.md。
+def _palette(**colors):
+    return {name: aliases.split("|") for name, aliases in colors.items()}
+
+
+_BASIC_COLORS = _palette(黑色="黑|Black", 白色="白|White", 藍色="藍|Blue", 綠色="綠|Green",
+                         紫色="紫|Purple", 黃色="黃|Yellow", 粉紅色="粉|粉色|粉紅|Pink",
+                         **{"(PRODUCT)RED": "紅|紅色|Red|PRODUCT RED|（PRODUCT）RED"})
+_SILVER = "銀|白|白色|Silver|White"
+_GOLD = "金|Gold"
+_GRAY = "灰|灰色|黑|黑色|太空灰|Space Gray|Space Grey|Black"
+_GRAPHITE = "石墨|灰|灰色|黑|黑色|Graphite|Black"
+_TITANIUM = _palette(黑色鈦金屬="黑|黑色|黑鈦|黑鈦色|黑色鈦|Black|Black Titanium",
+                     白色鈦金屬="白|白色|白鈦|白鈦色|白色鈦|銀|銀色|White|White Titanium|Silver",
+                     原色鈦金屬="原鈦|原鈦色|原色鈦|原色鈦金|原鈦金|鈦色|自然鈦|原色|Natural|Natural Titanium")
+COLOR_TABLE = {
+    "iPhone 8": _palette(銀色=_SILVER, 金色=_GOLD, 太空灰色=_GRAY,
+                         **{"(PRODUCT)RED": "紅|紅色|Red|PRODUCT RED|（PRODUCT）RED"}),
+    "iPhone XS": _palette(銀色=_SILVER, 金色=_GOLD, 太空灰色=_GRAY),
+    "iPhone 11": {k: v for k, v in _BASIC_COLORS.items() if k not in ("藍色", "粉紅色")},
+    "iPhone 11 Pro": _palette(銀色=_SILVER, 金色=_GOLD, 太空灰色=_GRAY, 夜幕綠色="綠|綠色|夜幕綠|Midnight Green|Green"),
+    "iPhone 12": {k: v for k, v in _BASIC_COLORS.items() if k not in ("黃色", "粉紅色")},
+    "iPhone 12 Pro": _palette(銀色=_SILVER, 金色=_GOLD, 石墨色=_GRAPHITE, 太平洋藍色="藍|藍色|太平洋藍|Pacific Blue|Blue"),
+    "iPhone 13": {**{k: v for k, v in _BASIC_COLORS.items() if k in ("藍色", "粉紅色", "綠色", "(PRODUCT)RED")},
+                  **_palette(星光色="星光|白|白色|Starlight|White", 午夜色="午夜|黑|黑色|Midnight|Black")},
+    "iPhone 13 Pro": _palette(銀色=_SILVER, 金色=_GOLD, 石墨色=_GRAPHITE,
+                              天峰藍色="藍|藍色|天峰藍|Sierra Blue|Blue", 松嶺青色="綠|綠色|松嶺青|松嶺綠|Alpine Green|Green"),
+    "iPhone 14": {**{k: v for k, v in _BASIC_COLORS.items() if k in ("藍色", "紫色", "黃色", "(PRODUCT)RED")},
+                  **_palette(星光色="星光|白|白色|Starlight|White", 午夜色="午夜|黑|黑色|Midnight|Black")},
+    "iPhone 14 Pro": _palette(銀色=_SILVER, 金色=_GOLD, 太空黑色="黑|黑色|太空黑|Space Black|Black", 深紫色="紫|紫色|深紫|Deep Purple|Purple"),
+    "iPhone 15": {k: v for k, v in _BASIC_COLORS.items() if k in ("黑色", "藍色", "綠色", "黃色", "粉紅色")},
+    "iPhone 15 Pro": {**_TITANIUM, **_palette(藍色鈦金屬="藍|藍色|藍鈦|藍鈦色|藍色鈦|Blue|Blue Titanium")},
+    "iPhone 16": {**{k: v for k, v in _BASIC_COLORS.items() if k in ("黑色", "白色", "粉紅色")},
+                  **_palette(湖水綠色="綠|綠色|湖水綠|Teal|Green", 湛海藍色="藍|藍色|湛海藍|Ultramarine|Blue")},
+    "iPhone 16 Pro": {**_TITANIUM, **_palette(沙漠色鈦金屬="沙漠金|沙漠鈦|沙漠鈦色|沙漠色|沙漠|金|金色|Desert|Desert Titanium|Gold")},
+    "iPhone 16e": {k: v for k, v in _BASIC_COLORS.items() if k in ("黑色", "白色")},
+    "iPhone 17": {**{k: v for k, v in _BASIC_COLORS.items() if k in ("黑色", "白色")},
+                  **_palette(霧藍色="霧藍|藍|藍色|Mist Blue|Blue", 鼠尾草綠色="鼠尾草綠|綠|綠色|Sage|Green", 薰衣草紫色="薰衣草|薰衣草紫|紫|紫色|Lavender|Purple")},
+    "iPhone 17 Pro": _palette(銀色=_SILVER, 宇宙橙色="宇宙橙|宇宙橘色|宇宙橘|橙|橙色|橘|橘色|Cosmic Orange|Orange",
+                              藏藍色="藏藍|深藍色|深藍|藍|藍色|Deep Blue|Blue"),
+    "iPhone Air": _palette(太空黑色="太空黑|黑|黑色|Space Black|Black", 雲白色="雲白|白|白色|Cloud White|White",
+                           天藍色="天藍|藍|藍色|Sky Blue|Blue", 淺金色="淺金|金|金色|Light Gold|Gold"),
+    "iPhone 17e": {**{k: v for k, v in _BASIC_COLORS.items() if k in ("黑色", "白色")},
+                   **_palette(嫩粉色="嫩粉|粉|粉色|粉紅|粉紅色|Soft Pink|Pink")},
+    # 已經 Apple 台灣官網核實：https://www.apple.com/tw/iphone-18-pro/specs/
+    "iPhone 18 Pro": _palette(黑色="黑|Black", 銀色=_SILVER, 冰川藍色="冰川藍|藍|藍色|Glacier Blue|Blue",
+                              勃根地紅色="勃根地紅|紅|紅色|Burgundy|Burgundy Red|Red"),
+}
+# Plus / mini / Pro Max 與對應系列共用色盤；不替不存在的型號推測色盤。
+for _base, _suffixes in {
+    "iPhone 8": (" Plus",), "iPhone XS": (" Max",),
+    "iPhone 11 Pro": (" Max",), "iPhone 12": (" mini",), "iPhone 12 Pro": (" Max",),
+    "iPhone 13": (" mini",), "iPhone 13 Pro": (" Max",), "iPhone 14": (" Plus",),
+    "iPhone 14 Pro": (" Max",), "iPhone 15": (" Plus",), "iPhone 15 Pro": (" Max",),
+    "iPhone 16": (" Plus",), "iPhone 16 Pro": (" Max",), "iPhone 17 Pro": (" Max",),
+    "iPhone 18 Pro": (" Max",),
+}.items():
+    for _suffix in _suffixes:
+        COLOR_TABLE[_base + _suffix] = COLOR_TABLE[_base]
+
+
+def _color_aliases(palette):
+    return {alias.casefold(): name for name, aliases in palette.items()
+            for alias in [name, name.removesuffix("色"), *aliases]}
+
+
+_COLOR_ALIASES = {m: _color_aliases(p) for m, p in COLOR_TABLE.items()}
+# 全色盤最長字串優先：不把「沙漠色鈦金屬」內的「金」誤認成別種顏色。
+_COLOR_TOKENS = sorted({a for p in _COLOR_ALIASES.values() for a in p}, key=lambda a: (-len(a), a))
+_COLOR_RE = re.compile("|".join((r"(?<![a-z])" + re.escape(a) + r"(?![a-z])")
+                             if a.isascii() else re.escape(a) for a in _COLOR_TOKENS), re.I)
+_COLOR_ACCESSORY_RE = re.compile(r"(?:" + _COLOR_RE.pattern + r"|透明)(?:(?!" + _COLOR_RE.pattern + r")[^\n，,/+]){0,4}[殼套貼膜線頭盒]", re.I)
+
+
+def _color_matches(text):
+    """僅處理呼叫者提供的欄位；回傳原始詞供預覽稽核。"""
+    text = re.sub(r"^\s*\[販售\]\s*", "", text or "")
+    text = _COLOR_ACCESSORY_RE.sub(" ", text)
+    text = re.sub(r"現金|訂金|定金|銀行|黑貓(?:宅配)?|紅包|白蘋果|小白點", " ", text)
+    return text, list(_COLOR_RE.finditer(text))
+
+
+def parse_color(model, *texts):
+    """依欄位優先序找機身顏色；衝突、不符色盤、多機來源一律留空。"""
+    aliases = _COLOR_ALIASES.get(model)
+    if not aliases:
+        return ""
+    for source in texts:
+        text, matches = _color_matches(source)
+        # 標題含第二支 iPhone / Air 或多個容量，不把其中一支的顏色套到整篇。
+        phones = re.findall(r"i\s*phone|(?<![a-z])air(?![a-z])", text, re.I)
+        phones = len(phones) - len(re.findall(r"i\s*phone\s*air", text, re.I))
+        capacities = re.findall(r"\d+\s*(?:gb|tb|g|t)(?![a-z])", text, re.I)
+        if phones > 1 or len(capacities) > 1:
+            return ""
+        if matches:
+            colors = {aliases.get(m.group().casefold()) for m in matches}
+            return next(iter(colors)) if len(colors) == 1 and None not in colors else ""
+    return ""
+
+
+def backfill_colors(listings):
+    """用既存標題補空白顏色，不抓文章、不寫事件。回傳補值筆數。"""
+    n = 0
+    for row in listings.values():
+        if (not row.get("color") and row.get("model") and
+                row.get("status") in (STATUS_ACTIVE, STATUS_PENDING, STATUS_SOLD, STATUS_DELETED)):
+            color = parse_color(row["model"], row.get("title", ""))
+            if color:
+                row["color"] = color
+                n += 1
+    return n
+
+
 def strip_signature(text):
     text = re.split(r"\n--+\s*\n|\n-{3,}", "\n" + text)[0]
     return "\n".join(l for l in text.splitlines() if not l.strip().lower().startswith("sent from"))
@@ -581,6 +697,7 @@ def rule_extract(title, body):
     return {
         "model": model,
         "storage": storage,
+        "color": parse_color(model, _field(fields, "顏色"), _field(fields, "規格"), _field(fields, "容量"), model_line, bare_title),
         "price": parse_price(price_text) if price_text else None,
         "battery_health": battery,
         "warranty": parse_warranty(_field(fields, "保固")),
@@ -753,6 +870,7 @@ def build_fields(parsed):
         "model_raw": str(model_raw),
         "model": normalize_model(model_raw),
         "storage": normalize_storage(parsed.get("storage")),
+        "color": parsed.get("color") or "",
         "全新未拆封機": "是" if brand_new else "否",
         "battery_health": battery if battery is not None else "",
         "price": price,
@@ -997,6 +1115,8 @@ def process_article(url, listings, use_llm, stats, multi=None):
                     log_event(url, "重新解析修正", f"{old_price} → {fields['price']}")
                     if to_int(row.get("first_price")) == old_price:
                         row["first_price"] = fields["price"]
+            if not fields.get("color"):
+                fields["color"] = row.get("color", "")
             row.update(fields)
 
     # 新文章沒有上次檢查時間：第一次看到就已售出時，無從得知何時賣掉，不計售出天數
@@ -1207,8 +1327,12 @@ def main():
               f"｜價格變動 {stats['price_changes']}｜錯誤 {stats['errors']}")
 
     dropped = drop_misparsed(listings)
+    colored = backfill_colors(listings)
+    if colored:
+        print(f"[COLOR] {colored} 篇由既存標題補上顏色")
     if dropped:
         print(f"[CLEAN] {dropped} 篇誤判（配件、不存在的型號）改為略過")
+    if dropped or colored:
         save_listings(listings)
     rows = build_summary(listings, multi=multi)
     print(f"[REPORT] 行情彙整 {len(rows)} 組 → {SUMMARY_FILE}")

@@ -319,6 +319,78 @@ class DaysToSellTest(unittest.TestCase):
         self.assertEqual(self.row["days_to_sell_basis"], T.BASIS_UNKNOWN)
 
 
+class ColorParseTest(unittest.TestCase):
+    def test_real_titles(self):
+        cases = [
+            ("15 Pro", "[販售]雙北 IPHONE 15 PRO 256G 原鈦色", "原色鈦金屬"),
+            ("15 Pro", "[販售] 台中 iPhone 15 Pro 256G 白色", "白色鈦金屬"),
+            ("16 Pro", "[販售] 中彰 iPhone 16 pro 256g 沙漠金", "沙漠色鈦金屬"),
+            ("16 Pro Max", "[販售] 新竹 iPhone 16 Pro Max 256G 沙漠鈦", "沙漠色鈦金屬"),
+            ("17 Pro Max", "[販售] Apple iPhone 17 Pro Max 1TB 藏藍色", "藏藍色"),
+            ("17 Pro Max", "[販售] 雙北 17 pro max 1TB 橘", "宇宙橙色"),
+            ("17 Pro", "[販售] 新莊 iPhone 17 Pro 256G 銀色", "銀色"),
+            ("17", "[販售] 新竹 iPhone 17 512G 薰衣草", "薰衣草紫色"),
+            ("Air", "[販售] 台北 iPhone Air 256G 太空黑+滑鼠", "太空黑色"),
+            ("18 Pro", "[販售] 台北 iphone 18 pro 256g 紅色", "勃根地紅色"),
+            ("18 Pro", "[販售] 台北 iPhone 18 Pro 256G 勃根地紅", "勃根地紅色"),
+            ("11", "[販售] 雙北 iphone11 128G 黑", "黑色"),
+            ("18 Pro Max", "[販售] 台北 iphone 18 pro max 512g銀/Air 256g", ""),
+            ("18 Pro Max", "512g銀/Air 256g 太空黑", ""),
+            ("13 mini", "[販售] iPhone 13 mini 白", "星光色"),
+            ("13 Pro", "iPhone 13 Pro 藍", "天峰藍色"),
+            ("12 Pro", "iPhone 12 Pro 藍", "太平洋藍色"),
+            ("15 Pro", "iPhone 15 Pro 金色", ""),
+            ("15 Pro", "iPhone 15 Pro 256G", ""),
+        ]
+        for model, title, expected in cases:
+            with self.subTest(title=title):
+                self.assertEqual(T.parse_color("iPhone " + model, title), expected)
+
+    def test_aliases_and_canonical_names(self):
+        for model, palette in T.COLOR_TABLE.items():
+            for color, aliases in palette.items():
+                for alias in [color, *aliases]:
+                    with self.subTest(model=model, alias=alias):
+                        self.assertEqual(T.parse_color(model, alias.upper()), color)
+
+    def test_accessories_and_ambiguity(self):
+        for text in ("送黑色手機殼", "透明殼", "白色充電線", "黑色保護套", "白色充電頭", "黑色盒", "白色保護貼", "黑色保護膜",
+                     "現金 訂金 銀行 黑貓宅配 紅包", "Blackberry", "黑色 / 白色"):
+            with self.subTest(text=text):
+                self.assertEqual(T.parse_color("iPhone 16 Pro", text), "")
+        self.assertEqual(T.parse_color("iPhone 16 Pro", "沙漠金 送黑色手機殼"), "沙漠色鈦金屬")
+        self.assertEqual(T.parse_color("iPhone 16 Pro", "黑色 白色盒"), "黑色鈦金屬")
+        self.assertEqual(T.parse_color("iPhone 16 Pro", "白色/銀色"), "白色鈦金屬")
+        self.assertEqual(T.parse_color("iPhone 16 Pro", "黑 白", "金"), "")
+        self.assertEqual(T.parse_color("iPhone 15 Pro", "金", "黑"), "")
+        self.assertEqual(T.parse_color("iPhone X Pro", "黑"), "")
+
+    def test_template_and_priority(self):
+        # 使用使用者提供的實際標題與 MacShop [型號]/[規格]/[顏色] 範本。
+        title = "[販售] 台中 iPhone 15 Pro 256G 白色"
+        body = "[型號] iPhone 15 Pro 黑色\n[規格] 256G 藍色\n[顏色] 原鈦色\n[保固] 過保\n[售價] 25000\n[備註] 現金、銀行、黑貓宅配"
+        self.assertEqual(T.rule_extract(title, body)["color"], "原色鈦金屬")
+        self.assertEqual(T.rule_extract(title, body.replace("[顏色] 原鈦色\n", ""))["color"], "藍色鈦金屬")
+        self.assertEqual(T.rule_extract(title, "[型號] iPhone 15 Pro 黑色\n[規格] 256G\n[售價] 25000")["color"], "黑色鈦金屬")
+        self.assertEqual(T.rule_extract(title, "[型號] iPhone 15 Pro\n黑色手機殼另售\n[規格] 256G\n[售價] 25000")["color"], "白色鈦金屬")
+        self.assertEqual(T.rule_extract("[販售] iPhone 13 256G", "[型號] iPhone 13\n[規格] 無\n[容量] 256G 午夜色\n[售價] 9000")["color"], "午夜色")
+        self.assertEqual(T.rule_extract("[販售] iPhone 13 256G", "[型號] iPhone 13\n[規格] 256G 午夜色\n[售價] 9000")["color"], "午夜色")
+        self.assertEqual(T.rule_extract("[販售] iPhone 16 Pro 256G", "[型號] iPhone 16 Pro\n[規格] 256G\n[備註] 現金 銀行 黑貓宅配\n[售價] 25000")["color"], "")
+
+    def test_backfill_no_fetch_no_events(self):
+        from unittest.mock import patch
+        rows = {str(i): {"model": "iPhone 15 Pro", "title": "iPhone 15 Pro 原鈦色", "status": status}
+                for i, status in enumerate(("在售", "交易中", "已售出", "已刪除", "略過"))}
+        rows["existing"] = {**rows["0"], "color": "白色鈦金屬"}
+        rows["unknown"] = {**rows["0"], "model": ""}
+        with patch.object(T, "fetch", side_effect=AssertionError("不可抓文章")), patch.object(T, "log_event", side_effect=AssertionError("不可寫事件")):
+            self.assertEqual(T.backfill_colors(rows), 4)
+            self.assertEqual(T.backfill_colors(rows), 0)
+        self.assertEqual(rows["existing"]["color"], "白色鈦金屬")
+        self.assertNotIn("color", rows["4"])
+        self.assertNotIn("color", rows["unknown"])
+
+
 class PipelineTest(unittest.TestCase):
     """模擬兩次執行：第一次抓到新文章，第二次文章已擠出首頁，但回訪仍偵測到售出/改價/刪文。"""
 
@@ -380,6 +452,32 @@ class PipelineTest(unittest.TestCase):
         T.main()
         return T.load_listings()
 
+    def test_color_pipeline_preserves_and_updates(self):
+        pa = self.paths[0]
+        title = "[販售] 台中 iPhone 15 Pro 256G 白色"
+        body = "[型號] iPhone 15 Pro\n[規格] 256G\n[顏色] 原鈦色\n[保固] 過保\n[售價] 25000"
+        self.arts[pa] = (title, body, "")
+        row = self.run_main()[T.BASE_URL + pa]
+        self.assertEqual(row["color"], "原色鈦金屬")
+        with open(T.LISTINGS_FILE, encoding="utf-8-sig") as f:
+            self.assertEqual(next(csv.reader(f))[-2:], ["price_checked_at", "color"])
+        self.arts[pa] = (title.replace(" 白色", ""), body.replace("原鈦色", "未標示"), "")
+        self.assertEqual(self.run_main()[T.BASE_URL + pa]["color"], "原色鈦金屬")
+        self.arts[pa] = (title, body.replace("原鈦色", "黑色"), "")
+        self.assertEqual(self.run_main()[T.BASE_URL + pa]["color"], "黑色鈦金屬")
+
+    def test_report_only_backfills_old_csv(self):
+        from unittest.mock import patch
+        row = {"source_url": "u", "model": "iPhone 15 Pro", "title": "iPhone 15 Pro 黑色", "status": "已售出"}
+        with open(T.LISTINGS_FILE, "w", encoding="utf-8-sig", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=list(row))
+            w.writeheader()
+            w.writerow(row)
+        with patch.object(T, "fetch", side_effect=AssertionError("不可抓文章")):
+            rows = self.run_main("--report-only")
+        self.assertEqual(rows["u"]["color"], "黑色鈦金屬")
+        self.assertFalse(os.path.exists(T.EVENTS_FILE))
+
     def test_two_runs(self):
         a, b, c, d = (T.BASE_URL + p for p in self.paths)
         first = self.run_main()
@@ -431,8 +529,8 @@ class PipelineTest(unittest.TestCase):
         self.assertIsNone(rows["old"].get("private_msg_count"))
         T.save_listings(rows)
         self.assertEqual(T.load_listings()["old"]["private_msg_count"], "")
-        self.assertEqual(T.LISTING_FIELDS[-4:],
-                         ["days_to_sell_basis", "private_msg_count", "last_edit_at", "price_checked_at"])
+        self.assertEqual(T.LISTING_FIELDS[-5:],
+                         ["days_to_sell_basis", "private_msg_count", "last_edit_at", "price_checked_at", "color"])
 
     def test_reparse_fixes_old_wrong_price(self):
         a = T.BASE_URL + self.paths[0]
