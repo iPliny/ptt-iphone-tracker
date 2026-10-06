@@ -3,13 +3,14 @@
   "use strict";
 
   const $ = (s) => document.querySelector(s);
-  const { esc, money, dayOf, modelUrl, itemHtml, soldNote, daysCell, priceEventText } = PttCommon;
+  const { esc, money, modelUrl, itemHtml, soldNote, daysCell, priceEventText,
+    periodRange, sumPeriod, previousPeriod, periodNavigation, periodTitle, inPeriod, periodItems } = PttCommon;
   const PAGE = 10;
 
   let D = null;
   let byUrl = {};
-  let dayIdx = {};
   let current = "";
+  let period = "day";
   let tab = "new";
   let listLimit = PAGE;
   let dayLimit = PAGE;
@@ -59,7 +60,6 @@
   function init(data) {
     D = data;
     D.listings.forEach((r) => { byUrl[r.url] = r; });
-    D.days.forEach((d, i) => { dayIdx[d.date] = i; });
     $("#updated").textContent = "最後回訪 " + (D.last_checked || "—") + " · 共追蹤 " + D.counts.total + " 篇";
 
     const days = D.days.map((d) => d.date);
@@ -71,6 +71,7 @@
     $("#prev-day").addEventListener("click", () => step(-1));
     $("#next-day").addEventListener("click", () => step(1));
     $("#latest-day").addEventListener("click", () => select(days[days.length - 1]));
+    $("#latest-week").addEventListener("click", () => select(days[days.length - 1], "week"));
     document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => {
       tab = b.dataset.tab;
       document.querySelectorAll(".tabs button").forEach((x) => x.classList.toggle("on", x === b));
@@ -112,39 +113,56 @@
   }
 
   function step(delta) {
-    const i = dayIdx[current];
-    const next = D.days[(i == null ? D.days.length : i) + delta];
-    if (next) select(next.date);
+    const nav = periodNavigation(D.days, current, period === "week" ? 7 : 1);
+    const date = delta < 0 ? nav.previous : nav.next;
+    if (date) select(date, period);
   }
 
-  function select(date) {
-    current = date;
+  function selectedRange() {
+    return periodRange(D.days, current, period === "week" ? 7 : 1);
+  }
+
+  function select(date, mode = "day") {
+    current = date || "";
+    period = mode;
     dayLimit = PAGE;
-    $("#day").value = date;
-    const i = dayIdx[date];
-    $("#prev-day").disabled = !(i > 0);
-    $("#next-day").disabled = i == null || i >= D.days.length - 1;
+    $("#day").value = current;
+    const nav = periodNavigation(D.days, current, period === "week" ? 7 : 1);
+    $("#prev-day").disabled = !nav.previous;
+    $("#next-day").disabled = !nav.next;
+    $("#prev-day").setAttribute("aria-label", period === "week" ? "前一週" : "前一天");
+    $("#next-day").setAttribute("aria-label", period === "week" ? "後一週" : "後一天");
+    const latest = D.days.length ? D.days[D.days.length - 1].date : "";
+    for (const mode of ["day", "week"]) {
+      const button = $("#latest-" + mode);
+      const on = !!latest && period === mode && (mode === "week" || current === latest);
+      button.classList.toggle("on", on);
+      button.setAttribute("aria-pressed", String(on));
+      button.disabled = !latest;
+    }
     renderKpis();
     renderChart();
     renderDayList();
   }
 
-  // ---------- 當日指標 ----------
+  // ---------- 所選期間指標 ----------
   function renderKpis() {
-    const i = dayIdx[current];
-    const d = i == null ? { new: 0, sold: 0, deleted: 0, price_changes: 0, on_shelf: 0 } : D.days[i];
-    const p = i > 0 ? D.days[i - 1] : null;
+    const range = selectedRange();
+    const d = sumPeriod(D.days, range ? range.start : -1, range ? range.end : -1);
+    const previous = previousPeriod(D.days, range, period === "week" ? 7 : 1);
+    const p = previous ? sumPeriod(D.days, previous.start, previous.end) : null;
+    const comparison = period === "week" ? "前一週" : "前一天";
     const diff = (k) => {
       if (!p) return "";
       const v = d[k] - p[k];
-      return v === 0 ? "與前一天持平" : "比前一天 " + (v > 0 ? "+" : "") + v;
+      return v === 0 ? "與" + comparison + "持平" : "比" + comparison + " " + (v > 0 ? "+" : "") + v;
     };
     const cards = [
       ["新刊登", d.new, diff("new")],
       ["售出", d.sold, diff("sold")],
       ["刪文", d.deleted, diff("deleted")],
       ["改價", d.price_changes, diff("price_changes")],
-      ["日終在架", d.on_shelf, diff("on_shelf")],
+      [period === "week" ? "期末在架" : "日終在架", d.on_shelf, diff("on_shelf")],
     ];
     $("#kpis").innerHTML = cards.map(([label, v, note]) =>
       `<div class="kpi"><div class="label">${label}</div><div class="value">${v}</div><div class="note">${esc(note) || "&nbsp;"}</div></div>`
@@ -153,6 +171,7 @@
 
   // ---------- 近 30 天圖 ----------
   function renderChart() {
+    const range = selectedRange();
     const days = D.days.slice(-30);
     if (!days.length) { $("#chart").innerHTML = '<p class="empty">還沒有資料</p>'; return; }
     const W = 900, H = 220, L = 34, R = 34, T = 10, B = 26;
@@ -173,7 +192,7 @@
     days.forEach((d, i) => {
       const x = L + i * cw;
       const cx = x + cw / 2;
-      s += `<rect class="hit${d.date === current ? " sel" : ""}" data-date="${d.date}" x="${x}" y="${T}" width="${cw}" height="${H - T - B}"><title>${d.date}：新刊登 ${d.new}、售出 ${d.sold}、在架 ${d.on_shelf}</title></rect>`;
+      s += `<rect class="hit${inPeriod(d.date, range) ? " sel" : ""}" data-date="${d.date}" x="${x}" y="${T}" width="${cw}" height="${H - T - B}"><title>${d.date}：新刊登 ${d.new}、售出 ${d.sold}、在架 ${d.on_shelf}</title></rect>`;
       s += `<rect class="bar-new" pointer-events="none" x="${cx - bw - 1}" y="${y(d.new)}" width="${bw}" height="${y(0) - y(d.new)}"/>`;
       s += `<rect class="bar-sold" pointer-events="none" x="${cx + 1}" y="${y(d.sold)}" width="${bw}" height="${y(0) - y(d.sold)}"/>`;
       path += (i ? "L" : "M") + cx + "," + ys(d.on_shelf);
@@ -186,28 +205,26 @@
     $("#chart").querySelectorAll(".hit").forEach((r) => r.addEventListener("click", () => select(r.dataset.date)));
   }
 
-  // ---------- 當日清單 ----------
+  // ---------- 所選期間清單 ----------
   function renderDayList() {
-    const date = current;
-    $("#day-title").textContent = date ? date + " 動態" : "當日動態";
+    const range = selectedRange();
+    $("#day-title").textContent = period === "week" ? periodTitle(range) : current ? current + " 動態" : "當日動態";
+    const rows = periodItems(D, tab, range);
     let items = [];  // 每項是一個回傳 HTML 的函式，只畫出要顯示的那幾篇
     if (tab === "new") {
-      items = D.listings.filter((r) => dayOf(r.post_time) === date).map((r) => () => itemHtml(r));
+      items = rows.map((r) => () => itemHtml(r));
     } else if (tab === "sold") {
-      items = D.listings.filter((r) => r.status === "已售出" && dayOf(r.sold_at) === date)
-        .map((r) => () => itemHtml(r, soldNote(r)));
+      items = rows.map((r) => () => itemHtml(r, soldNote(r)));
     } else if (tab === "price" || tab === "deleted") {
-      items = D.events.filter((e) => dayOf(e.time) === date &&
-        (tab === "price" ? e.event === "價格變動" : /已刪除$/.test(e.detail)))
-        .map((e) => () => {
-          const r = byUrl[e.url] || { url: e.url, post_time: "", status: "", title: e.url };
-          const { what, explanation } = tab === "price" ? priceEventText(e) : { what: "刪文", explanation: "" };
-          return itemHtml(r, e.time.slice(11, 16) + " " + what, explanation);
-        });
+      items = rows.map((e) => () => {
+        const r = byUrl[e.url] || { url: e.url, post_time: "", status: "", title: e.url };
+        const { what, explanation } = tab === "price" ? priceEventText(e) : { what: "刪文", explanation: "" };
+        return itemHtml(r, e.time.slice(period === "week" ? 5 : 11, 16) + " " + what, explanation);
+      });
     }
     $("#day-list").innerHTML = items.length
       ? `<div class="items">${items.slice(0, dayLimit).map((f) => f()).join("")}</div>`
-      : '<p class="empty">這天沒有紀錄</p>';
+      : `<p class="empty">${period === "week" ? "這週沒有紀錄" : "這天沒有紀錄"}</p>`;
     setMore("#day-more", items.length - dayLimit);
   }
 
