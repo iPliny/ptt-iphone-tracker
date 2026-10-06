@@ -217,7 +217,9 @@
         ? "目前刊登價比較：" + tied.map((r) => r.color).join("、") + "的校正後相對值並列最低（" + diff + "）。"
         : "目前刊登價最低的顏色：" + best.color + "（" + diff + "，" + best.samples + " 篇）";
     }
-    const columns = ["顏色", "刊登", "已售", "二手刊登價中位數", "相對同型號同容量"];
+    // 全部容量混了不同容量，價格中位數會被大容量拉高，只留相對值
+    const showPrice = storage !== null;
+    const columns = ["顏色", "刊登", "已售"].concat(showPrice ? ["二手刊登價中位數"] : [], ["相對同型號同容量"]);
     const cell = (text, index, cls = "") => `<td data-label="${columns[index]}" class="${index ? "num " : ""}${cls}">${text}</td>`;
     $("#color-table").innerHTML = "<thead><tr>" + columns.map((c, i) =>
       `<th scope="col" class="${i ? "num" : ""}">${c}</th>`).join("") + "</tr></thead><tbody>" + rows.map((r) => {
@@ -225,8 +227,9 @@
       const relative = r.relative == null ? "樣本不足" : (r.relative < 0 ? "−" : r.relative > 0 ? "+" : "") + pct + "%";
       const tone = r.relative == null ? "muted" : r.relative < 0 ? "relative-low" : r.relative > 0 ? "relative-high" : "";
       return "<tr>" + cell(esc(r.color), 0) + cell(r.listed, 1) + cell(r.sold, 2) +
-        cell(r.median_price == null ? "樣本不足" : money(r.median_price), 3) + cell(relative, 4, tone) + "</tr>";
-    }).join("") + (rows.length ? "" : '<tr><td colspan="5" class="empty">這個容量尚無可比較的顏色價格資料</td></tr>') + "</tbody>";
+        (showPrice ? cell(r.median_price == null ? "樣本不足" : money(r.median_price), 3) : "") +
+        cell(relative, columns.length - 1, tone) + "</tr>";
+    }).join("") + (rows.length ? "" : `<tr><td colspan="${columns.length}" class="empty">這個容量尚無可比較的顏色價格資料</td></tr>`) + "</tbody>";
     const missing = selected().filter((r) => !r.color).length;
     $("#color-note").textContent = "顏色由標題與規格欄判斷，未標示顏色的 " + missing +
       " 篇不列入；每個顏色至少 3 篇才顯示數字。價格欄只算二手機；相對值是和同型號、同容量、同為全新或二手的刊登價中位數比較，全新機不會拉高某個顏色。異常價格不列入。";

@@ -49,11 +49,13 @@ test('顏色表按相對值排序，樣本不足最後；容量切換和未標�
   assert.match(html, /−5%/);
   assert.match(html, /\+3%/);
   assert.match(html, /樣本不足/);
+  assert.doesNotMatch(html, /二手刊登價中位數/);  // 全部容量不顯示混了容量的價格
   assert.match(element('#color-best').textContent, /宇宙橙色（比中位數低 5%，3 篇）/);
   assert.match(element('#color-note').textContent, /未標示顏色的 2 篇/);
   choose('256GB');
   assert.match(element('#color-note').textContent, /未標示顏色的 1 篇/);
   assert.doesNotMatch(element('#color-table').innerHTML, /宇宙橙色/);
+  assert.match(element('#color-table').innerHTML, /二手刊登價中位數/);
   assert.equal(element('#color-best').hidden, true);
 });
 
