@@ -268,6 +268,16 @@ class MultiProductPostTest(unittest.TestCase):
         self.assertIsNone(T.build_fields(T.rule_extract("[販售] iPhone 15 / iPhone 14", body)))
 
 
+class RepeatedFieldTest(unittest.TestCase):
+    def test_repeated_spec_field(self):
+        # M.1790515861.A.C91：型號寫在第一個 [規格]，又多一個 [規格]；不能拆成兩段而抓不到售價
+        body = ("[規格] iPhone 12 Pro Max 256G 灰-售出\n\n[規格] 256G 灰白\n\n[保固] 已過保\n\n[盒裝配件] 無\n\n"
+                "[售價] 7000 售出\n\n[交易方式] 台南面交\n\n[補充說明] 手機出售，有盒子無配件，手機貼有保護貼，"
+                "邊框及背蓋有些微掉漆及使用\n痕跡，電池健康度78%；台南南科附近可面交。\n")
+        f = T.build_fields(T.rule_extract("[販售] 台南iPhone 12 Pro Max 256G 藍", body))
+        self.assertEqual((f["model"], f["storage"], f["price"], f["battery_health"]), ("iPhone 12 Pro Max", "256GB", 7000, 78))
+
+
 class DaysToSellTest(unittest.TestCase):
     def setUp(self):
         self.now = T.datetime.now()
@@ -491,13 +501,22 @@ class PipelineTest(unittest.TestCase):
     def test_reparse_skips_accessory(self):
         b = T.BASE_URL + self.paths[1]
         rows = self.run_main()
-        pb = self.paths[1]
         self.assertEqual(rows[b]["status"], T.STATUS_ACTIVE)
-        # 規則變嚴後，同一篇本文（未編輯）重新解析不再算 iPhone
+        self.listed = set()
+        # 只是新規則抓不到售價：不能因此把原本的刊登排除（M.1790515861 曾被誤排除）
         with patch.object(T, "safe_extract", return_value=None):
-            self.listed = set()
+            rows = self.run_main("--reparse")
+        self.assertEqual(rows[b]["status"], T.STATUS_ACTIVE)
+        # 同一篇本文（未編輯）新規則判定為配件或一篇賣多支 → 改為略過
+        with patch.object(T, "safe_extract", return_value=None), patch.object(T, "not_single_iphone", return_value=True):
             rows = self.run_main("--reparse")
         self.assertEqual(rows[b]["status"], "略過")
+        # 之後規則又認得它：恢復原本狀態，不當成新刊登
+        rows = self.run_main("--reparse")
+        self.assertEqual((rows[b]["status"], rows[b]["first_price"]), (T.STATUS_ACTIVE, "9000"))
+        events = open(T.EVENTS_FILE, encoding="utf-8-sig").read()
+        self.assertIn("恢復誤排除", events)
+        self.assertEqual(events.count("新刊登,iPhone 14"), 1)
 
 if __name__ == "__main__":
     unittest.main()
