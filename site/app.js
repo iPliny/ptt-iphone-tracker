@@ -3,7 +3,7 @@
   "use strict";
 
   const $ = (s) => document.querySelector(s);
-  const { esc, money, dayOf, modelUrl, itemHtml, soldNote, priceEventText } = PttCommon;
+  const { esc, money, dayOf, modelUrl, itemHtml, soldNote, daysCell, priceEventText } = PttCommon;
   const PAGE = 10;
 
   let D = null;
@@ -236,9 +236,6 @@
     const fmt = (k, v, m) => {
       if (v == null) return "—";
       if (/price/.test(k)) return money(v);
-      if (k === "median_days" && m.days_estimated) {
-        return v + (m.days_estimated === m.days_samples ? "（推估）" : "（" + m.days_estimated + "/" + m.days_samples + " 推估）");
-      }
       return v;
     };
     const head = '<tr><th class="watch-column" aria-label="收藏"></th>' + MODEL_COLS.map(([k, label, num]) =>
@@ -247,7 +244,7 @@
       const saved = watchlist.has({ model: m.model, storage: m.storage });
       const link = `<a href="${esc(modelUrl(m.model, m.storage))}" title="查看 ${esc(m.model)} 機型頁">`;
       return `<tr><td class="watch-column"><button type="button" class="ghost watch-model" data-watch-model="${esc(m.model)}" data-watch-storage="${esc(m.storage)}" aria-label="${saved ? "取消收藏" : "收藏"} ${esc(m.model)} ${esc(m.storage || "容量未提供")}" title="${saved ? "取消收藏" : "收藏"}" aria-pressed="${saved}">${saved ? "★" : "☆"}</button></td>` + MODEL_COLS.map(([k, , num]) =>
-        `<td${num ? ' class="num"' : ""}>${k === "model" ? link + esc(m.model) + "</a>" : esc(fmt(k, m[k], m))}</td>`).join("") + "</tr>";
+        `<td${num ? ' class="num"' : ""}>${k === "model" ? link + esc(m.model) + "</a>" : (k === "median_days" ? daysCell(m) : esc(fmt(k, m[k], m)))}</td>`).join("") + "</tr>";
     }).join("");
     $("#models").innerHTML = "<thead>" + head + "</thead><tbody>" +
       (body || `<tr><td colspan="${MODEL_COLS.length + 1}" class="empty">沒有符合的型號</td></tr>`) + "</tbody>";
