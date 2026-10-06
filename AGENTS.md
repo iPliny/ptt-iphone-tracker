@@ -23,6 +23,10 @@
 - 機型頁顯示「Apple 原廠」區塊，資料是 `site/apple_prices.json`（人工查詢，`build_site.apple_prices` 轉成 `data.json` 的 `apple`）。POYU 指定：官網還在賣的放購買連結與現行官網價（`on_sale`，附 `checked_at`）；停售機型放停售前最後的官方建議售價（`discontinued`，附來源），不放上市價。
 - 新機上市、官網調價或機型下架時要手動更新：下架的機型從 `on_sale` 移到 `discontinued`，價格用下架前的官網價。查不到的容量填 null，網站顯示「查無官方價格」。
 
+### 2026-10-06 歷代官方價格頁
+- `site/prices.html`（資料 `site/official-prices.json`，說明見 `docs/official-prices.md`）列 iPhone 歷代台灣上市價、後續容量／調價與初代美國價。POYU 2026-10-06 同意上線。只有 Apple 原文（A）與電信官方（B）有金額，其他查核狀態一律 `null`，未核實金額不得出現在任何公開檔案。
+- 現行官網價／停售前最終價仍只放 `site/apple_prices.json`（機型頁），兩者不重複存。
+
 ### 2026-10-05 異常價格不公開
 - POYU 指示明顯怪的價格「優先不要 po」。`parse_price` 先移除日期（如 AppleCare+ 到 2028/1/22），避免把年份當售價。
 - 網站與週報再加一層：`build_site.drop_price_outliers` 把和同型號×容量×全新與否中位數（不到 5 筆改用同型號）相比低於一半或高於兩倍的價格改成不公開；`implausible_price_change` 把降幅超過一半或漲幅超過一倍的改價事件排除。CSV 原始資料不改。被隱藏的價格與改價由 track.yml 每次寫進 `data/price_outliers.csv`（`build_site.py --outlier-report`，整檔覆寫，不放上網站），POYU 要「不發但手上記著」。

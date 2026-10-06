@@ -19,7 +19,8 @@ from datetime import date, datetime, timedelta, timezone
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SITE_DIR = os.path.join(ROOT, "site")
 DATA_DIR = os.path.join(ROOT, "data")
-STATIC_FILES = ["index.html", "model.html", "common.js", "app.js", "model.js", "watchlist.js", "style.css"]
+STATIC_FILES = ["index.html", "model.html", "common.js", "app.js", "model.js", "watchlist.js", "style.css",
+                "prices.html", "prices.js", "prices.css", "official-prices.json"]
 CSV_FILES = ["listings.csv", "events.csv", "market_summary.csv", "price_event_times.csv"]
 TAIPEI = timezone(timedelta(hours=8))
 SITE_URL = "https://ipliny.github.io/ptt-iphone-tracker/"  # sitemap.xml 用的正式網址
@@ -341,9 +342,9 @@ def write_outlier_report(data_dir=DATA_DIR):
 
 
 def sitemap_xml(data, today=None, column_urls=()):
-    """首頁、每個機型頁（model.html?m=...，和網站內連結相同），以及每週專欄的入口與各期。"""
+    """首頁、歷代官方價格頁、每個機型頁（model.html?m=...，和網站內連結相同），以及每週專欄的入口與各期。"""
     lastmod = (today or datetime.now(TAIPEI).date()).isoformat()
-    urls = [SITE_URL] + [SITE_URL + "model.html?" + urlencode({"m": m["model"]}) for m in data["model_totals"]]
+    urls = [SITE_URL, SITE_URL + "prices.html"] + [SITE_URL + "model.html?" + urlencode({"m": m["model"]}) for m in data["model_totals"]]
     if column_urls:
         urls += [SITE_URL + "column/"] + list(column_urls)
     items = "".join(f"  <url><loc>{escape(u)}</loc><lastmod>{lastmod}</lastmod></url>\n" for u in urls)
