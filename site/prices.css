@@ -1,0 +1,22 @@
+/* 僅套用在歷史價格頁，不變更二手行情／收藏樣式。 */
+#prices-main p { max-width: 78ch; }
+#prices-main .price-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0; align-items: end; }
+.price-filters label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.price-filters input, .price-filters select, .price-filters button { min-width: 0; width: 100%; min-height: 44px; }
+.price-filters .price-search { grid-column: 1 / -1; }
+.price-notice { border-left: 3px solid var(--accent); padding-left: 10px; font-size: 13px; }
+#price-table { min-width: 690px; }
+#price-table th { cursor: default; }
+#price-table td { vertical-align: top; white-space: normal; }
+#price-table .price-amount { white-space: nowrap; font-weight: 650; }
+#price-table .price-model { min-width: 160px; }
+#price-table .price-note { display: block; color: var(--muted); font-size: 12px; max-width: 280px; margin-top: 4px; overflow-wrap: anywhere; }
+#price-table .price-source { display: inline-block; padding: 8px 0; }
+#price-table caption { text-align: left; color: var(--muted); font-size: 13px; padding: 8px; }
+#price-table-scroll:focus-visible, .price-filters input:focus-visible, .price-filters select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+#price-error { color: var(--ink); border-left: 3px solid var(--shelf); padding-left: 12px; }
+@media (max-width: 540px) {
+  #prices-main .price-filters { grid-template-columns: minmax(0, 1fr); }
+  #prices-main .card { padding: 12px; }
+  .top h1 { font-size: 23px; margin-top: 8px; }
+}

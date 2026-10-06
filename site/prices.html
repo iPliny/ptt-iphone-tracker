@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <!-- Google tag (gtag.js)：Google Analytics 4，Search Console 也靠這段驗證擁有權 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-G3GH12TQSZ"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-G3GH12TQSZ');
+  </script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>iPhone 歷代官方價格查核表｜PTT MacShop交易觀測</title>
+  <meta name="description" content="查閱 iPhone 歷代各容量的台灣上市定價、後續容量與調價，附官方來源及查核狀態。未核實金額不公開，電信方案與美國價格分開列示。">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="prices.css">
+  <script src="prices.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="back" href="./">← PTT MacShop交易觀測</a> · <a class="back" href="column/">二手 iPhone 行情週報</a>
+      <h1>iPhone 歷代官方價格查核表</h1>
+      <p class="sub">歷史定價參考，不是目前售價，也不是二手成交價。</p>
+    </div>
+  </header>
+  <main class="wrap" id="prices-main">
+    <section class="card" aria-labelledby="scope-title">
+      <h2 id="scope-title">先看價格的時點與依據</h2>
+      <p>預設只列 Apple 原文可支持的台灣上市價。可切換「全部查核狀態」查看待查項目；待查金額不公開，不以最低容量的起價代替其他容量價格。</p>
+      <p class="hint">要看現在 Apple 官網的售價或停售前最後售價，請到各機型頁的「Apple 原廠」區塊。電信官方方案不等於 Apple 直售空機價。後增容量、後續調價與初代美國價格另列；不同市場、容量、時點不可混算。</p>
+      <p id="price-coverage" class="hint" role="status">載入查核資料中…</p>
+    </section>
+    <section class="card" aria-labelledby="lookup-title">
+      <h2 id="lookup-title">查詢歷史價目</h2>
+      <form id="price-filters" class="price-filters" role="search" aria-label="歷史價格篩選">
+        <label>價格區塊
+          <select id="price-section" name="section">
+            <option value="tw-launch">台灣上市價／首發方案（TWD）</option>
+            <option value="tw-later">台灣後續容量／調價（TWD）</option>
+            <option value="us">初代美國價格（USD）</option>
+          </select>
+        </label>
+        <label>查核狀態
+          <select id="price-evidence" name="evidence">
+            <option value="A">Apple 原文</option>
+            <option value="all">全部查核狀態（含待查）</option>
+            <option value="B">電信官方（非 Apple 直售）</option>
+            <option value="pending">待查／不適用</option>
+          </select>
+        </label>
+        <label>機型初發年<select id="price-year" name="year"><option value="">全部年份</option></select></label>
+        <label>容量<select id="price-storage" name="storage"><option value="">全部容量</option></select></label>
+        <label class="price-search">搜尋機型<input id="price-query" name="q" type="search" maxlength="120" placeholder="例如 16 Pro、SE、XS Max"></label>
+        <label>排序<select id="price-sort" name="sort"><option value="newest">初發年：新到舊</option><option value="oldest">初發年：舊到新</option><option value="price-asc">金額：低到高</option><option value="price-desc">金額：高到低</option></select></label>
+        <button type="reset" class="ghost">重設篩選</button>
+      </form>
+      <p id="price-result" class="hint" role="status" aria-live="polite"></p>
+      <p class="hint">手機版表格可左右捲動，查看適用日期與來源連結。</p>
+      <p id="price-section-note" class="price-notice"></p>
+      <div class="scroll" id="price-table-scroll" role="region" aria-label="價格表，可橫向捲動" tabindex="0">
+        <table id="price-table">
+          <caption id="price-caption">歷史價格查核明細</caption>
+          <thead><tr><th scope="col">初發年／機型</th><th scope="col">容量</th><th scope="col" class="num">金額</th><th scope="col">時點／價格類型</th><th scope="col">查核狀態／來源</th></tr></thead>
+          <tbody id="price-rows"></tbody>
+        </table>
+      </div>
+      <p id="price-empty" class="empty" hidden>沒有符合條件的資料。可清除機型／容量篩選，或切換全部查核狀態。</p>
+      <p id="price-error" role="alert" hidden>價格資料載入失敗，請重新整理。二手交易觀測不受影響。</p>
+      <button id="price-retry" type="button" class="ghost" hidden>重新載入</button>
+      <noscript><p>此查詢表需要 JavaScript；請啟用後重新整理。未顯示資料不代表售價為零。</p></noscript>
+    </section>
+    <section class="card" aria-labelledby="method-title">
+      <h2 id="method-title">如何使用這張表</h2>
+      <p>「Apple 原文」與「電信官方」沿用查核底稿的證據分級；不代表每次開啟網頁都重新查價。每筆附來源與適用時點；新聞稿只列起價時，其他容量保留待查，不推算。</p>
+      <p>轉載待原件、時點待複核的金額未放入公開檔案；機型或官方索引仍待確認的條目暫不刊出。原始底稿持續補件，因此本頁不是已查核完畢的完整歷代價目。</p>
+      <p>若要比較二手行情，請確認同一機型、容量、幣別與價格時點，再考量機況。本頁不計算折價率或保值率，也不把參考價併入二手市場統計。</p>
+    </section>
+  </main>
+  <footer class="wrap foot"><p><a href="./">回到 PTT MacShop交易觀測</a> · 價格來源請見各筆記錄連結。</p></footer>
+</body>
+</html>
