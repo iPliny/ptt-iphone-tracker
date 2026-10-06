@@ -81,6 +81,17 @@ class BuildSiteTest(unittest.TestCase):
         self.assertNotIn("u4", [r["url"] for r in data["listings"]])
         self.assertEqual(data["counts"]["已售出"], 1)
 
+    def test_skipped_rows_events_excluded(self):
+        # 改成「略過」的配件文，原本的新刊登／改價事件不再出現在網站
+        path = os.path.join(self.dir, "events.csv")
+        rows = S.read_csv(path) + [
+            {"time": "2026-09-03 09:00:00", "source_url": "u4", "event": "新刊登", "detail": "iPhone 17 Pro Max 未知 $1200"},
+            {"time": "2026-09-03 10:00:00", "source_url": "u4", "event": "價格變動", "detail": "1200 → 1000"}]
+        write_csv(path, S_EVENT_HEADER, rows)
+        data = S.build_data(self.dir)
+        self.assertNotIn("u4", [e["url"] for e in data["events"]])
+        self.assertEqual({d["date"]: d["price_changes"] for d in data["days"]}["2026-09-03"], 1)
+
     def test_model_stats(self):
         (m,) = S.build_data(self.dir)["models"]
         self.assertEqual((m["listed"], m["active"], m["sold"]), (3, 1, 1))
