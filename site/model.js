@@ -127,7 +127,7 @@
     const daysNote = m && m.days_samples
       ? m.days_samples + " 筆樣本" + (m.days_estimated ? "，" + m.days_estimated + " 筆推估" : "") : "還沒有售出天數";
     const cards = [
-      ["刊登", m ? m.listed : selected().length, m ? "在架 " + m.active + " · 已售 " + m.sold : "沒有可用的標價"],
+      ["刊登", m ? m.listed : selected().length, m ? "在架 " + m.active + " · 已售 " + m.sold + (m.multi ? " · 多品項 " + m.multi : "") : "沒有可用的標價"],
       ["刊登中位數", money(m && m.median_price), m ? money(m.min_price) + " – " + money(m.max_price) : ""],
       ["成交中位數", money(m && m.median_sold_price), "售出時的最後標價"],
       ["售出天數中位數", days, daysNote],

@@ -54,7 +54,7 @@ def load_tracked(data_dir):
     events = S.read_csv(os.path.join(data_dir, "events.csv"))
     events = S.attach_price_times(events, S.read_csv(os.path.join(data_dir, "price_event_times.csv")))
     events = [e for e in events if not S.implausible_price_change(e)]
-    listings = S.drop_price_outliers([S.clean_listing(r) for r in raw if r.get("status") in S.TRACKED_STATUSES])
+    listings, _ = S.load_priced(raw, data_dir)  # 和網站用同一套異常價格判斷；週報只用單支刊登
     events = S.tracked_events(events, listings)
     first_seen = min((d for d in (S.day_of(r.get("first_seen")) for r in raw) if d), default=None)
     return listings, events, first_seen
