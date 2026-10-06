@@ -381,17 +381,18 @@ def split_template(body):
 def split_blocks(body):
     """
     一篇賣多樣商品時，賣家常把整份範本重複貼好幾次（iPhone 一段、Apple Watch 一段）。
-    同一個欄位名再次出現就視為新的一段；回傳 [{欄位名: 內容}, ...]。
+    型號欄再次出現就視為新的一段；回傳 [{欄位名: 內容}, ...]。
     """
     blocks, fields, key = [], {}, None
     for line in body.splitlines():
         m = _FIELD_RE.match(line)
         if m:
             key = m.group(1).strip()
-            if key in fields:
+            if key in fields and re.search(r"型號|品名|物品", key):
                 blocks.append(fields)
                 fields = {}
-            fields[key] = m.group(2).strip()
+            # 其他欄位重複（兩個 [規格]、兩個 [補充說明]）只是賣家多貼一次，接在原欄位後面
+            fields[key] = (fields[key] + "\n" + m.group(2).strip()).strip() if key in fields else m.group(2).strip()
         elif key is not None:
             fields[key] = (fields[key] + "\n" + line.strip()).strip()
     if fields or not blocks:
@@ -489,6 +490,25 @@ def misparsed_reason(row):
     if is_accessory_post(row.get("title"), row.get("storage")):
         return "配件"
     return None
+
+
+def not_single_iphone(art):
+    """新規則明確判定不是單支 iPhone：配件文，或一篇賣多支。只是抓不到售價之類的不算。"""
+    raw = rule_extract(art["title"], art["body"])
+    return is_accessory_post(art["title"], raw["storage"]) or bool(extract_items(art["title"], art["body"]))
+
+
+def skipped_from(url, path=None):
+    """events.csv 裡這篇最後一次「排除誤判」之前的狀態；沒有就回傳 None。"""
+    path = path or EVENTS_FILE
+    prev = None
+    if os.path.exists(path):
+        with open(path, encoding="utf-8-sig", newline="") as f:
+            for e in csv.DictReader(f):
+                if e.get("source_url") == url and e.get("event") == "排除誤判":
+                    m = re.match(r"(\S+) → 略過", e.get("detail", ""))
+                    prev = m.group(1) if m else None
+    return prev
 
 
 def drop_misparsed(listings):
@@ -917,10 +937,16 @@ def process_article(url, listings, use_llm, stats, multi=None):
 
     first_seen = None
     if REPARSE and use_llm and row is not None and row.get("status") == "略過":
-        # 規則改進後，先前略過的文章當成新文章重新判斷，但保留第一次看到的時間
-        first_seen = row.get("first_seen")
-        del listings[url]
-        row = None
+        prev = skipped_from(url) if row.get("model") else None
+        if prev and safe_extract(art, stats) is not None:
+            # 先前被「排除誤判」改成略過、現在規則認得的文章：恢復原本狀態，保留售出天數等紀錄
+            row["status"] = prev
+            log_event(url, "恢復誤排除", f"略過 → {prev}")
+        else:
+            # 規則改進後，先前略過的文章當成新文章重新判斷，但保留第一次看到的時間
+            first_seen = row.get("first_seen")
+            del listings[url]
+            row = None
 
     if row is None:
         if not use_llm:
@@ -935,7 +961,8 @@ def process_article(url, listings, use_llm, stats, multi=None):
         if fields is None:
             # 仍記錄 hash，避免每次重跑；status 標成「略過」不進行情統計
             listings[url] = {"source_url": url, "post_time": post_time_from_url(url), "title": art["title"],
-                             "status": "略過", "first_seen": now_str(), "last_checked": now_str(), "body_hash": h}
+                             "status": "略過", "first_seen": first_seen or now_str(), "last_checked": now_str(),
+                             "body_hash": h}
             return
         row = {"source_url": url, "post_time": post_time_from_url(url), "first_seen": first_seen or now_str(),
                "status": STATUS_ACTIVE, "first_price": fields["price"], **fields}
@@ -951,10 +978,12 @@ def process_article(url, listings, use_llm, stats, multi=None):
         print("    [UPDATE] 本文被編輯，重新解析。" if edited else "    [REPARSE] 依新規則重新解析。")
         fields = safe_extract(art, stats)
         price_confirmed = fields is not None
-        if fields is None and REPARSE and row.get("body_hash") == h:
-            # 本文沒變、是新規則判定不是單支 iPhone（配件等）→ 不再計入
+        if fields is None and REPARSE and row.get("body_hash") == h and not_single_iphone(art):
+            # 本文沒變、新規則判定是配件或一篇賣多支 → 不再當單支刊登計入
             log_event(url, "排除誤判", f"{row.get('status')} → 略過（重新解析）")
             row["status"] = "略過"
+            if multi is not None:
+                record_multi(url, art, multi, row.get("first_seen"))
             row["last_checked"] = now_str()
             return
         if fields:
