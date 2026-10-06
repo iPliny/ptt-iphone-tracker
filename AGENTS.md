@@ -55,6 +55,12 @@
 - CSV 裡不帶時區的時間（`post_time`、`first_seen`、`last_checked`、`sold_detected_at`、`events.csv` 的 `time` 等）一律是台灣時間。`tracker.py` 開頭強制 `TZ=Asia/Taipei`，workflow 也設了 `TZ`。
 - 在這之前 Actions 主機是 UTC：PR #10 合併前寫入的這些時間都比台灣時間慢 8 小時。POYU 決定不回頭修正舊資料（2026-09-29），所以舊列的 `post_time` 仍是 UTC；發文時間在切換前的文章，之後算出的售出天數，以及舊的用編輯時間推估的售出天數，都會多算約 0.3 天。
 
+### 2026-10-07 顏色預覽
+- `listings.csv` 最後一欄新增 `color`（接在 `price_checked_at` 後）。`tracker.py` 的 `COLOR_TABLE` 保存 Apple 台灣正式色名與各代別名，來源見 `docs/colors.md`。依序看 [顏色]、[規格]／[容量]、[型號] 第一行、標題，不掃整篇本文；排除配件顏色，多色／多機／不符色盤留空。本文重解析時只有非空顏色覆寫舊值。
+- `backfill_colors` 只用既存標題補在售／交易中／已售出／已刪除的空白值，不抓文章、不寫事件；`--report-only` 也會跑。
+- 網站在異常價格排除後計算 `colors`，僅單支文章；多品項維持既有流程。每篇價格除以同型號×容量×全新或二手組的中位數（基準至少 3 篇），各顏色取比值中位數減 1，再四捨五入至整數百分比；各容量及全部容量各一組。某顏色可計比值的 `samples` 不足 3，價格中位數與相對值皆 null。未標顏色但有價格的文章仍可作為基準。
+- 首頁和機型文章共用 `site/common.js:itemHtml`，顏色 chip 在該處統一維護。機型顏色表依容量切換，價格均為刊登價；已售只是賣家狀態，非真實成交價。
+
 ## 開發規則
 - 修改後必須跑 `python -m unittest`，測試不需網路也不需 Ollama（`fetch`、`llm_extract` 皆被替換成假的）。
 - 改動售出判斷（`detect_status`）或規則萃取（`rule_extract`、`is_brand_new`）時，把觸發問題的實際文章本文精簡後加進 `tests/test_tracker.py` 當回歸測試。

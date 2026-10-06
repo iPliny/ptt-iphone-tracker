@@ -86,6 +86,7 @@
     renderKpis();
     renderChart();
     renderCompare();
+    renderColors();
     renderList();
     renderEvents();
   }
@@ -196,6 +197,37 @@
       rows.map((m) => `<tr class="${m.storage === storage ? "current" : ""}">` + COLS.map(([k, , num]) => k === "storage"
         ? `<td><button type="button" class="linkish" data-storage="${esc(m.storage)}">${esc(storageLabel(m.storage))}</button></td>`
         : `<td${num ? ' class="num"' : ""}>${esc(fmt(k, m[k], m))}</td>`).join("") + "</tr>").join("") + "</tbody>";
+  }
+
+  function renderColors() {
+    const rows = (D.colors || []).filter((r) => r.model === model && r.storage === storage)
+      .sort((a, b) => (a.relative == null) - (b.relative == null) ||
+        (a.relative - b.relative) || a.color.localeCompare(b.color, "zh-Hant"));
+    $("#color-card").hidden = !mine.some((r) => r.color);
+    const comparable = rows.filter((r) => r.relative != null);
+    const best = comparable[0];
+    $("#color-best").hidden = comparable.length < 2;
+    if (best) {
+      const pct = Math.round(Math.abs(best.relative) * 100);
+      const diff = pct === 0 ? "與中位數相同" : "比中位數" + (best.relative < 0 ? "低 " : "高 ") + pct + "%";
+      const tied = comparable.filter((r) => r.relative === best.relative);
+      $("#color-best").textContent = tied.length > 1
+        ? "目前刊登價比較：" + tied.map((r) => r.color).join("、") + "的校正後相對值並列最低（" + diff + "）。"
+        : "目前刊登價最低的顏色：" + best.color + "（" + diff + "，" + best.samples + " 篇）";
+    }
+    const columns = ["顏色", "刊登", "已售", "刊登價中位數", "相對同型號同容量"];
+    const cell = (text, index, cls = "") => `<td data-label="${columns[index]}" class="${index ? "num " : ""}${cls}">${text}</td>`;
+    $("#color-table").innerHTML = "<thead><tr>" + columns.map((c, i) =>
+      `<th scope="col" class="${i ? "num" : ""}">${c}</th>`).join("") + "</tr></thead><tbody>" + rows.map((r) => {
+      const pct = Math.round(Math.abs(r.relative || 0) * 100);
+      const relative = r.relative == null ? "樣本不足" : (r.relative < 0 ? "−" : r.relative > 0 ? "+" : "") + pct + "%";
+      const tone = r.relative == null ? "muted" : r.relative < 0 ? "relative-low" : r.relative > 0 ? "relative-high" : "";
+      return "<tr>" + cell(esc(r.color), 0) + cell(r.listed, 1) + cell(r.sold, 2) +
+        cell(r.median_price == null ? "樣本不足" : money(r.median_price), 3) + cell(relative, 4, tone) + "</tr>";
+    }).join("") + (rows.length ? "" : '<tr><td colspan="5" class="empty">這個容量尚無可比較的顏色價格資料</td></tr>') + "</tbody>";
+    const missing = selected().filter((r) => !r.color).length;
+    $("#color-note").textContent = "顏色由標題與規格欄判斷，未標示顏色的 " + missing +
+      " 篇不列入；每個顏色至少 3 篇可比較樣本才顯示價格。相對值先依同型號、同容量、同為全新或二手的刊登價中位數校正，再取比值中位數；基準組至少 3 篇。全部容量依校正後相對值比較，原始中位數仍受容量與新舊組成影響。異常價格不列入。";
   }
 
   function selectedCount(s) {

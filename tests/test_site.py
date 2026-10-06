@@ -251,3 +251,65 @@ S_EVENT_HEADER = ["time", "source_url", "event", "detail"]
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ColorStatsTest(unittest.TestCase):
+    def row(self, price, color="黑色", storage="256GB", new=False, status="在售"):
+        return {"model": "iPhone 17", "storage": storage, "brand_new": new,
+                "color": color, "price": price, "status": status}
+
+    def test_threshold_and_relative(self):
+        rows = [self.row(p) for p in (27000, 28500, 30000)] + [self.row(p, "白色") for p in (30000, 31500, 33000)]
+        black = next(r for r in S.color_stats(rows) if r["color"] == "黑色" and r["storage"] is None)
+        self.assertEqual(black["relative"], -0.05)
+        self.assertEqual(black["median_price"], 28500)
+        self.assertEqual(black["samples"], 3)
+        rows.pop(0)
+        black = next(r for r in S.color_stats(rows) if r["color"] == "黑色" and r["storage"] is None)
+        self.assertIsNone(black["relative"])
+        self.assertIsNone(black["median_price"])
+        self.assertEqual(black["listed"], 2)
+
+    def test_capacity_condition_and_unknown_color_baseline(self):
+        rows = []
+        for storage, new, base in [("256GB", False, 30000), ("512GB", False, 40000), ("512GB", True, 50000)]:
+            rows.extend([self.row(base * .9, "黑色", storage, new), self.row(base, "", storage, new), self.row(base * 1.1, "", storage, new)])
+        all_caps = next(r for r in S.color_stats(rows) if r["storage"] is None)
+        self.assertEqual(all_caps["relative"], -.1)
+        self.assertEqual(all_caps["samples"], 3)
+        self.assertTrue(all(r["relative"] is None for r in S.color_stats(rows) if r["storage"] is not None))
+
+    def test_small_baseline_no_ratios(self):
+        rows = [self.row(30000, storage=s) for s in ("128GB", "256GB", "512GB")]
+        row = next(r for r in S.color_stats(rows) if r["storage"] is None)
+        self.assertEqual(row["listed"], 3)
+        self.assertEqual(row["samples"], 0)
+        self.assertIsNone(row["median_price"])
+
+    def test_outliers_excluded_from_build(self):
+        with tempfile.TemporaryDirectory() as d:
+            rows = [{**listing(str(i), "2026-10-06 12:00:00", model="iPhone 17", price=str(p)), "color": "黑色"}
+                    for i, p in enumerate([30000, 30000, 30000, 30000, 30000, 1000])]
+            write_csv(os.path.join(d, "listings.csv"), LISTING_HEADER + ["color"], rows)
+            result = S.build_data(d)
+            self.assertTrue(result["colors"])
+            for row in result["colors"]:
+                self.assertEqual(row["listed"], 5)
+                self.assertEqual(row["samples"], 5)
+                self.assertEqual(row["median_price"], 30000)
+                self.assertEqual(row["relative"], 0)
+            self.assertIsNone(next(r for r in result["listings"] if r["url"] == "5")["price"])
+
+    def test_round_half_up_and_sold_counts(self):
+        rows = [self.row(30150, status="已售出") for _ in range(3)] + [self.row(30000, "") for _ in range(4)]
+        row = next(r for r in S.color_stats(rows) if r["storage"] is None)
+        self.assertEqual(row["relative"], .01)
+        self.assertEqual(row["sold"], 3)
+        for r in rows[:3]:
+            r["price"] = 29850
+        row = next(r for r in S.color_stats(rows) if r["storage"] is None)
+        self.assertEqual(row["relative"], -.01)
+
+    def test_missing_color_compatibility(self):
+        self.assertEqual(S.clean_listing({})["color"], "")
+        self.assertEqual(S.color_stats([self.row(None), self.row(30000, "")]), [])

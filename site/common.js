@@ -35,8 +35,8 @@
   function itemHtml(r, extra, extraTitle = "") {
     const pm = (r.status === "在售" || r.status === "交易中") && r.pm_count >= 1
       ? `<span class="chip pm" title="${esc(r.pm_count)} 位網友推文表示已私訊">私${esc(r.pm_count)}</span>` : "";
-    const tags = [r.storage, r.brand_new ? "全新未拆" : "", r.battery ? "電池 " + r.battery + "%" : "", r.warranty]
-      .filter(Boolean).map((t) => `<span class="chip">${esc(t)}</span>`).join("");
+    const tags = [r.storage, r.color, r.brand_new ? "全新未拆" : "", r.battery ? "電池 " + r.battery + "%" : "", r.warranty]
+      .filter(Boolean).map((t) => `<span class="chip${r.color && t === r.color ? " color-chip" : ""}">${esc(t)}</span>`).join("");
     return `<div class="item">
       <div><a class="name" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.model || r.title || "（未解析）")}</a> ${pm}${tags}</div>
       <div class="price">${money(r.price)}</div>
