@@ -310,6 +310,16 @@ class ColorStatsTest(unittest.TestCase):
         row = next(r for r in S.color_stats(rows) if r["storage"] is None)
         self.assertEqual(row["relative"], -.01)
 
+    def test_price_column_counts_used_only(self):
+        # 全新機價格高：價格欄只看二手，相對值仍分開全新與二手各自比較
+        rows = [self.row(p) for p in (30000, 30000, 30000)] + [self.row(p, new=True) for p in (40000, 40000, 40000)]
+        row = next(r for r in S.color_stats(rows) if r["storage"] is None)
+        self.assertEqual((row["median_price"], row["used"], row["relative"]), (30000, 3, 0.0))
+        only_new = [self.row(p, new=True) for p in (40000, 40000, 40000)] + [self.row(30000)]
+        row = next(r for r in S.color_stats(only_new) if r["storage"] is None)
+        self.assertIsNone(row["median_price"])
+        self.assertEqual(row["relative"], 0.0)
+
     def test_missing_color_compatibility(self):
         self.assertEqual(S.clean_listing({})["color"], "")
         self.assertEqual(S.color_stats([self.row(None), self.row(30000, "")]), [])

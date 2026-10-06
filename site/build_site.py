@@ -304,13 +304,16 @@ def color_stats(listings):
     for (model, storage, color), rows in colors.items():
         ratios = [Decimal(str(r["price"])) / Decimal(str(medians[key(r)])) for r in rows if key(r) in medians]
         enough = len(ratios) >= COLOR_MIN_SAMPLES
+        used = [r["price"] for r in rows if not r.get("brand_new")]
         relative = None
         if enough:
             relative = float((statistics.median(ratios) - 1).quantize(
                 Decimal("0.01"), rounding=ROUND_HALF_UP))
         out.append({"model": model, "storage": storage, "color": color,
                     "listed": len(rows), "sold": sum(r.get("status") == "已售出" for r in rows),
-                    "median_price": int(statistics.median(r["price"] for r in rows)) if enough else None,
+                    # 價格欄只看二手：全新機價格高，混在一起會讓全新比例高的顏色看起來比較貴
+                    "median_price": int(statistics.median(used)) if enough and len(used) >= COLOR_MIN_SAMPLES else None,
+                    "used": len(used),
                     "relative": (relative or 0.0) if enough else None, "samples": len(ratios)})
     return sorted(out, key=lambda r: (r["model"], r["storage"] or "", r["color"]))
 

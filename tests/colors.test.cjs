@@ -59,6 +59,9 @@ test('顏色表按相對值排序，樣本不足最後；容量切換和未標�
 
 test('同值並列不任選一種顏色當最低；沒有顏色時隱藏卡片', async () => {
   let view = await render([row('銀色', 0), row('藏藍色', 0)], [listing('銀色')]);
+  assert.match(view.element('#color-best').textContent, /沒有明顯差異/);
+  assert.doesNotMatch(view.element('#color-best').textContent, /最低/);
+  view = await render([row('銀色', -.02), row('藏藍色', -.02), row('宇宙橙色', .04)], [listing('銀色')]);
   assert.match(view.element('#color-best').textContent, /並列最低/);
   assert.match(view.element('#color-best').textContent, /銀色/);
   assert.match(view.element('#color-best').textContent, /藏藍色/);
