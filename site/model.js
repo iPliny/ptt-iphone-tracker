@@ -3,7 +3,7 @@
   "use strict";
 
   const $ = (s) => document.querySelector(s);
-  const { esc, money, dayOf, modelUrl, compareStorage, itemHtml, soldNote, priceEventText } = PttCommon;
+  const { esc, money, dayOf, modelUrl, compareStorage, itemHtml, soldNote, daysCell, priceEventText } = PttCommon;
   const PAGE = 10;
   const EVENT_LIMIT = 10;
 
@@ -126,7 +126,7 @@
     const days = m && m.median_days != null
       ? m.median_days + " 天" : "—";
     const daysNote = m && m.days_samples
-      ? m.days_samples + " 筆樣本" + (m.days_estimated ? "，" + m.days_estimated + " 筆推估" : "") : "還沒有售出天數";
+      ? m.days_samples + " 筆樣本" + (m.days_estimated ? "（推估）" : "") : "還沒有售出天數";
     const cards = [
       ["刊登", m ? m.listed : selected().length, m ? "在架 " + m.active + " · 已售 " + m.sold + (m.multi ? " · 多品項 " + m.multi : "") : "沒有可用的標價"],
       ["刊登中位數", money(m && m.median_price), m ? money(m.min_price) + " – " + money(m.max_price) : ""],
@@ -187,16 +187,13 @@
     const fmt = (k, v, m) => {
       if (v == null) return "—";
       if (/price/.test(k)) return money(v);
-      if (k === "median_days" && m.days_estimated) {
-        return v + (m.days_estimated === m.days_samples ? "（推估）" : "（" + m.days_estimated + "/" + m.days_samples + " 推估）");
-      }
       return v;
     };
     $("#compare").innerHTML = "<thead><tr>" + COLS.map(([, label, num]) =>
       `<th class="${num ? "num" : ""}">${label}</th>`).join("") + "</tr></thead><tbody>" +
       rows.map((m) => `<tr class="${m.storage === storage ? "current" : ""}">` + COLS.map(([k, , num]) => k === "storage"
         ? `<td><button type="button" class="linkish" data-storage="${esc(m.storage)}">${esc(storageLabel(m.storage))}</button></td>`
-        : `<td${num ? ' class="num"' : ""}>${esc(fmt(k, m[k], m))}</td>`).join("") + "</tr>").join("") + "</tbody>";
+        : `<td${num ? ' class="num"' : ""}>${(k === "median_days" ? daysCell(m) : esc(fmt(k, m[k], m)))}</td>`).join("") + "</tr>").join("") + "</tbody>";
   }
 
   function renderColors() {

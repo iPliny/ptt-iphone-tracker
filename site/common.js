@@ -47,7 +47,14 @@
 
   function soldNote(r) {
     if (r.days_to_sell == null) return "已售出，售出時間無法推估（依偵測日 " + dayOf(r.sold_detected_at) + " 計）";
-    return "上架 " + r.days_to_sell + " 天後售出" + (r.days_basis === "推估" ? "（推估，依最後編輯時間）" : "");
+    return "上架 " + r.days_to_sell + " 天後售出" + (r.days_basis === "推估" ? "（推估）" : "");
+  }
+
+  // 表格的售出天數欄：有推估樣本只標「（推估）」，不列筆數；沒推估的列放同寬的隱形標記，讓數字對齊。
+  function daysCell(m) {
+    const est = m.median_days != null && m.days_estimated;
+    return (m.median_days == null ? "—" : esc(m.median_days)) +
+      `<span class="est"${est ? "" : ' aria-hidden="true" style="visibility:hidden"'}>（推估）</span>`;
   }
 
   // 改價事件的顯示文字與滑鼠提示；時間語意見 AGENTS.md「改價時間」。
@@ -65,5 +72,5 @@
     btn.textContent = "顯示更多（還有 " + rest + " 篇）";
   }
 
-  return { esc, money, dayOf, modelUrl, storageSize, compareStorage, itemHtml, soldNote, priceEventText, setMore };
+  return { esc, money, dayOf, modelUrl, storageSize, compareStorage, itemHtml, soldNote, daysCell, priceEventText, setMore };
 });
