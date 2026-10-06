@@ -50,6 +50,9 @@ button { cursor: pointer; }
 button:hover { border-color: var(--accent); }
 button:disabled { opacity: .4; cursor: default; }
 .ghost { background: transparent; }
+.day-bar button { flex-shrink: 0; white-space: nowrap; }
+.day-bar input { min-width: 0; max-width: 100%; }
+.day-bar button.on { color: var(--accent); border-color: var(--accent); background: var(--chip); font-weight: 650; }
 
 .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
 .kpi { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
