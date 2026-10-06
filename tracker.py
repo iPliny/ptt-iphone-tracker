@@ -56,6 +56,9 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 LISTINGS_FILE = os.path.join(DATA_DIR, "listings.csv")
 EVENTS_FILE = os.path.join(DATA_DIR, "events.csv")
 SUMMARY_FILE = os.path.join(DATA_DIR, "market_summary.csv")
+MULTI_FILE = os.path.join(DATA_DIR, "multi_items.csv")  # 一篇賣多樣商品時拆出的各支 iPhone（只算刊登價）
+MULTI_FIELDS = ["source_url", "item_no", "post_time", "title", "model", "storage", "全新未拆封機",
+                "battery_health", "price", "first_seen"]
 
 LISTING_FIELDS = [
     "source_url", "post_time", "title", "status", "sold_detected_at", "days_to_sell",
@@ -77,6 +80,7 @@ STATUS_PENDING = "交易中"
 STATUS_SOLD = "已售出"
 STATUS_DELETED = "已刪除"
 OPEN_STATUSES = {STATUS_ACTIVE, STATUS_PENDING}
+MULTI_STATUS = "多品項"  # multi_items.csv 的品項，只在彙整時使用
 
 SYSTEM_PROMPT = """
 你是一個專業的台灣二手蘋果商品數據分析師。
@@ -203,7 +207,7 @@ def normalize_model(raw):
         base = m.group(1) + ("e" if m.group(2) or re.search(rf"\b{m.group(1)}\s+e\b", s) else "")
     elif re.search(r"\bair\b", s):
         base = "Air"
-    elif re.search(r"\bse\b", s):
+    elif re.search(r"\bse\s*\d?\b", s):
         gen = re.search(r"\bse\s*(\d)\b", s)
         base = f"SE{gen.group(1)}" if gen else "SE"
     else:
@@ -501,6 +505,21 @@ def drop_misparsed(listings):
     return n
 
 
+def _pick_model(sources, context=""):
+    """依序看各段文字，回傳第一個能確定的單一型號；都不行回傳 None。"""
+    for source in sources:
+        if not source or not re.search(r"i\s*phone|愛鳳", context + source, re.I):
+            continue
+        # 「保固至2026/10/4」的 10 不是代數
+        undated = _DATE_RE.sub(" ", source)
+        numbers = set(re.findall(r"(?<![\d.])(1[0-9]|[4-9])(?:\s*(?:pro|plus|mini|max|e)\b|\b)", undated, re.I))
+        cand = normalize_model(source)
+        # 沒寫代數（iPhone Pro Max）或不存在的組合（iPhone X Pro）→ 改看下一個來源
+        if _CANONICAL_MODEL_RE.fullmatch(cand) and len(numbers) <= 1 and not _ACCESSORY_RE.search(source):
+            return cand
+    return None
+
+
 def rule_extract(title, body):
     """回傳與 LLM 相同格式的 dict；無法確定是單一 iPhone 時 model 為 None。"""
     body = strip_signature(body)
@@ -516,19 +535,10 @@ def rule_extract(title, body):
 
     # 一篇賣多支（型號欄是 1. 2. 編號清單）→ 價格無法對應單機，略過
     multi = len(_NUMBERED_LINE_RE.findall(model_text)) >= 2
-    model = None
     # 型號欄常只寫 A2633、MG6K4ZP/A 這類料號，依序改用規格欄、標題
     # 型號欄只看第一行：下一行常是「可憑商品序號至 Apple官網查詢」之類的附註
     model_line = next((l for l in model_text.splitlines() if l.strip()), "")
-    for source in (model_line, spec, bare_title):
-        if not source or not re.search(r"i\s*phone|愛鳳", title + source, re.I):
-            continue
-        numbers = set(re.findall(r"(?<![\d.])(1[0-9]|[4-9])(?:\s*(?:pro|plus|mini|max|e)\b|\b)", source, re.I))
-        cand = normalize_model(source)
-        # 沒寫代數（iPhone Pro Max）或不存在的組合（iPhone X Pro）→ 改看下一個來源
-        if _CANONICAL_MODEL_RE.fullmatch(cand) and len(numbers) <= 1 and not _ACCESSORY_RE.search(source):
-            model = cand
-            break
+    model = _pick_model((model_line, spec, bare_title), title)
     if model:
         # 型號欄只寫「iPhone18」、標題寫「18 Pro」：同一代時以標題較完整的型號為準
         refined = normalize_model(bare_title)
@@ -557,6 +567,129 @@ def rule_extract(title, body):
         "notes": notes,
         "is_brand_new": is_brand_new(title, fields),
     }
+
+
+# ==========================================
+# 一篇賣多樣商品：拆出各支 iPhone（只用來算刊登價）
+# ==========================================
+_ITEM_NO_RE = re.compile(r"^\s*([1-9])\s*(?:[.、)）:：]\s*|(?=[^\d\s.,]))(.*)$")
+
+
+def _numbered(text):
+    """'1.xxx\n2.yyy' → {1: 'xxx', 2: 'yyy'}；沒編號的行接在上一項後面。"""
+    items, cur = {}, None
+    for line in (text or "").splitlines():
+        m = _ITEM_NO_RE.match(line)
+        if m:
+            cur = int(m.group(1))
+            items[cur] = (items.get(cur, "") + "\n" + m.group(2)).strip()
+        elif cur is not None and line.strip():
+            items[cur] += "\n" + line.strip()
+    return items
+
+
+def _plain_lines(text):
+    """沒編號的多行欄位：去掉網址、空行與「二手」這類太短的行。"""
+    return [l.strip() for l in (text or "").splitlines()
+            if len(l.strip()) > 3 and not re.search(r"https?://", l)]
+
+
+def _split_field(text, n, numbered_keys):
+    """把一個欄位拆成和品項對應的 n 段；拆不出來時每項共用整段。"""
+    nums = _numbered(text)
+    if set(nums) >= set(numbered_keys):
+        return [nums[k] for k in numbered_keys]
+    parts = [p for p in re.split(r"\s*[/／]\s*", (text or "").strip()) if p]
+    if len(parts) == n and all(parse_price(p) for p in parts):
+        return parts
+    return [text or ""] * n
+
+
+def _item(model_text, spec, price_text, warranty, extra=""):
+    model = _pick_model((model_text, spec), "")
+    # 只看第一行：下一行常是「兩個一起帶走 1600」這類合購價或發文範本的提示
+    first = next((l for l in (price_text or "").splitlines() if l.strip()), "")
+    price = parse_price(first) if first else None
+    if not model or not price:
+        return None
+    fields = {"型號": model_text, "規格": spec, "保固": warranty, "說明": extra}
+    m = _BATTERY_RE.search("\n".join(fields.values()))
+    battery = int(m.group(1)) if m and 50 <= int(m.group(1)) <= 100 else None
+    brand_new = is_brand_new(model_text + " " + spec, fields)
+    return {"model": model, "storage": parse_storage(spec, model_text), "price": price,
+            "battery_health": 100 if brand_new else battery, "is_brand_new": brand_new}
+
+
+def extract_items(title, body):
+    """一篇賣多樣商品（編號清單、或重複貼好幾段範本）時，回傳每支 iPhone 的型號／容量／售價。
+
+    非 iPhone 的品項、找不到對應售價的品項略過；不是多品項的文章回傳 []。"""
+    body = strip_signature(body)
+    blocks = split_blocks(body)
+    iphone_blocks = [b for b in blocks if _looks_like_iphone(b)]
+    if len(iphone_blocks) > 1:  # 每支 iPhone 各貼一段範本
+        items = (_item(_field(b, "型號", "品名", "物品"), _field(b, "規格", "容量", "顏色"),
+                       _field(b, "售價", "價格", "價錢"), _field(b, "保固"), _field(b, "盒裝", "補充", "說明"))
+                 for b in iphone_blocks)
+        return [i for i in items if i]
+    fields = iphone_blocks[0] if iphone_blocks else blocks[0]
+    model_text = _field(fields, "型號", "品名", "物品")
+    spec, price_text = _field(fields, "規格", "容量", "顏色"), _field(fields, "售價", "價格", "價錢")
+    warranty, extra = _field(fields, "保固"), _field(fields, "盒裝", "補充", "說明")
+    nums = _numbered(model_text)
+    if len(nums) >= 2:
+        keys = sorted(nums)
+        names = [nums[k] for k in keys]
+    else:
+        # 沒編號、一行一個品項（例：iPhone 18 Pro Max A3717 / iPhone 16 Pro Max A3296），售價也一行一個
+        names, prices = _plain_lines(model_text), [l for l in _plain_lines(price_text) if parse_price(l)]
+        if len(names) < 2 or len(prices) != len(names):
+            return []
+        specs = _plain_lines(spec)
+        specs = specs if len(specs) == len(names) else [spec] * len(names)
+        return [i for i in (_item(n, s, p, warranty) for n, s, p in zip(names, specs, prices)) if i]
+    n = len(keys)
+    cols = [_split_field(t, n, keys) for t in (spec, price_text, warranty, extra)]
+    if cols[1] == [price_text] * n and n > 1:
+        return []  # 售價沒有逐項寫，無法對應
+    return [i for i in (_item(name, *vals) for name, *vals in zip(names, *cols)) if i]
+
+
+def load_multi(path=None):
+    path = path or MULTI_FILE
+    out = {}
+    if os.path.exists(path):
+        with open(path, encoding="utf-8-sig", newline="") as f:
+            for row in csv.DictReader(f):
+                out.setdefault(row["source_url"], []).append(row)
+    return out
+
+
+def save_multi(multi, path=None):
+    path = path or MULTI_FILE
+    rows = sorted((r for items in multi.values() for r in items), key=lambda r: int(r["item_no"]))
+    rows.sort(key=lambda r: (r.get("post_time", ""), r["source_url"]), reverse=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=MULTI_FIELDS, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(rows)
+    os.replace(tmp, path)
+
+
+def record_multi(url, art, multi, first_seen=None):
+    """把多品項文章拆出的 iPhone 記進 multi；沒有就移除舊紀錄。回傳筆數。"""
+    multi.pop(url, None)
+    if EXTRACTOR == "ollama":
+        return 0
+    items = extract_items(art["title"], art["body"])
+    if items:
+        multi[url] = [{"source_url": url, "item_no": n, "post_time": post_time_from_url(url), "title": art["title"],
+                       "model": it["model"], "storage": it["storage"],
+                       "全新未拆封機": "是" if it["is_brand_new"] else "否",
+                       "battery_health": it["battery_health"] or "", "price": it["price"],
+                       "first_seen": first_seen or now_str()} for n, it in enumerate(items, 1)]
+    return len(items)
 
 
 # ==========================================
@@ -760,7 +893,7 @@ def scan_board(days, max_pages):
 # ==========================================
 # 第二、三階段：處理單篇文章
 # ==========================================
-def process_article(url, listings, use_llm, stats):
+def process_article(url, listings, use_llm, stats, multi=None):
     code, html = fetch(url)
     row = listings.get(url)
     if code == 404:
@@ -794,6 +927,11 @@ def process_article(url, listings, use_llm, stats):
             return  # 新文章要等有 LLM 時才解析
         print("    [NEW] 新文章，解析欄位。")
         fields = safe_extract(art, stats)
+        if multi is not None:
+            if fields is None and record_multi(url, art, multi, first_seen):
+                print(f"    [MULTI] 多品項文章，拆出 {len(multi[url])} 支 iPhone（只算刊登價）。")
+            elif fields is not None:
+                multi.pop(url, None)
         if fields is None:
             # 仍記錄 hash，避免每次重跑；status 標成「略過」不進行情統計
             listings[url] = {"source_url": url, "post_time": post_time_from_url(url), "title": art["title"],
@@ -887,9 +1025,16 @@ def median(xs):
     return int(statistics.median(xs)) if xs else ""
 
 
-def build_summary(listings, path=None):
+def build_summary(listings, path=None, multi=None):
     path = path or SUMMARY_FILE
     groups = {}
+    # 多品項文章拆出的 iPhone 只算刊登價：計入刊登數與價格，不計售出
+    for items in (multi or {}).values():
+        for r in items:
+            price = to_int(r.get("price"))
+            if price and r.get("model"):
+                key = (r["model"], r.get("storage", ""), r.get("全新未拆封機", "否"))
+                groups.setdefault(key, []).append(({**r, "status": MULTI_STATUS}, price))
     for r in listings.values():
         if r.get("status") not in (STATUS_ACTIVE, STATUS_PENDING, STATUS_SOLD, STATUS_DELETED):
             continue
@@ -903,6 +1048,7 @@ def build_summary(listings, path=None):
     for (model, storage, new), items in groups.items():
         prices = [p for _, p in items]
         sold = [(r, p) for r, p in items if r["status"] == STATUS_SOLD]
+        n_multi = sum(1 for r, _ in items if r["status"] == MULTI_STATUS)
         days, n_obs, n_est = [], 0, 0
         for r, _ in sold:
             if r.get("days_to_sell") in ("", None):
@@ -920,13 +1066,15 @@ def build_summary(listings, path=None):
             "model": model, "storage": storage, "全新未拆封機": new,
             "刊登數": len(items),
             "已售出數": len(sold),
-            "售出率": f"{len(sold) / len(items):.0%}",
+            # 多品項文章無法判斷是哪一支售出，售出率只用單支刊登的文章計算
+            "售出率": f"{len(sold) / (len(items) - n_multi):.0%}" if len(items) > n_multi else "",
             "刊登價中位數": median(prices),
             "成交價中位數(已售標價)": median([p for _, p in sold]),
             "最低價": min(prices), "最高價": max(prices),
             "平均電池": round(sum(batt) / len(batt)) if batt else "",
             "售出天數中位數": round(statistics.median(days), 1) if days else "",
             "售出天數樣本(觀測/推估)": f"{n_obs}/{n_est}" if days else "",
+            "多品項刊登數": n_multi,
         })
     rows.sort(key=lambda r: (r["model"], r["storage"], r["全新未拆封機"]))
     fields = list(rows[0].keys()) if rows else ["model"]
@@ -986,6 +1134,7 @@ def main():
 
     os.makedirs(DATA_DIR, exist_ok=True)
     listings = load_listings()
+    multi = load_multi()
     if args.migrate:
         migrate(args.migrate, listings)
         save_listings(listings)
@@ -1014,14 +1163,16 @@ def main():
         for i, url in enumerate(queue, 1):
             print(f"\n[{i}/{len(queue)}] {url}")
             try:
-                process_article(url, listings, use_llm, stats)
+                process_article(url, listings, use_llm, stats, multi)
             except Exception as e:
                 print(f"    [ERR] {e}")
                 stats["errors"] += 1
             if i % 10 == 0:
                 save_listings(listings)  # 中途存檔，被中斷也不會白跑
+                save_multi(multi)
             polite_sleep()
         save_listings(listings)
+        save_multi(multi)
         print("\n" + "=" * 60)
         print(f"[DONE] 新刊登 {stats['new']}｜新售出 {stats['sold']}｜刪文 {stats['deleted']}"
               f"｜價格變動 {stats['price_changes']}｜錯誤 {stats['errors']}")
@@ -1030,7 +1181,7 @@ def main():
     if dropped:
         print(f"[CLEAN] {dropped} 篇誤判（配件、不存在的型號）改為略過")
         save_listings(listings)
-    rows = build_summary(listings)
+    rows = build_summary(listings, multi=multi)
     print(f"[REPORT] 行情彙整 {len(rows)} 組 → {SUMMARY_FILE}")
 
 

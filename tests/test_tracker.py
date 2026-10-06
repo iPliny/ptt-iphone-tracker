@@ -1,4 +1,5 @@
 """離線測試：用假的 PTT 頁面與假的 LLM，不需網路也不需 Ollama。執行：python -m unittest"""
+import csv
 import os
 import re
 import sys
@@ -57,7 +58,7 @@ class NormalizeTest(unittest.TestCase):
             "iPhone 17 pro max": "iPhone 17 Pro Max", "iphone 11 pro": "iPhone 11 Pro",
             "iPhone Air": "iPhone Air", "iPhone 14 plus": "iPhone 14 Plus",
             "IPHONE15PM": "iPhone 15 Pro Max", "i14 pro max": "iPhone 14 Pro Max",
-            "iPhone SE 3": "iPhone SE3", "iphone 16e": "iPhone 16e", "iPhone XS Max": "iPhone XS Max",
+            "iPhone SE 3": "iPhone SE3", "iPhone SE3 128 G": "iPhone SE3", "iphone 16e": "iPhone 16e", "iPhone XS Max": "iPhone XS Max",
             "iphone xr": "iPhone XR", "iPhone 13 mini": "iPhone 13 mini", "15p 256": "iPhone 15 Pro",
         }
         for raw, want in cases.items():
@@ -313,9 +314,10 @@ class PipelineTest(unittest.TestCase):
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.orig = {k: getattr(T, k) for k in ("LISTINGS_FILE", "EVENTS_FILE", "SUMMARY_FILE",
+        self.orig = {k: getattr(T, k) for k in ("LISTINGS_FILE", "EVENTS_FILE", "SUMMARY_FILE", "MULTI_FILE",
                                                   "fetch", "llm_extract", "polite_sleep", "REPARSE")}
         T.LISTINGS_FILE = os.path.join(self.tmp.name, "listings.csv")
+        T.MULTI_FILE = os.path.join(self.tmp.name, "multi_items.csv")
         T.EVENTS_FILE = os.path.join(self.tmp.name, "events.csv")
         T.SUMMARY_FILE = os.path.join(self.tmp.name, "summary.csv")
         T.polite_sleep = lambda *a: None
@@ -448,6 +450,27 @@ class PipelineTest(unittest.TestCase):
 
 
 
+    def test_multi_item_post_counts_listing_price_only(self):
+        pc = self.paths[2]
+        self.arts[pc] = ("[販售] 高屏 iPhone 17 pro銀512g/16 綠 512g",
+                         "[型號]\n1. iPhone 17 Pro\n2. iPhone 16\n[規格]\n1. 銀色，512g\n2. 湖水綠色，512g\n"
+                         "[售價]\n1. 36000\n2. 16000\n", "")
+        url = T.BASE_URL + pc
+        rows = self.run_main()
+        self.assertEqual(rows[url]["status"], "略過")
+        items = T.load_multi()[url]
+        self.assertEqual([(r["model"], r["storage"], r["price"]) for r in items],
+                         [("iPhone 17 Pro", "512GB", "36000"), ("iPhone 16", "512GB", "16000")])
+        with open(T.SUMMARY_FILE, encoding="utf-8-sig") as f:
+            summary = {r["model"]: r for r in csv.DictReader(f)}
+        self.assertEqual((summary["iPhone 16"]["刊登數"], summary["iPhone 16"]["多品項刊登數"],
+                          summary["iPhone 16"]["售出率"]), ("1", "1", ""))
+        self.assertEqual(summary["iPhone 15 Pro"]["多品項刊登數"], "0")
+        # 第二次執行（略過的文章不回訪）不會清掉已拆出的品項
+        self.listed = set()
+        self.run_main()
+        self.assertEqual(len(T.load_multi()[url]), 2)
+
     def test_old_rows_become_skipped(self):
         a, b = T.BASE_URL + self.paths[0], T.BASE_URL + self.paths[1]
         rows = self.run_main()
@@ -558,3 +581,62 @@ class AccessoryPostTest(unittest.TestCase):
         self.assertIsNone(T.misparsed_reason({"title": "[販售] 雙北 iPhone 17Pro Max 原廠透明殼",
                                               "model": "iPhone 17 Pro Max", "storage": "256GB"}))
 
+
+class MultiItemTest(unittest.TestCase):
+    """一篇賣多樣商品（實際文章精簡）：拆出每支 iPhone 的型號、容量、售價，其他商品略過。"""
+
+    def items(self, title, body):
+        return [(i["model"], i["storage"], i["price"]) for i in T.extract_items(title, body)]
+
+    def test_numbered_with_other_products(self):
+        # M.1791016469.A.0A2
+        body = ("[型號]\n1.Iphone15 pro 256g原鈦色\n2.iPad mini 5 64g\n3.Apple Watch s7 44mmgps黑色\n"
+                "[規格]\n256g\n64g\n[保固]\n皆已過保\n[售價]\n1. 15500\n2. 5500\n3. 2000\n")
+        self.assertEqual(self.items("[販售] 台中 iphone15pro ipadmini5", body), [("iPhone 15 Pro", "256GB", 15500)])
+        self.assertIsNone(T.rule_extract("[販售] 台中 iphone15pro ipadmini5", body)["model"])
+
+    def test_slash_separated_prices(self):
+        # M.1790539627.A.7C5
+        body = ("[型號]\n1.iPhone 13 128G 白（暫售）\n2.iPhone 13 128G 粉\n3.iPhone 13 pro 128G 遠峰藍\n"
+                "[規格]128G\n[保固]過保\n[售價]6500/6500/8000\n")
+        self.assertEqual(self.items("[販售] 雙北 二手iPhone 13/13pro  128G", body),
+                         [("iPhone 13", "128GB", 6500), ("iPhone 13", "128GB", 6500), ("iPhone 13 Pro", "128GB", 8000)])
+
+    def test_unnumbered_lines(self):
+        # M.1790827618.A.0DA：沒有編號，一行一支，售價前面寫型號
+        body = ("[型號] \n可憑商品序號至 Apple官網查詢 https://apple.co/3l6By0R \n"
+                "iPhone 18 Pro Max A3717\niPhone 16 Pro Max A3296\n\n[規格]\n"
+                "全新iPhone 18 Pro Max 256GB 冰川藍\n\n二手iPhone 16 Pro Max 256GB 沙漠金 已售出\n"
+                "[保固]\n18 Pro Max:開機後原廠保固一年\n16 Pro Max:已過保\n[售價]\n"
+                "18 Pro Max: 49500NTD（中華電信續約購得，有實體發票）\n\n\n16 Pro Max: 25500NTD（送全新CASETiFY 手機殼）已售出\n")
+        self.assertEqual(self.items("[販售]  台北 iPhone 18 Pro max藍/16 Pro Max金", body),
+                         [("iPhone 18 Pro Max", "256GB", 49500), ("iPhone 16 Pro Max", "256GB", 25500)])
+
+    def test_bundle_price_on_next_line_ignored(self):
+        # M.1790612638.A.734：「兩個一起帶走 1600」不是 iPhone 的售價；800 元低於門檻不列
+        body = ("[型號]\n1. iPad mini 4\n2. iPhone 7 Plus\n[規格]\n1. 32 gb / 玫瑰金\n2. 128 gb / 玫瑰金\n"
+                "[售價]\n1. 1000\n2. 800\n兩個一起帶走 1600 含運，面交再折 100\n")
+        self.assertEqual(self.items("[販售] 全國 iPad mini 4/iPhone 7 Plus", body), [])
+
+    def test_warranty_date_is_not_generation(self):
+        # M.1790495518.A.4AE：「保固至2026/10/4」的 10 不能當成第二個代數
+        body = ("[型號]\n1. iPhone 18 Pro Max 512G 紅(全新)\n2. iPhone 17 Pro 256G 銀(保固至2026/10/4)\n"
+                "[規格]\n1. 512G 紅\n2. 256G 銀，無刮傷無摔機，電池健康度96\n[保固]\n1.拆封啟用後1年\n2.至2026/10/4\n"
+                "[售價]\n1.54000\n2.30000(售出）\n")
+        got = T.extract_items("[販售] 高雄 iPhone 18 pro max 512G 紅+17p256", body)
+        self.assertEqual([(i["model"], i["price"], i["is_brand_new"], i["battery_health"]) for i in got],
+                         [("iPhone 18 Pro Max", 54000, True, 100), ("iPhone 17 Pro", 30000, False, 96)])
+
+    def test_repeated_field_name(self):
+        # M.1790805333.A.27C：[商品照/補充說明] 寫了兩次，不能當成兩段範本
+        body = ("[型號]\n1.iPhone 15 Pro Max---->已售\n2.Apple TV 4K 二代 (A2169)---->已售\n"
+                "[規格]\n1.鈦藍256G\n2.32G\n[保固]\n已過保\n[售價]\n1. 20900元\n2. 2900元\n"
+                "[商品照/補充說明]\n1. 換過原廠電池，電池壽命96%。\n[連絡方式]\n站內信\n[商品照/補充說明]\niPhone 15 pro max\n")
+        self.assertEqual(self.items("[販售] 台北 iPhone 15 pro max/Apple TV 2代", body),
+                         [("iPhone 15 Pro Max", "256GB", 20900)])
+
+    def test_single_phone_post_has_no_items(self):
+        body = "[型號] iPhone SE3 128 GB\n[規格] 128G 黑色\n[保固] 已過保\n[售價] 4,650\n"
+        self.assertEqual(self.items("[販售] 台北 iPhone SE3 黑 128G", body), [])
+        f = T.rule_extract("[販售] 台北 iPhone SE3 黑 128G", body)
+        self.assertEqual((f["model"], f["price"]), ("iPhone SE3", 4650))

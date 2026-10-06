@@ -97,6 +97,22 @@ class BuildSiteTest(unittest.TestCase):
         self.assertEqual((m["listed"], m["active"], m["sold"]), (3, 1, 1))
         self.assertEqual((m["median_price"], m["median_sold_price"], m["median_days"]), (12000, 20000, 0.9))
 
+    def test_multi_items_only_in_price_stats(self):
+        write_csv(os.path.join(self.dir, "multi_items.csv"),
+                  ["source_url", "item_no", "post_time", "title", "model", "storage", "全新未拆封機", "price"],
+                  [{"source_url": "u9", "item_no": 1, "post_time": "2026-09-03 10:00:00", "title": "x",
+                    "model": "iPhone 15", "storage": "128GB", "全新未拆封機": "否", "price": "14000"},
+                   {"source_url": "u9", "item_no": 2, "post_time": "2026-09-03 10:00:00", "title": "x",
+                    "model": "iPhone 16", "storage": "128GB", "全新未拆封機": "否", "price": "18000"}])
+        data = S.build_data(self.dir)
+        m = next(m for m in data["models"] if m["model"] == "iPhone 15")
+        self.assertEqual((m["listed"], m["multi"], m["active"], m["sold"]), (4, 1, 1, 1))
+        self.assertEqual(m["median_price"], 13000)
+        self.assertIn("iPhone 16", [t["model"] for t in data["model_totals"]])
+        self.assertNotIn("u9", [r["url"] for r in data["listings"]])
+        self.assertEqual(data["counts"]["total"], 3)
+        self.assertEqual(sum(d["new"] for d in data["days"]), 3)
+
     def test_model_totals_merge_storages(self):
         """機型頁的「全部容量」要把同機型不同容量合在一起，不同機型分開。"""
         path = os.path.join(self.dir, "listings.csv")

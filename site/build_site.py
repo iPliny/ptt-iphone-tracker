@@ -21,11 +21,12 @@ SITE_DIR = os.path.join(ROOT, "site")
 DATA_DIR = os.path.join(ROOT, "data")
 STATIC_FILES = ["index.html", "model.html", "common.js", "app.js", "model.js", "watchlist.js", "style.css",
                 "prices.html", "prices.js", "prices.css", "official-prices.json"]
-CSV_FILES = ["listings.csv", "events.csv", "market_summary.csv", "price_event_times.csv"]
+CSV_FILES = ["listings.csv", "events.csv", "market_summary.csv", "price_event_times.csv", "multi_items.csv"]
 TAIPEI = timezone(timedelta(hours=8))
 SITE_URL = "https://ipliny.github.io/ptt-iphone-tracker/"  # sitemap.xml 用的正式網址
 
 TRACKED_STATUSES = {"在售", "交易中", "已售出", "已刪除"}
+MULTI_STATUS = "多品項"  # 一篇賣多支時拆出的 iPhone：只算刊登數與刊登價
 MAX_DAYS = 90       # 每日序列最多保留幾天
 MAX_EVENTS = 1000   # 網頁上最多帶幾筆事件
 
@@ -96,6 +97,20 @@ def clean_listing(r):
         "last_checked": r.get("last_checked", ""),
         "last_edit_at": r.get("last_edit_at", ""),
     }
+
+
+def load_multi_items(data_dir):
+    """multi_items.csv 的每支 iPhone，轉成和 clean_listing 相同的格式（狀態固定為「多品項」）。"""
+    return [clean_listing({**r, "status": MULTI_STATUS})
+            for r in read_csv(os.path.join(data_dir, "multi_items.csv"))]
+
+
+def load_priced(raw, data_dir):
+    """單支刊登與多品項拆出的 iPhone 一起剔除異常價格；回傳 (單支刊登, 多品項)。"""
+    listings = [clean_listing(r) for r in raw if r.get("status") in TRACKED_STATUSES]
+    multi = load_multi_items(data_dir)
+    drop_price_outliers(listings + multi)
+    return listings, multi
 
 
 OUTLIER_MIN_SAMPLES = 5   # 同組至少幾筆才判斷價格是否異常
@@ -235,6 +250,7 @@ def group_stats(items):
     days = [r["days_to_sell"] for r in timed]
     return {
         "listed": len(items),
+        "multi": sum(1 for r in items if r["status"] == MULTI_STATUS),
         "active": sum(1 for r in items if r["status"] in ("在售", "交易中")),
         "sold": len(sold),
         "median_price": int(statistics.median(prices)),
@@ -293,7 +309,7 @@ def build_data(data_dir=DATA_DIR, now=None):
     events = read_csv(os.path.join(data_dir, "events.csv"))
     events = attach_price_times(events, read_csv(os.path.join(data_dir, "price_event_times.csv")))
     events = [e for e in events if not implausible_price_change(e)]
-    listings = drop_price_outliers([clean_listing(r) for r in raw if r.get("status") in TRACKED_STATUSES])
+    listings, multi = load_priced(raw, data_dir)
     events = tracked_events(events, listings)
     listings.sort(key=lambda r: r["post_time"], reverse=True)
 
@@ -312,12 +328,13 @@ def build_data(data_dir=DATA_DIR, now=None):
         "last_checked": max(checked) if checked else "",
         "counts": {"total": len(listings), **counts},
         "days": daily_series(listings, events),
-        "models": model_stats(listings),
-        "model_totals": model_totals(listings),
+        # 型號統計另外納入多品項文章拆出的 iPhone（只影響刊登數與刊登價）
+        "models": model_stats(listings + multi),
+        "model_totals": model_totals(listings + multi),
         "summary": read_csv(os.path.join(data_dir, "market_summary.csv")),
         "listings": listings,
         "events": events_out,
-        "apple": apple_prices(r["model"] for r in listings),
+        "apple": apple_prices(r["model"] for r in listings + multi),
     }
 
 
@@ -328,7 +345,7 @@ OUTLIER_FIELDS = ["kind", "source_url", "title", "model", "storage", "brand_new"
 def write_outlier_report(data_dir=DATA_DIR):
     """把目前不公開的異常價格與改價寫成 data/price_outliers.csv（只留紀錄，不放上網站）。回傳筆數。"""
     raw = read_csv(os.path.join(data_dir, "listings.csv"))
-    listings = [clean_listing(r) for r in raw if r.get("status") in TRACKED_STATUSES]
+    listings = [clean_listing(r) for r in raw if r.get("status") in TRACKED_STATUSES] + load_multi_items(data_dir)
     by_url = {r["url"]: r for r in listings}
     rows = [{"kind": "刊登價", "source_url": r["url"], "title": r["title"], "model": r["model"],
              "storage": r["storage"], "brand_new": "是" if r["brand_new"] else "否", "price": r["price"],
