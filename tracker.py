@@ -471,6 +471,36 @@ _CANONICAL_MODEL_RE = re.compile(
     r"iPhone (?:(?:\d{1,2}e?|SE\d?|Air)(?: Pro Max| Pro| Plus| mini)?|X|XR|XS(?: Max)?)")
 
 
+def is_accessory_post(title, storage):
+    """標題提到殼、保護貼等配件，又找不到容量 → 賣的是配件（標題的型號只是適用機型）。"""
+    bare = re.sub(r"^\[[^\]]*\]\s*", "", title or "")
+    return bool(_ACCESSORY_RE.search(bare)) and storage in ("", "未知", None)
+
+
+def misparsed_reason(row):
+    """舊規則留下、現在看得出是誤判的列：回傳原因，正常則回傳 None。"""
+    model = row.get("model") or ""
+    if model and not _CANONICAL_MODEL_RE.fullmatch(model):
+        return f"不存在的型號 {model}"
+    if is_accessory_post(row.get("title"), row.get("storage")):
+        return "配件"
+    return None
+
+
+def drop_misparsed(listings):
+    """把誤判成 iPhone 的列改成「略過」，網站、週報、行情都不再計入。回傳處理筆數。"""
+    n = 0
+    for url, row in listings.items():
+        if row.get("status") not in (STATUS_ACTIVE, STATUS_PENDING, STATUS_SOLD, STATUS_DELETED):
+            continue
+        reason = misparsed_reason(row)
+        if reason:
+            log_event(url, "排除誤判", f"{row.get('status')} → 略過（{reason}）")
+            row["status"] = "略過"
+            n += 1
+    return n
+
+
 def rule_extract(title, body):
     """回傳與 LLM 相同格式的 dict；無法確定是單一 iPhone 時 model 為 None。"""
     body = strip_signature(body)
@@ -499,7 +529,14 @@ def rule_extract(title, body):
         if _CANONICAL_MODEL_RE.fullmatch(cand) and len(numbers) <= 1 and not _ACCESSORY_RE.search(source):
             model = cand
             break
-    if multi or len(iphone_blocks) > 1:  # 分段賣兩支以上 iPhone，同樣略過
+    if model:
+        # 型號欄只寫「iPhone18」、標題寫「18 Pro」：同一代時以標題較完整的型號為準
+        refined = normalize_model(bare_title)
+        if _CANONICAL_MODEL_RE.fullmatch(refined) and refined.startswith(model + " "):
+            model = refined
+    storage = parse_storage(spec, model_text, bare_title)
+    if multi or len(iphone_blocks) > 1 or is_accessory_post(title, storage):
+        # 分段賣兩支以上 iPhone 或賣的是配件，同樣略過
         model = None
 
     battery = None
@@ -513,7 +550,7 @@ def rule_extract(title, body):
     notes = re.sub(r"\s+", " ", notes).strip()[:120]
     return {
         "model": model,
-        "storage": parse_storage(spec, model_text, bare_title),
+        "storage": storage,
         "price": parse_price(price_text) if price_text else None,
         "battery_health": battery,
         "warranty": parse_warranty(_field(fields, "保固")),
@@ -776,6 +813,12 @@ def process_article(url, listings, use_llm, stats):
         print("    [UPDATE] 本文被編輯，重新解析。" if edited else "    [REPARSE] 依新規則重新解析。")
         fields = safe_extract(art, stats)
         price_confirmed = fields is not None
+        if fields is None and REPARSE and row.get("body_hash") == h:
+            # 本文沒變、是新規則判定不是單支 iPhone（配件等）→ 不再計入
+            log_event(url, "排除誤判", f"{row.get('status')} → 略過（重新解析）")
+            row["status"] = "略過"
+            row["last_checked"] = now_str()
+            return
         if fields:
             old_price = to_int(row.get("price"))
             if old_price and fields["price"] != old_price:
@@ -983,6 +1026,10 @@ def main():
         print(f"[DONE] 新刊登 {stats['new']}｜新售出 {stats['sold']}｜刪文 {stats['deleted']}"
               f"｜價格變動 {stats['price_changes']}｜錯誤 {stats['errors']}")
 
+    dropped = drop_misparsed(listings)
+    if dropped:
+        print(f"[CLEAN] {dropped} 篇誤判（配件、不存在的型號）改為略過")
+        save_listings(listings)
     rows = build_summary(listings)
     print(f"[REPORT] 行情彙整 {len(rows)} 組 → {SUMMARY_FILE}")
 

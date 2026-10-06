@@ -167,6 +167,12 @@ def attach_price_times(events, times):
     return out
 
 
+def tracked_events(events, listings):
+    """只留還在統計內的文章的事件；改成「略過」的配件、誤判文不出現在事件列表與改價統計。"""
+    urls = {r["url"] for r in listings}
+    return [e for e in events if e.get("source_url") in urls]
+
+
 def deleted_dates(events):
     """從 events 找出每篇文章第一次被記為已刪除的日期。"""
     out = {}
@@ -287,6 +293,7 @@ def build_data(data_dir=DATA_DIR, now=None):
     events = attach_price_times(events, read_csv(os.path.join(data_dir, "price_event_times.csv")))
     events = [e for e in events if not implausible_price_change(e)]
     listings = drop_price_outliers([clean_listing(r) for r in raw if r.get("status") in TRACKED_STATUSES])
+    events = tracked_events(events, listings)
     listings.sort(key=lambda r: r["post_time"], reverse=True)
 
     counts = {s: 0 for s in ("在售", "交易中", "已售出", "已刪除")}

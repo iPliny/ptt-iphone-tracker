@@ -447,6 +447,35 @@ class PipelineTest(unittest.TestCase):
         self.assertTrue(T.sold_on_first_sight(legacy))
 
 
+
+    def test_old_rows_become_skipped(self):
+        a, b = T.BASE_URL + self.paths[0], T.BASE_URL + self.paths[1]
+        rows = self.run_main()
+        rows[b].update(title="[販售] 新北 iPhone 14 原廠殼", storage="未知")  # 舊規則留下的配件列
+        rows[a]["model"] = "iPhone X Pro"
+        T.save_listings(rows)
+        self.listed = set()
+        rows = self.run_main("--report-only")
+        self.assertEqual((rows[a]["status"], rows[b]["status"]), ("略過", "略過"))
+        events = open(T.EVENTS_FILE, encoding="utf-8-sig").read()
+        self.assertIn("排除誤判", events)
+        with open(T.SUMMARY_FILE, encoding="utf-8-sig") as f:
+            self.assertNotIn("iPhone 14", f.read())
+        # 第二次執行不再重複記錄
+        self.run_main("--report-only")
+        self.assertEqual(open(T.EVENTS_FILE, encoding="utf-8-sig").read(), events)
+
+    def test_reparse_skips_accessory(self):
+        b = T.BASE_URL + self.paths[1]
+        rows = self.run_main()
+        pb = self.paths[1]
+        self.assertEqual(rows[b]["status"], T.STATUS_ACTIVE)
+        # 規則變嚴後，同一篇本文（未編輯）重新解析不再算 iPhone
+        with patch.object(T, "safe_extract", return_value=None):
+            self.listed = set()
+            rows = self.run_main("--reparse")
+        self.assertEqual(rows[b]["status"], "略過")
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -487,7 +516,45 @@ class ModelFieldRegressionTest(unittest.TestCase):
         # M.1790607432.A.D59：標題只有 [販售]，型號寫 iPhone X Pro（不存在）
         self.assertIsNone(T.rule_extract("[販售]", self.post("iPhone X Pro"))["model"])
 
+    def test_title_adds_missing_suffix(self):
+        # M.1790406395.A.158：型號欄只寫 iPhone18，標題是 18 pro → 不能記成不存在的 iPhone 18
+        f = T.rule_extract("[販售] 高雄 全新Iphone18 pro 256紅", self.post("iPhone18"))
+        self.assertEqual(f["model"], "iPhone 18 Pro")
+        # 標題是別的代數時不採用
+        f = T.rule_extract("[販售] 高雄 iPhone 17 256G", self.post("iPhone18"))
+        self.assertEqual(f["model"], "iPhone 18")
+
     def test_glued_names(self):
         for raw, want in [("iPhone16pro256G金", "iPhone 16 Pro"), ("iPhone 17ProMax 256G", "iPhone 17 Pro Max"),
                           ("Mac mini m4 iPhone 16 pro", "iPhone 16 Pro")]:
             self.assertEqual(T.normalize_model(raw), want)
+
+
+class AccessoryPostTest(unittest.TestCase):
+    """標題寫型號、賣的其實是殼：型號欄照抄適用機型，不能當成一支 iPhone。"""
+
+    def test_case_with_model_field(self):
+        # M.1790394640.A.E45：原廠織紋殼被記成 17 Pro Max $1,200
+        body = ("[型號]：iPhone 17 Pro Max\n[規格]：原廠織紋殼 黑色\n[保固]：無\n[售價]：1200\n"
+                "[補充說明]：很少使用，略有使用痕跡 (如照片)\n")
+        self.assertIsNone(T.rule_extract("[販售] 全國 iphone 17 pro max 原廠織紋殼", body)["model"])
+
+    def test_two_cases(self):
+        # M.1791217114.A.90E：兩個原廠殼一起賣 $1,000
+        body = "[型號]：iPhone16Plus\n[規格]：原廠殼\n[售價]：1000\n[補充說明]：約8-9成新 無明顯傷 兩個一起賣\n"
+        self.assertIsNone(T.rule_extract("[販售] 苗栗 iPhone16Plus 原廠殼", body)["model"])
+
+    def test_phone_with_case_in_title_kept(self):
+        # M.1790992340.A.022：標題提到透明殼，但賣的是 256G 手機，殼是加購
+        body = ("[型號]：iPhone 17 Pro Max\n[規格]：256G\n[保固]：2026/10/4\n[售價]：34000\n"
+                "[補充說明]：原廠透明殼也有原盒，加購只要700元\n")
+        f = T.rule_extract("[販售]  雙北 iPhone 17Pro Max 原廠透明殼", body)
+        self.assertEqual((f["model"], f["storage"], f["price"]), ("iPhone 17 Pro Max", "256GB", 34000))
+
+    def test_misparsed_reason(self):
+        row = {"title": "[販售] 全國 iphone 17 pro max 原廠織紋殼", "model": "iPhone 17 Pro Max", "storage": "未知"}
+        self.assertEqual(T.misparsed_reason(row), "配件")
+        self.assertIn("iPhone X Pro", T.misparsed_reason({"title": "[販售]", "model": "iPhone X Pro", "storage": "64GB"}))
+        self.assertIsNone(T.misparsed_reason({"title": "[販售] 雙北 iPhone 17Pro Max 原廠透明殼",
+                                              "model": "iPhone 17 Pro Max", "storage": "256GB"}))
+
