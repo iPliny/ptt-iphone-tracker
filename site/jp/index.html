@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <!-- Google tag (gtag.js)：Google Analytics 4，Search Console 也靠這段驗證擁有權 -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-G3GH12TQSZ"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-G3GH12TQSZ');
+  </script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>iPhone 18 Pro 日本買取價比較｜PTT MacShop交易觀測</title>
+  <meta name="description" content="比較 mobile-mix、イオシス與アメモバ的 iPhone 18 Pro／Pro Max 日本買取價、價差與價格走勢。每 6 小時更新，以日圓顯示。">
+  <link rel="canonical" href="https://ipliny.github.io/ptt-iphone-tracker/jp/">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="stylesheet" href="jp.css">
+  <script defer src="jp.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="back" href="../">← PTT MacShop交易觀測</a>
+      <h1>日本買取價比較</h1>
+      <p class="sub">iPhone 18 Pro 系列 · 未開封 · SIMフリー</p>
+      <p class="sub" id="updated">資料準備中</p>
+    </div>
+  </header>
+  <main class="wrap">
+    <section class="card" aria-labelledby="comparison-title">
+      <div class="card-head">
+        <h2 id="comparison-title">最高買取價比較</h2>
+        <label>機型 <select id="compare-model"><option value="iPhone 18 Pro">18 Pro</option><option value="iPhone 18 Pro Max">18 Pro Max</option></select></label>
+      </div>
+      <p class="intro">各店標示的最高可收價，實際依顏色與店家條件。點價格查看原頁。</p>
+      <div id="comparison" aria-live="polite"><p class="empty">資料準備中</p></div>
+      <p class="hint">最高價以底色與「最高」標示；價差為可比較店家的最高價減最低價。「—」表示未提供或價格待確認。</p>
+    </section>
+    <section class="card" aria-labelledby="trend-title">
+      <div class="card-head"><h2 id="trend-title">價格走勢</h2><span class="hint">日圓 · 日本時間</span></div>
+      <div class="jp-controls">
+        <label>機型 <select id="trend-model"><option value="iPhone 18 Pro">18 Pro</option><option value="iPhone 18 Pro Max">18 Pro Max</option></select></label>
+        <label>容量 <select id="trend-storage"><option>256GB</option><option>512GB</option><option>1TB</option><option>2TB</option></select></label>
+        <label>期間 <select id="trend-days"><option value="7">7 天</option><option value="30">30 天</option><option value="all">全部</option></select></label>
+      </div>
+      <div class="jp-legend" id="legend"></div>
+      <div id="trend" aria-live="polite"><p class="empty">資料準備中</p></div>
+      <p class="hint">階梯線代表觀測到的主價；下架／不收時斷線。粗虛線為當下最高價。只有一次觀測時顯示單點，尚不能推定價格走勢。</p>
+    </section>
+    <section class="card" aria-labelledby="changes-title">
+      <div class="card-head"><h2 id="changes-title">最近變動</h2><span class="hint">最近 7 天 · 日本時間</span></div>
+      <p class="hint">未開封・SIMフリー，含 mobile-mix 精確色價；首次觀測不算漲跌。</p>
+      <div id="changes"><p class="empty">資料準備中</p></div>
+    </section>
+    <section class="card" aria-labelledby="status-title">
+      <div class="card-head"><h2 id="status-title">各店抓取狀態</h2></div>
+      <div id="statuses" class="jp-statuses"></div>
+    </section>
+    <footer class="jp-footer">
+      <p>資料來源：<a href="https://mobile-mix.jp/?category=7">mobile-mix</a>、<a href="https://k-tai-iosys.com/pricelist/smartphone/iphone/iphone18-pro/">イオシス</a>、<a href="https://amemoba.com/smartphone/iphone/iphone-18-pro/">アメモバ</a>。</p>
+      <p>每 6 小時更新（日本時間 03:30／09:30／15:30／21:30）。價格以店家頁面為準，實際可能有顏色、數量、版本、付屬品、期間等條件。イオシス「未使用品」與アメモバ「新品」統一列在未開封比較，實際驗收標準依各店規定。</p>
+      <p>中古上限與電信版本已分開保存，頁面暫不顯示（第二階段）。本頁只顯示日圓，時間皆為日本時間。</p>
+      <p id="downloads"></p>
+    </footer>
+  </main>
+</body>
+</html>

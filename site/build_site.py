@@ -406,7 +406,7 @@ def write_outlier_report(data_dir=DATA_DIR):
 def sitemap_xml(data, today=None, column_urls=()):
     """首頁、歷代官方價格頁、每個機型頁（model.html?m=...，和網站內連結相同），以及每週專欄的入口與各期。"""
     lastmod = (today or datetime.now(TAIPEI).date()).isoformat()
-    urls = [SITE_URL, SITE_URL + "prices.html"] + [SITE_URL + "model.html?" + urlencode({"m": m["model"]}) for m in data["model_totals"]]
+    urls = [SITE_URL, SITE_URL + "prices.html", SITE_URL + "jp/"] + [SITE_URL + "model.html?" + urlencode({"m": m["model"]}) for m in data["model_totals"]]
     if column_urls:
         urls += [SITE_URL + "column/"] + list(column_urls)
     items = "".join(f"  <url><loc>{escape(u)}</loc><lastmod>{lastmod}</lastmod></url>\n" for u in urls)
@@ -429,6 +429,8 @@ def build(out_dir, data_dir=DATA_DIR):
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
     from column import render_column  # column.py 也會 import 這個檔，放在這裡避免循環
     column_urls = render_column(out_dir, data_dir)
+    from jp_build import build_jp
+    build_jp(out_dir, data_dir)
     with open(os.path.join(out_dir, "sitemap.xml"), "w", encoding="utf-8") as f:
         f.write(sitemap_xml(data, column_urls=column_urls))
     return data

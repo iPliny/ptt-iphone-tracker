@@ -1,0 +1,64 @@
+.back { display: inline-block; margin-bottom: 9px; font-size: 13px; }
+.intro { color: var(--muted); margin: 0 0 12px; font-size: 13px; }
+.jp-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+.jp-table th, .jp-table td { padding: 12px 10px; white-space: normal; vertical-align: top; border-bottom: 1px solid var(--line); text-align: left; }
+.jp-table th:first-child { width: 10%; }
+.jp-table th:last-child { width: 13%; }
+.jp-price { display: inline-block; font-size: 19px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.jp-best { background: var(--chip); box-shadow: inset 3px 0 var(--sold); }
+.jp-badge { font-size: 11px; display: inline-block; color: var(--ink); border: 1px solid var(--sold); border-radius: 4px; padding: 0 4px; margin-left: 5px; }
+.jp-colors { padding: 0; margin: 7px 0 0; list-style: none; font-size: 11px; color: var(--muted); line-height: 1.8; }
+.jp-colors li { overflow-wrap: anywhere; }
+.jp-spread { font-weight: 650; font-variant-numeric: tabular-nums; }
+.jp-controls { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 16px; }
+.jp-controls label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.jp-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12px; margin-bottom: 8px; }
+.jp-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.jp-key { width: 22px; height: 0; border-top: 3px solid; }
+.jp-key.best { border-top: 4px dashed; }
+#trend svg { display: block; width: 100%; height: auto; overflow: visible; }
+#trend .axis { fill: var(--muted); font-size: 12px; }
+#trend .grid { stroke: var(--line); }
+#trend .jp-series { fill: none; stroke-width: 2.5; stroke-linejoin: round; }
+#trend .jp-high { stroke-width: 4; stroke-dasharray: 8 5; }
+.shop-0 { color: #2563eb; stroke: #2563eb; }
+.shop-1 { color: #a16207; stroke: #a16207; }
+.shop-2 { color: #9333ea; stroke: #9333ea; }
+.shop-3 { color: #15803d; stroke: #15803d; }
+.jp-change { display: grid; grid-template-columns: 145px 90px 1fr 180px; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); align-items: start; font-size: 13px; }
+.jp-change time { color: var(--muted); font-size: 12px; }
+.jp-change .amount { font-variant-numeric: tabular-nums; }
+.jp-change .delta { display: block; color: var(--muted); font-size: 12px; }
+.jp-statuses { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+.jp-statuses article { padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
+.jp-statuses p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+.jp-statuses .failed { color: #b45309; }
+.jp-footer { color: var(--muted); font-size: 12px; padding: 4px 0 24px; }
+#downloads a { display: inline-block; margin-right: 16px; }
+@media (prefers-color-scheme: dark) {
+  .shop-0 { color: #60a5fa; stroke: #60a5fa; }
+  .shop-1 { color: #fbbf24; stroke: #fbbf24; }
+  .shop-2 { color: #c084fc; stroke: #c084fc; }
+  .shop-3 { color: #4ade80; stroke: #4ade80; }
+  .jp-statuses .failed { color: #fbbf24; }
+}
+@media (max-width: 640px) {
+  h1 { font-size: 23px; }
+  .card { padding: 14px; }
+  .jp-table, .jp-table tbody { display: block; }
+  .jp-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .jp-table tr { display: block; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; margin-bottom: 12px; }
+  .jp-table td { display: grid; grid-template-columns: 83px minmax(0,1fr); gap: 6px; padding: 10px 12px; }
+  .jp-table td::before { content: attr(data-label); font-weight: 500; font-size: 12px; color: var(--muted); padding-top: 4px; }
+  .jp-table th[scope="row"] { display: block; width: 100%; background: var(--chip); padding: 8px 12px; }
+  .jp-table tr td:last-child { border-bottom: 0; }
+  .jp-price { font-size: 19px; }
+  .jp-colors { margin-top: 4px; }
+  .jp-controls { gap: 8px; }
+  .jp-controls select { max-width: 210px; }
+  .jp-change { grid-template-columns: 1fr 1fr; gap: 3px 12px; }
+  .jp-change .spec { grid-column: 1; }
+  .jp-change .amount { grid-column: 2; grid-row: 2; }
+  .jp-statuses { grid-template-columns: 1fr; }
+  .jp-legend { gap: 6px 12px; }
+}
