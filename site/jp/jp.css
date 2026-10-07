@@ -62,3 +62,4 @@
   .jp-statuses { grid-template-columns: 1fr; }
   .jp-legend { gap: 6px 12px; }
 }
+.jp-lang { float: right; font-size: 13px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; }

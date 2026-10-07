@@ -76,6 +76,9 @@
 - `site/jp_build.py` 只讀日本 CSV，供 `build_site.py` 增加獨立建置步驟；缺檔仍輸出資料準備中的頁面。`site/jp/` 第一階段只顯示未開封・SIMフリー，價格異常保守隱藏，原始 CSV 仍保留供下載。台灣頁除頁首入口連結外不改行為。
 - 驗收／回復方式見 `docs/jp-buyback-validation.md`；fixture 來源見 `tests/fixtures/jp/README.md`。離線測試使用暫存目錄，不連網、不寫專案資料。
 
+### 2026-10-08 日本買取頁日文版
+- POYU 要日文版、中文版照留：`site/jp/index.html`（中文，`jp/`）與 `site/jp/ja/index.html`（日文，`jp/ja/`）共用 `site/jp/jp.js`，介面字串在 `I18N`（zh／ja），依 `<html lang>` 切換；日文頁 `<body data-base="../">` 讓它讀 `jp/data.json`。兩頁互設 hreflang、頁首互相切換，sitemap 都列入。改頁面文字時兩個 HTML 與 `I18N` 一起改。
+
 ## 開發規則
 - 修改後必須跑 `python -m unittest`，測試不需網路也不需 Ollama（`fetch`、`llm_extract` 皆被替換成假的）。
 - 改動售出判斷（`detect_status`）或規則萃取（`rule_extract`、`is_brand_new`）時，把觸發問題的實際文章本文精簡後加進 `tests/test_tracker.py` 當回歸測試。

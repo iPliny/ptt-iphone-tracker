@@ -209,6 +209,11 @@ class FetchAndBuildTests(unittest.TestCase):
                 self.assertEqual(payload["prices"], [])
                 self.assertIn("資料準備中", (out/"jp/index.html").read_text())
                 self.assertIn("https://ipliny.github.io/ptt-iphone-tracker/jp/",(out/"sitemap.xml").read_text())
+                ja=(out/"jp/ja/index.html").read_text()
+                self.assertIn('<html lang="ja">', ja)
+                self.assertIn('data-base="../"', ja)
+                self.assertIn("G-G3GH12TQSZ", ja)
+                self.assertIn("https://ipliny.github.io/ptt-iphone-tracker/jp/ja/",(out/"sitemap.xml").read_text())
 
     def test_build_jp_downloads_and_keeps_taiwan_json_unchanged(self):
         sys.path.insert(0,str(ROOT/"site"))
