@@ -61,3 +61,17 @@ test('來源字串經跳脫，非來源連結不輸出',()=>{
   const latest=[row('mobile-mix',1,200000,{source_url:'javascript:alert(1)',shop_updated:'<script>bad</script>'})];
   assert.doesNotMatch(jp.renderComparison({latest,prices:[]},'iPhone 18 Pro'),/javascript:|<script>/);
 });
+test('日文版介面文字：同一份程式依語言切換，數字與資料不變',()=>{
+  const latest=[row('mobile-mix',1,212000),row('イオシス',1,192000),row('mobile-mix',1,220000,{color:'シルバー',storage:'512GB'}),
+    row('mobile-mix',1,197000,{color:'グレイシャー'})];
+  const prices=[row('mobile-mix',1,212000,{color:'シルバー'})];
+  try {
+    jp.setLang('ja');
+    const html=jp.renderComparison({latest,prices},'iPhone 18 Pro');
+    assert.match(html,/価格差/);assert.match(html,/シルバー 買取不可/);assert.match(html,/¥212,000/);
+    assert.doesNotMatch(html,/價差|不收|此價自/);
+    assert.equal(jp.dateTime('bad'),'記録なし');
+    assert.match(jp.renderChart(jp.timeline([row('mobile-mix',1,200000)],'iPhone 18 Pro','256GB','all',Date.parse(at(1))),315),/基本価格の推移/);
+  } finally { jp.setLang('zh'); }
+  assert.match(jp.renderComparison({latest,prices},'iPhone 18 Pro'),/價差/);
+});
