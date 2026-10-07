@@ -2,7 +2,8 @@ name: 日本買取價
 
 on:
   schedule:
-    - cron: "30 0,6,12,18 * * *"
+    # 日本時間 09:00／15:00／21:00；深夜店家不改價，不抓（POYU 2026-10-08）
+    - cron: "0 0,6,12 * * *"
   workflow_dispatch:
 
 env:

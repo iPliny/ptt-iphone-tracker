@@ -67,7 +67,7 @@
 
 ### 2026-10-07 日本買取價（第一階段）
 - `jp/buyback.py` 是獨立爬蟲，只追 mobile-mix、イオシス、アメモバ的 iPhone 18 Pro／Pro Max。不得混入 PTT 資料、修改 `tracker.py` 或既有台灣 CSV。新增店家請新增純 HTML parser 並在 `collect` 登錄。
-- `.github/workflows/jp.yml` 每 6 小時執行（UTC `30 0,6,12,18 * * *`；日本 03:30／09:30／15:30／21:30），只在 main 寫入 `data/jp/` 並觸發 `pages.yml`。分支驗收只准 `--dry-run`；程式 PR 不帶任何 `data/` 檔案，第一次正式資料由合併後排程產生。
+- `.github/workflows/jp.yml` 每天三次（UTC `0 0,6,12 * * *`；日本 09:00／15:00／21:00，POYU 2026-10-08 指示深夜不抓），只在 main 寫入 `data/jp/` 並觸發 `pages.yml`。分支驗收只准 `--dry-run`；程式 PR 不帶任何 `data/` 檔案，第一次正式資料由合併後排程產生。
 - 日本時間欄位均為 `Asia/Tokyo`、含 `+09:00` 的 ISO 8601，不改程序全域 `TZ`。`shop_updated` 是店家頁面更新日 `YYYY-MM-DD`，未標示留空。
 - `data/jp/prices.csv` 只附加：`shop,model,storage,condition,carrier,color,price_jpy,observed_at,shop_updated,source_url`。前六欄是鍵；同價不附加，首次觀測、改價、恢復收購才新增，空白 `price_jpy` 表示下架／不收。`observed_at` 是發現該變動的時間，非店家實際改價時間。
 - `data/jp/latest.csv` 整檔覆寫：`shop,model,storage,condition,carrier,color,price_jpy,since,last_checked,shop_updated,source_url`。只保留目前有價格的鍵；`since` 是目前價格第一次被觀測的時間、同價保留，`last_checked` 每次成功更新。價格是整數日圓；`color` 空白表示主價，mobile-mix 可收的精確色價另列。`condition` 為 `未開封`／`中古上限`；`carrier` 為 `SIMフリー`／`docomo`／`au`／`SoftBank`／`Rakuten`。
