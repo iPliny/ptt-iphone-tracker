@@ -65,6 +65,17 @@
 - 首頁「最近一週」以資料最新一天為結尾，往前共 7 天的滾動區間，不同於週報的週日～週六；可前後移動 7 天，資料不足時顯示實際起訖與天數。
 - 新刊登、售出、刪文、改價加總期間內每日計數，在架取期末值；與前 7 天比較（在架比前期末），前期不足 7 天留白。全部在前端由 `days` 計算，`data.json` 與建置流程不變；期間純函式放 `site/common.js`。
 
+### 2026-10-07 日本買取價（第一階段）
+- `jp/buyback.py` 是獨立爬蟲，只追 mobile-mix、イオシス、アメモバ的 iPhone 18 Pro／Pro Max。不得混入 PTT 資料、修改 `tracker.py` 或既有台灣 CSV。新增店家請新增純 HTML parser 並在 `collect` 登錄。
+- `.github/workflows/jp.yml` 每 6 小時執行（UTC `30 0,6,12,18 * * *`；日本 03:30／09:30／15:30／21:30），只在 main 寫入 `data/jp/` 並觸發 `pages.yml`。分支驗收只准 `--dry-run`；程式 PR 不帶任何 `data/` 檔案，第一次正式資料由合併後排程產生。
+- 日本時間欄位均為 `Asia/Tokyo`、含 `+09:00` 的 ISO 8601，不改程序全域 `TZ`。`shop_updated` 是店家頁面更新日 `YYYY-MM-DD`，未標示留空。
+- `data/jp/prices.csv` 只附加：`shop,model,storage,condition,carrier,color,price_jpy,observed_at,shop_updated,source_url`。前六欄是鍵；同價不附加，首次觀測、改價、恢復收購才新增，空白 `price_jpy` 表示下架／不收。`observed_at` 是發現該變動的時間，非店家實際改價時間。
+- `data/jp/latest.csv` 整檔覆寫：`shop,model,storage,condition,carrier,color,price_jpy,since,last_checked,shop_updated,source_url`。只保留目前有價格的鍵；`since` 是目前價格第一次被觀測的時間、同價保留，`last_checked` 每次成功更新。價格是整數日圓；`color` 空白表示主價，mobile-mix 可收的精確色價另列。`condition` 為 `未開封`／`中古上限`；`carrier` 為 `SIMフリー`／`docomo`／`au`／`SoftBank`／`Rakuten`。
+- `data/jp/runs.csv` 只附加：`run_at,shop,status,rows,error`，每次每家一列；`status` 為 `ok`／`fetch_error`／`parse_error`，`rows` 是本次解析筆數（失敗時可能是已解析的部分），`error` 說明原因。任一頁抓取／解析失敗、0 筆、或筆數比上次減少至少一半，都保留該店舊價格；其他店照常。
+- 依序經 `fetch` 用 curl_cffi 抓取，所有請求含重試至少間隔 5 秒；イオシス同站至少 60 秒。每次失敗最多重試一次。pastec／駿河屋因擋雲端 IP 暫不做，不用代理或繞過驗證。
+- `site/jp_build.py` 只讀日本 CSV，供 `build_site.py` 增加獨立建置步驟；缺檔仍輸出資料準備中的頁面。`site/jp/` 第一階段只顯示未開封・SIMフリー，價格異常保守隱藏，原始 CSV 仍保留供下載。台灣頁除頁首入口連結外不改行為。
+- 驗收／回復方式見 `docs/jp-buyback-validation.md`；fixture 來源見 `tests/fixtures/jp/README.md`。離線測試使用暫存目錄，不連網、不寫專案資料。
+
 ## 開發規則
 - 修改後必須跑 `python -m unittest`，測試不需網路也不需 Ollama（`fetch`、`llm_extract` 皆被替換成假的）。
 - 改動售出判斷（`detect_status`）或規則萃取（`rule_extract`、`is_brand_new`）時，把觸發問題的實際文章本文精簡後加進 `tests/test_tracker.py` 當回歸測試。

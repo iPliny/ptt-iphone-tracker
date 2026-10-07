@@ -1,0 +1,55 @@
+name: 日本買取價
+
+on:
+  schedule:
+    - cron: "30 0,6,12,18 * * *"
+  workflow_dispatch:
+
+env:
+  TZ: Asia/Tokyo
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: jp
+  cancel-in-progress: false
+
+jobs:
+  buyback:
+    # 分支上的手動驗收不可寫 main，也不可觸發正式部署。
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: 依序抓取日本買取價
+        run: python jp/buyback.py
+      - name: 只提交日本資料並重新部署
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "ptt-tracker-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/jp/
+          if git diff --cached --quiet; then
+            echo "日本資料沒有變動。"
+            exit 0
+          fi
+          git commit -m "日本買取價更新 $(TZ=Asia/Tokyo date '+%F %H:%M')"
+          for attempt in 1 2 3; do
+            if git pull --rebase origin main && git push origin HEAD:main; then
+              gh workflow run pages.yml --ref main
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "推送失敗" >&2
+          exit 1
