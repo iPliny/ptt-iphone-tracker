@@ -1,0 +1,44 @@
+name: JP source inspection (temporary)
+on:
+  push:
+    branches: [codex/jp-buyback-phase1]
+    paths: [.github/workflows/jp-inspect.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install curl_cffi beautifulsoup4
+      - name: Sequential source capture (no data writes)
+        run: |
+          mkdir -p /tmp/jp-source
+          python - <<'PY'
+          from curl_cffi import requests
+          import time, pathlib, json
+          urls = [
+            ("mobilemix", "https://mobile-mix.jp/?category=7"),
+            ("iosys-pro", "https://k-tai-iosys.com/pricelist/smartphone/iphone/iphone18-pro/"),
+            ("iosys-max", "https://k-tai-iosys.com/pricelist/smartphone/iphone/iphone18-pro-max/"),
+            ("amemoba-pro", "https://amemoba.com/smartphone/iphone/iphone-18-pro/"),
+            ("amemoba-max", "https://amemoba.com/smartphone/iphone/iphone-18pro-max/"),
+          ]
+          previous = ""
+          for name,url in urls:
+              if previous:
+                  time.sleep(60 if "iosys" in name or "iosys" in previous else 5)
+              r = requests.get(url, impersonate="chrome", headers={"Accept-Language":"ja-JP,ja;q=0.9"}, timeout=45)
+              print(json.dumps({"name":name,"status":r.status_code,"url":r.url,"bytes":len(r.content)}, ensure_ascii=False))
+              r.raise_for_status()
+              pathlib.Path("/tmp/jp-source",name+".html").write_text(r.text,encoding="utf-8")
+              previous=name
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jp-source-html
+          path: /tmp/jp-source/
+          retention-days: 7
