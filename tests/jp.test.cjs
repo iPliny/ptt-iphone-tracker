@@ -75,3 +75,28 @@ test('日文版介面文字：同一份程式依語言切換，數字與資料�
   } finally { jp.setLang('zh'); }
   assert.match(jp.renderComparison({latest,prices},'iPhone 18 Pro'),/價差/);
 });
+
+test('快報：只看最新一次成功抓取的主價，取漲最多與跌最多',()=>{
+  const prices=[row('mobile-mix',1,200000),row('イオシス',1,190000),row('アメモバ',1,195000),
+    row('mobile-mix',1,170000,{model:'iPhone 17 Pro'}),row('イオシス',1,165000,{model:'iPhone 17 Pro'}),
+    row('mobile-mix',2,203000),row('イオシス',2,185000),row('アメモバ',2,196000),
+    row('mobile-mix',2,175000,{model:'iPhone 17 Pro'}),row('mobile-mix',2,150000,{color:'シルバー'}),
+    row('アメモバ',2,168000,{model:'iPhone 17 Pro'})];
+  const runs=SHOPS_RUNS(1).concat(SHOPS_RUNS(2));
+  const f=jp.flash(prices,runs);
+  assert.equal(f.count,4);
+  assert.equal(f.up.shop,'mobile-mix');assert.equal(f.up.model,'iPhone 17 Pro');assert.equal(f.up.delta,5000);
+  assert.equal(f.down.shop,'イオシス');assert.equal(f.down.delta,-5000);
+  jp.setLang('zh');
+  const html=jp.renderFlash(f);
+  assert.match(html,/mobile-mix<\/strong> iPhone 17 Pro 256GB 提價最多 <span class="amount">\+¥5,000/);
+  assert.match(html,/イオシス<\/strong> iPhone 18 Pro 256GB 砍價最多 <span class="amount">−¥5,000/);
+  jp.setLang('ja');assert.match(jp.renderFlash(f),/最大の値上げ/);jp.setLang('zh');
+});
+test('快報：最新一次沒有改價或尚無抓取',()=>{
+  const prices=[row('mobile-mix',1,200000),row('イオシス',1,190000),row('mobile-mix',2,203000)];
+  const f=jp.flash(prices,SHOPS_RUNS(1).concat(SHOPS_RUNS(2),SHOPS_RUNS(3)));
+  assert.equal(f.count,0);assert.match(jp.renderFlash(f),/這次各店都沒有改價/);
+  assert.equal(jp.flash(prices,[{shop:'mobile-mix',status:'fetch_error',run_at:at(4)}]),null);
+});
+function SHOPS_RUNS(day){return jp.SHOPS.map(shop=>({run_at:at(day),shop,status:'ok',rows:'10',error:''}));}

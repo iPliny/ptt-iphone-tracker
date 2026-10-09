@@ -29,6 +29,12 @@
 .jp-change time { color: var(--muted); font-size: 12px; }
 .jp-change .amount { font-variant-numeric: tabular-nums; }
 .jp-change .delta { display: block; color: var(--muted); font-size: 12px; }
+.jp-flash-item { margin: 6px 0; font-size: 15px; }
+.jp-flash-item .amount { font-weight: 700; font-variant-numeric: tabular-nums; }
+/* 台灣、日本習慣紅漲綠跌 */
+.jp-flash-item.up .amount { color: #dc2626; }
+.jp-flash-item.down .amount { color: #15803d; }
+.jp-flash-item .detail { margin-left: 8px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .jp-statuses { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
 .jp-statuses article { padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
 .jp-statuses p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
@@ -41,6 +47,8 @@
   .shop-2 { color: #c084fc; stroke: #c084fc; }
   .shop-3 { color: #4ade80; stroke: #4ade80; }
   .jp-statuses .failed { color: #fbbf24; }
+  .jp-flash-item.up .amount { color: #f87171; }
+  .jp-flash-item.down .amount { color: #4ade80; }
 }
 @media (max-width: 640px) {
   h1 { font-size: 23px; }

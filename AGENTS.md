@@ -78,6 +78,7 @@
 
 ### 2026-10-08 日本買取頁日文版
 - POYU 要日文版、中文版照留：`site/jp/index.html`（中文，`jp/`）與 `site/jp/ja/index.html`（日文，`jp/ja/`）共用 `site/jp/jp.js`，介面字串在 `I18N`（zh／ja），依 `<html lang>` 切換；日文頁 `<body data-base="../">` 讓它讀 `jp/data.json`。兩頁互設 hreflang、頁首互相切換，sitemap 都列入。改頁面文字時兩個 HTML 與 `I18N` 一起改。
+- 2026-10-09 POYU 要在比較表上方加「快報」（日文「速報」）：`jp.js` 的 `flash` 取 `runs.csv` 最後一次成功抓取的時間，從當次的未開封・SIMフリー主價改價中各挑漲最多、跌最多一筆（首次觀測、色價、異常價不算），全部在前端計算，`data.json` 不變。
 
 ## 開發規則
 - 修改後必須跑 `python -m unittest`，測試不需網路也不需 Ollama（`fetch`、`llm_extract` 皆被替換成假的）。
