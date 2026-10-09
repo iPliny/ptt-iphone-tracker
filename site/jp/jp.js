@@ -11,13 +11,15 @@
       chartLabel:'各店與當下最高買取價階梯走勢，日圓，日本時間', chartTitle:'未開封・SIMフリー主價走勢', highest:'當下最高價',
       loadFailed:'資料暫時無法載入，請稍後重試', checked:'最近確認：', removed:'下架／不收', restored:'重新收購',
       up:'上漲 ', down:'下跌 ', noChanges:'最近 7 天沒有改價紀錄', ok:'抓取正常', failed:'暫時抓不到',
-      notStarted:'尚未開始抓取', lastOk:'最後成功：', csv:{latest:'最新報價', prices:'價格歷史', runs:'抓取紀錄'}},
+      notStarted:'尚未開始抓取', lastOk:'最後成功：',
+      flashAt:'最新一次抓取：', flashNone:'這次各店都沒有改價', flashUp:'提價最多', flashDown:'砍價最多', flashCount:n=>'這次共 '+n+' 筆改價', csv:{latest:'最新報價', prices:'價格歷史', runs:'抓取紀錄'}},
     ja: {none:'記録なし', notBuying:'買取不可', since:'この価格の開始：', jst:'（日本時間）', shopUpdated:'／店舗の更新日：', unmarked:'記載なし',
       storage:'容量', spread:'価格差', best:'最高', preparing:'データ準備中', noPublic:'この期間に公開できる価格はありません',
       chartLabel:'各店と現在の最高買取価格の推移（円・日本時間）', chartTitle:'未開封・SIMフリーの基本価格の推移', highest:'現在の最高価格',
       loadFailed:'データを読み込めませんでした。しばらくしてから再度お試しください', checked:'最終確認：', removed:'掲載終了／買取不可', restored:'買取再開',
       up:'値上げ ', down:'値下げ ', noChanges:'直近 7 日間の価格変更はありません', ok:'取得正常', failed:'一時的に取得できません',
-      notStarted:'未取得', lastOk:'最終取得成功：', csv:{latest:'最新価格', prices:'価格履歴', runs:'取得ログ'}},
+      notStarted:'未取得', lastOk:'最終取得成功：',
+      flashAt:'最新の取得：', flashNone:'今回はどの店舗も価格変更なし', flashUp:'最大の値上げ', flashDown:'最大の値下げ', flashCount:n=>'今回の価格変更 '+n+' 件', csv:{latest:'最新価格', prices:'価格履歴', runs:'取得ログ'}},
   };
   let T = I18N.zh;
   const setLang = lang => { T = String(lang || '').startsWith('ja') ? I18N.ja : I18N.zh; };
@@ -124,6 +126,27 @@
     return changes.reverse();
   }
 
+  // 快報：最新一次成功抓取裡，未開封・SIMフリー主價漲最多與跌最多的各一筆（首次觀測、異常價不算）。
+  function flash(prices, runs) {
+    const at=runs.filter(r=>r.status==='ok' && Number.isFinite(Date.parse(r.run_at))).map(r=>r.run_at)
+      .sort((a,b)=>Date.parse(a)-Date.parse(b)).at(-1);
+    if (!at) return null;
+    const changes=recentChanges(prices, Date.parse(at))
+      .filter(r=>r.observed_at===at && !r.color && Number.isFinite(r.old_price) && Number.isFinite(r.new_price))
+      .map(r=>({...r, delta:r.new_price-r.old_price}));
+    const pick=(sign)=>changes.filter(r=>Math.sign(r.delta)===sign).sort((a,b)=>sign*(b.delta-a.delta))[0] || null;
+    return {at, count:changes.length, up:pick(1), down:pick(-1)};
+  }
+
+  function renderFlash(result) {
+    if (!result) return '<p class="empty">'+T.preparing+'</p>';
+    const line=(r,label)=>r?'<p class="jp-flash-item '+(r.delta>0?'up':'down')+'"><strong>'+esc(r.shop)+'</strong> '+esc(r.model+' '+r.storage)+' '+label
+      +' <span class="amount">'+(r.delta>0?'+':'−')+money(Math.abs(r.delta))+'</span><span class="detail">'+money(r.old_price)+' → '+money(r.new_price)+'</span></p>':'';
+    const body=result.count?line(result.up,T.flashUp)+line(result.down,T.flashDown)+'<p class="hint">'+esc(T.flashCount(result.count))+'</p>'
+      :'<p class="empty">'+T.flashNone+'</p>';
+    return '<p class="hint">'+T.flashAt+esc(dateTime(result.at))+T.jst+'</p>'+body;
+  }
+
   function shopStatuses(runs) {
     return SHOPS.map(shop=>{
       const all=runs.filter(r=>r.shop===shop).slice().sort((a,b)=>Date.parse(a.run_at)-Date.parse(b.run_at));
@@ -184,7 +207,7 @@
     return svg+'</svg>';
   }
 
-  const api={SHOPS, setLang, visiblePrices, comparison, timeline, stepPath, recentChanges, shopStatuses, renderComparison, renderChart, dateTime, money};
+  const api={SHOPS, setLang, visiblePrices, comparison, timeline, stepPath, recentChanges, flash, renderFlash, shopStatuses, renderComparison, renderChart, dateTime, money};
   if(typeof module!=='undefined' && module.exports) module.exports=api;
   if(typeof document==='undefined') return;
 
@@ -213,6 +236,7 @@
       get('trend').innerHTML=renderChart(timeline(data.prices,model,get('trend-storage').value,get('trend-days').value,end),get('trend').clientWidth);
     };
     get('legend').innerHTML=[...SHOPS,T.highest].map((s,i)=>'<span><i class="jp-key shop-'+i+(i===3?' best':'')+'"></i>'+s+'</span>').join('');
+    get('flash').innerHTML=renderFlash(flash(data.prices,data.runs||[]));
     get('compare-model').addEventListener('change',compare);
     ['trend-model','trend-storage','trend-days'].forEach(id=>get(id).addEventListener('change',chart));
     window.addEventListener('resize',chart);
