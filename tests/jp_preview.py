@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from jp.buyback import (parse_mobilemix, parse_iosys, parse_amemoba, apply_results,
-                        IOSYS_URLS, AMEMOBA_URLS, TOKYO)
+                        IOSYS_PAGES, AMEMOBA_PAGES, TOKYO)
 
 
 def preview(data_root):
@@ -21,11 +21,13 @@ def preview(data_root):
     fixtures = ROOT / "tests/fixtures/jp"
     read = lambda name: (fixtures / f"{name}.html").read_text(encoding="utf-8")
     base = [dict(shop="mobile-mix", rows=parse_mobilemix(read("mobilemix"))[0])]
-    for shop, names, parser, urls in [
-        ("イオシス", ["iosys-pro", "iosys-max"], parse_iosys, IOSYS_URLS),
-        ("アメモバ", ["amemoba-pro", "amemoba-max"], parse_amemoba, AMEMOBA_URLS),
+    for shop, names, parser, pages in [
+        ("イオシス", ["iosys-pro", "iosys-max", None, None, "iosys-17"], parse_iosys, IOSYS_PAGES),
+        ("アメモバ", ["amemoba-pro", "amemoba-max", "amemoba-17pro"], parse_amemoba, AMEMOBA_PAGES),
     ]:
-        base.append(dict(shop=shop, rows=sum([parser(read(name), url)[0] for name, url in zip(names, urls)], [])))
+        rows = [r for name, (url, model) in zip(names, pages.items()) if name
+                for r in parser(read(name), url)[0] if r["model"] == model]
+        base.append(dict(shop=shop, rows=rows))
     today = datetime.now(TOKYO).replace(hour=9, minute=30, second=0, microsecond=0)
     adjustments = [[-4000, -2000, 0], [-1000, -1000, 1000], [-1000, 0, 1000],
                    [1000, 2000, 0], [0, 1000, 2000], [-2000, 0, 1000], [0, 0, 0]]
