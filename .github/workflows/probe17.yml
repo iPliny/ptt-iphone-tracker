@@ -1,0 +1,20 @@
+name: probe17
+on:
+  push:
+    branches: [claude/jp17-probe]
+    paths: [probe/probe.py]
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install curl_cffi
+      - run: python probe/probe.py
+      - run: |
+          git config user.name probe; git config user.email probe@users.noreply.github.com
+          git add probe/out && git commit -qm "probe output" && git push origin HEAD:claude/jp17-probe
