@@ -3,6 +3,7 @@ import contextlib
 import copy
 import io
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -25,6 +26,16 @@ def find(rows, model="iPhone 18 Pro", storage="256GB", condition="未開封", ca
     return next(r for r in rows if [r[k] for k in jp.KEY[1:]] == [model, storage, condition, carrier, color])
 
 
+def shop_page(url):
+    """依網址回傳該頁機型的 fixture；17 系列沒有存的頁面由 18 Pro 的 fixture 換機型名稱。"""
+    if url == jp.MOBILEMIX_URL:
+        return fixture("mobilemix")
+    shop, model = ("iosys", jp.IOSYS_PAGES[url]) if url in jp.IOSYS_PAGES else ("amemoba", jp.AMEMOBA_PAGES[url])
+    html = fixture(f"{shop}-max" if model.endswith("Max") else f"{shop}-pro")
+    target = {"iPhone 17 Pro": "iPhone17 Pro", "iPhone 17 Pro Max": "iPhone17 Pro", "iPhone 17": "iPhone17", "iPhone Air": "iPhone Air"}
+    return re.sub(r"iPhone\s*18\s*Pro", target[model], html) if model in target else html
+
+
 def result(shop, rows, **kwargs):
     return dict(shop=shop, rows=copy.deepcopy(rows), status="ok", **kwargs)
 
@@ -33,8 +44,10 @@ class ParserTests(unittest.TestCase):
     def test_mobilemix_actual_rows_and_color_exclusions(self):
         rows, updated = jp.parse_mobilemix(fixture("mobilemix"))
         self.assertEqual(updated, "2026-10-07")
-        self.assertEqual(len(rows), 26)
-        self.assertEqual({r["model"] for r in rows}, {"iPhone 18 Pro", "iPhone 18 Pro Max"})
+        self.assertEqual(len(rows), 30)
+        self.assertEqual({r["model"] for r in rows}, {"iPhone 18 Pro", "iPhone 18 Pro Max", "iPhone 17 Pro Max"})
+        self.assertEqual(find(rows, model="iPhone 17 Pro Max")["price_jpy"], 186000)
+        self.assertEqual(find(rows, model="iPhone 17 Pro Max", color="ディープブルー")["price_jpy"], 184000)
         self.assertEqual(find(rows)["price_jpy"], 212000)
         self.assertEqual(find(rows, color="グレイシャー")["price_jpy"], 197000)
         self.assertEqual(find(rows, model="iPhone 18 Pro Max", color="シルバー")["price_jpy"], 221000)
@@ -66,12 +79,40 @@ class ParserTests(unittest.TestCase):
 
     def test_other_models_ignored_and_carriers_normalized(self):
         for parser, name, url in [(jp.parse_iosys, "iosys-pro", jp.IOSYS_URLS[0]), (jp.parse_amemoba, "amemoba-pro", jp.AMEMOBA_URLS[0])]:
-            for replace in ("17", "18 Air", "18 Pro Ultra"):
+            for replace in ("17e", "16", "18 Air", "18 Pro Ultra"):
                 with self.subTest(name=name, replace=replace):
                     rows, _ = parser(fixture(name).replace("18", replace), url)
                     self.assertEqual(rows, [])
         for label, carrier in [("au版SIMフリー", "au"), ("docomo版SIMフリー", "docomo"), ("SoftBank版", "SoftBank"), ("国内版SIMフリー", "SIMフリー"), ("Rakuten版SIMフリー", "Rakuten"), ("楽天モバイル版SIMフリー", "Rakuten")]:
             self.assertEqual(jp.carrier_name(label), carrier)
+
+    def test_iphone17_series_names(self):
+        for text, expected in [("iPhone17 256GB", ("iPhone 17", "256GB")), ("iPhone Air 1TB", ("iPhone Air", "1TB")),
+                               ("iPhone 17 Air 512GB", ("iPhone Air", "512GB")), ("iPhone17 Pro 512GB", ("iPhone 17 Pro", "512GB")),
+                               ("iPhone 17 Pro Max 2TB", ("iPhone 17 Pro Max", "2TB")), ("iPhone 17e 256GB", None),
+                               ("iPhone 16 Pro 256GB", None)]:
+            self.assertEqual(jp.model_storage(text), expected, text)
+
+    def test_iosys_overseas_version_ignored(self):
+        rows, _ = jp.parse_iosys(fixture("iosys-17"), jp.IOSYS_URLS[4])
+        self.assertEqual({r["model"] for r in rows}, {"iPhone 17"})
+        self.assertEqual(find(rows, model="iPhone 17")["price_jpy"], 135000)
+        self.assertEqual(find(rows, model="iPhone 17", storage="512GB", carrier="docomo")["price_jpy"], 160000)
+        self.assertEqual(len(rows), 8)  # 海外版 SIMフリー（95,000円）不可蓋掉国内版
+        self.assertIsNone(jp.carrier_name("海外版SIMフリー"))
+
+    def test_rows_of_other_models_on_a_page_are_dropped(self):
+        # アメモバ 17 Pro 頁的楽天版混入兩列 iPhone Air，不能記成 Air 的價格。
+        rows, _ = jp.parse_amemoba(fixture("amemoba-17pro"), jp.AMEMOBA_URLS[2])
+        self.assertIn("iPhone Air", {r["model"] for r in rows})
+        url = "https://amemoba.com/smartphone/iphone/iphone-17-pro/"
+        results = jp.collect(lambda u: fixture("amemoba-17pro") if u == url else shop_page(u))
+        amemoba = next(r for r in results if r["shop"] == "アメモバ")
+        self.assertEqual(amemoba["status"], "ok")
+        pro17 = [r for r in amemoba["rows"] if r["source_url"] == url]
+        self.assertEqual({r["model"] for r in pro17}, {"iPhone 17 Pro"})
+        self.assertEqual(find(pro17, model="iPhone 17 Pro")["price_jpy"], 169000)
+        self.assertFalse(any(r["model"] == "iPhone Air" and r["source_url"] == url for r in amemoba["rows"]))
 
     def test_missing_price_is_error_not_delisting(self):
         for parser, name, url, selector in [(jp.parse_iosys,"iosys-pro",jp.IOSYS_URLS[0],"s-price"), (jp.parse_amemoba,"amemoba-pro",jp.AMEMOBA_URLS[0],"p-purchaseArchive__priceNew")]:
@@ -175,17 +216,16 @@ class FetchAndBuildTests(unittest.TestCase):
             self.assertEqual(kwargs["headers"]["Accept-Language"], "ja-JP,ja;q=0.9")
 
     def test_partial_shop_failure_does_not_write_half_a_shop(self):
-        lookup={jp.MOBILEMIX_URL:"mobilemix", jp.IOSYS_URLS[0]:"iosys-pro", jp.AMEMOBA_URLS[0]:"amemoba-pro", jp.AMEMOBA_URLS[1]:"amemoba-max"}
         def fetch(url):
             if url == jp.IOSYS_URLS[1]:
                 raise RuntimeError("fixture failure")
-            return fixture(lookup[url])
+            return shop_page(url)
         results=jp.collect(fetch)
         self.assertEqual([r["status"] for r in results], ["ok", "fetch_error", "ok"])
         with tempfile.TemporaryDirectory() as directory:
             jp.apply_results(directory, results, T0)
             self.assertEqual({r["shop"] for r in jp.read_csv(Path(directory)/"latest.csv")}, {"mobile-mix", "アメモバ"})
-        results=jp.collect(lambda url: "<html>blocked</html>" if url in jp.IOSYS_URLS else fixture(lookup[url]))
+        results=jp.collect(lambda url: "<html>blocked</html>" if url in jp.IOSYS_URLS else shop_page(url))
         self.assertEqual(results[1]["status"], "parse_error")
 
     def test_dry_run_does_not_create_data(self):
@@ -227,7 +267,7 @@ class FetchAndBuildTests(unittest.TestCase):
             self.assertEqual(before,after)
             build_site.build(root/"out",data)
             payload=json.loads((root/"out/jp/data.json").read_text())
-            self.assertEqual(len(payload["latest"]),26)
+            self.assertEqual(len(payload["latest"]),30)
             self.assertIsInstance(payload["latest"][0]["price_jpy"],int)
             for name in ("latest", "prices", "runs"):
                 self.assertEqual((data/"jp"/f"{name}.csv").read_bytes(),(root/"out/data/jp"/f"{name}.csv").read_bytes())

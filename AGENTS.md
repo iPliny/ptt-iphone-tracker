@@ -66,7 +66,7 @@
 - 新刊登、售出、刪文、改價加總期間內每日計數，在架取期末值；與前 7 天比較（在架比前期末），前期不足 7 天留白。全部在前端由 `days` 計算，`data.json` 與建置流程不變；期間純函式放 `site/common.js`。
 
 ### 2026-10-07 日本買取價（第一階段）
-- `jp/buyback.py` 是獨立爬蟲，只追 mobile-mix、イオシス、アメモバ的 iPhone 18 Pro／Pro Max。不得混入 PTT 資料、修改 `tracker.py` 或既有台灣 CSV。新增店家請新增純 HTML parser 並在 `collect` 登錄。
+- `jp/buyback.py` 是獨立爬蟲，只追 mobile-mix、イオシス、アメモバ的 iPhone 18 Pro／Pro Max，2026-10-09 起加上 iPhone 17、Air、17 Pro、17 Pro Max（POYU 指示；17e 不收）。イオシス、アメモバ每個機型一頁，網址與機型對照在 `IOSYS_PAGES`／`AMEMOBA_PAGES`，每頁只收該頁機型的列（アメモバ 17 Pro 頁曾混入 Air 列）；`海外版SIMフリー` 不算 SIMフリー，不收。不得混入 PTT 資料、修改 `tracker.py` 或既有台灣 CSV。新增店家請新增純 HTML parser 並在 `collect` 登錄。
 - `.github/workflows/jp.yml` 每天三次（UTC `0 0,6,12 * * *`；日本 09:00／15:00／21:00，POYU 2026-10-08 指示深夜不抓），只在 main 寫入 `data/jp/` 並觸發 `pages.yml`。分支驗收只准 `--dry-run`；程式 PR 不帶任何 `data/` 檔案，第一次正式資料由合併後排程產生。
 - 日本時間欄位均為 `Asia/Tokyo`、含 `+09:00` 的 ISO 8601，不改程序全域 `TZ`。`shop_updated` 是店家頁面更新日 `YYYY-MM-DD`，未標示留空。
 - `data/jp/prices.csv` 只附加：`shop,model,storage,condition,carrier,color,price_jpy,observed_at,shop_updated,source_url`。前六欄是鍵；同價不附加，首次觀測、改價、恢復收購才新增，空白 `price_jpy` 表示下架／不收。`observed_at` 是發現該變動的時間，非店家實際改價時間。
