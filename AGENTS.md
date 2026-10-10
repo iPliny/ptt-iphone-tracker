@@ -80,6 +80,12 @@
 - POYU 要日文版、中文版照留：`site/jp/index.html`（中文，`jp/`）與 `site/jp/ja/index.html`（日文，`jp/ja/`）共用 `site/jp/jp.js`，介面字串在 `I18N`（zh／ja），依 `<html lang>` 切換；日文頁 `<body data-base="../">` 讓它讀 `jp/data.json`。兩頁互設 hreflang、頁首互相切換，sitemap 都列入。改頁面文字時兩個 HTML 與 `I18N` 一起改。
 - 2026-10-09 POYU 要在比較表上方加「快報」（日文「速報」）：`jp.js` 的 `flash` 取 `runs.csv` 最後一次成功抓取的時間，從當次的未開封・SIMフリー主價改價中各挑漲最多、跌最多一筆（首次觀測、色價、異常價不算），全部在前端計算，`data.json` 不變。
 
+### 2026-10-11 Claude 萃取（規則抓不到時）
+- `--extractor` 預設 `auto`：環境有 `ANTHROPIC_API_KEY` 時為 `claude`，否則 `rules`，本機與沒設 secret 的行為不變。`track.yml` 從 repo secret `ANTHROPIC_API_KEY` 帶入。
+- `claude` 模式先跑 `rule_extract`，結果可用就照用；規則抓不到、且 `not_single_iphone` 不成立（不是配件文、不是一篇賣多支）時，才由 `claude_extract` 呼叫 `CLAUDE_MODEL`（`claude-haiku-5-5`，effort low），用 `CLAUDE_SCHEMA` JSON schema 限定輸出，再經 `build_fields` 同一套檢查。顏色仍由 `parse_color` 從標題判斷。Claude 失敗只記錯誤、文章留到下次。
+- `listings.csv` 最後一欄新增 `extractor`（`rules`／`claude`／`ollama`），空白＝加此欄前的舊列。網站不使用此欄。
+- 測試以 `claude_extract` 替身執行，不連網、不需要金鑰。
+
 ## 開發規則
 - 修改後必須跑 `python -m unittest`，測試不需網路也不需 Ollama（`fetch`、`llm_extract` 皆被替換成假的）。
 - 改動售出判斷（`detect_status`）或規則萃取（`rule_extract`、`is_brand_new`）時，把觸發問題的實際文章本文精簡後加進 `tests/test_tracker.py` 當回歸測試。

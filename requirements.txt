@@ -1,5 +1,6 @@
 requests
 curl_cffi
 beautifulsoup4
+anthropic  # 有 ANTHROPIC_API_KEY 時，規則抓不到的文章改請 Claude 萃取
 # 選用：本機用 --extractor ollama 時才需要
 # ollama

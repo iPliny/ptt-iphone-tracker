@@ -7,7 +7,8 @@ v1 的問題：每次只看最新 2 頁，文章一旦被擠出前 2 頁就再�
 v2 的流程（每次執行都做完這四步）：
   1. 掃描：往回翻頁，直到文章時間早於 --days 天前（上限 --max-pages 頁）。
   2. 萃取：新文章、或「本文」有被編輯（推文不算）的文章才解析欄位；
-     預設依發文範本用規則萃取（雲端可跑），--extractor ollama 改用本機 LLM。
+     預設依發文範本用規則萃取（雲端可跑）；有 ANTHROPIC_API_KEY 時，規則抓不到的文章改請 Claude 萃取；
+     --extractor ollama 改用本機 LLM。
   3. 回訪：所有仍在售、且發文在 --track-days 天內的文章逐篇重新打開，
      只用標題/本文關鍵字判斷是否已售出或被刪除。
   4. 彙整：輸出 data/ 底下的 listings.csv（每篇文章一列、最新狀態）、events.csv（變動紀錄）、
@@ -51,6 +52,7 @@ INDEX_URL = BASE_URL + "/bbs/MacShop/index.html"
 HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
 IMPERSONATE = ["chrome", "safari", "firefox"]  # 被 403 時依序換一種瀏覽器指紋
 OLLAMA_MODEL = "qwen2.5:32b"
+CLAUDE_MODEL = "claude-haiku-5-5"
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 LISTINGS_FILE = os.path.join(DATA_DIR, "listings.csv")
@@ -68,6 +70,7 @@ LISTING_FIELDS = [
     "private_msg_count",
     "last_edit_at", "price_checked_at",  # ISO 8601，台灣時間；不回填舊事件
     "color",  # 空白＝無法確定機身顏色
+    "extractor",  # rules／claude／ollama：這列欄位由誰萃取；空白＝加入此欄前的舊資料
 ]
 BASIS_OBSERVED = "觀測"
 BASIS_ESTIMATED = "推估"
@@ -845,6 +848,42 @@ def llm_extract(title, body):
     return json.loads(resp["message"]["content"])
 
 
+_NULLABLE = lambda t: {"anyOf": [{"type": t}, {"type": "null"}]}
+CLAUDE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "model": _NULLABLE("string"),
+        "storage": _NULLABLE("string"),
+        "battery_health": _NULLABLE("integer"),
+        "price": _NULLABLE("integer"),
+        "warranty": _NULLABLE("string"),
+        "notes": {"type": "string"},
+        "is_brand_new": {"type": "boolean"},
+    },
+    "required": ["model", "storage", "battery_health", "price", "warranty", "notes", "is_brand_new"],
+    "additionalProperties": False,
+}
+_claude_client = None
+
+
+def claude_extract(title, body):
+    """規則抓不到的文章交給 Claude；用 JSON schema 限定輸出格式，回傳與 rule_extract 相同鍵的 dict。"""
+    global _claude_client
+    if _claude_client is None:
+        import anthropic  # 延遲載入：只用規則時不需要安裝
+        _claude_client = anthropic.Anthropic()  # 讀 ANTHROPIC_API_KEY；程式裡不放金鑰
+    resp = _claude_client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=2048,
+        system=SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": f"標題：{title}\n\n{body}"}],
+        output_config={"effort": "low", "format": {"type": "json_schema", "schema": CLAUDE_SCHEMA}},
+    )
+    if resp.stop_reason != "end_turn":
+        raise RuntimeError(f"Claude 未完成萃取（{resp.stop_reason}）")
+    return json.loads(next(b.text for b in resp.content if b.type == "text"))
+
+
 def build_fields(parsed):
     """把 LLM 回傳轉成 listing 欄位；非 iPhone 或無單機價格回傳 None。"""
     model_raw = parsed.get("model")
@@ -1054,6 +1093,7 @@ def process_article(url, listings, use_llm, stats, multi=None):
     price_confirmed = bool(row and row.get("body_hash") == h)
 
     first_seen = None
+    skipped_row = None
     if REPARSE and use_llm and row is not None and row.get("status") == "略過":
         prev = skipped_from(url) if row.get("model") else None
         if prev and safe_extract(art, stats) is not None:
@@ -1063,7 +1103,7 @@ def process_article(url, listings, use_llm, stats, multi=None):
         else:
             # 規則改進後，先前略過的文章當成新文章重新判斷，但保留第一次看到的時間
             first_seen = row.get("first_seen")
-            del listings[url]
+            skipped_row = listings.pop(url)
             row = None
 
     if row is None:
@@ -1071,6 +1111,12 @@ def process_article(url, listings, use_llm, stats, multi=None):
             return  # 新文章要等有 LLM 時才解析
         print("    [NEW] 新文章，解析欄位。")
         fields = safe_extract(art, stats)
+        if fields is None and art.get("extract_failed"):
+            # Claude 暫時失敗：不記成略過（略過列之後不回訪），留給下次重新萃取
+            if skipped_row is not None:
+                listings[url] = skipped_row
+            print("    [RETRY] 萃取失敗，下次再試。")
+            return
         if multi is not None:
             if fields is None and record_multi(url, art, multi, first_seen):
                 print(f"    [MULTI] 多品項文章，拆出 {len(multi[url])} 支 iPhone（只算刊登價）。")
@@ -1148,11 +1194,31 @@ REPARSE = False  # --reparse：追蹤期內所有文章都用目前的規則重�
 
 
 def safe_extract(art, stats):
+    title, body = art["title"], art["body"]
     try:
-        extract = llm_extract if EXTRACTOR == "ollama" else rule_extract
-        return build_fields(extract(art["title"], art["body"]))
+        if EXTRACTOR == "ollama":
+            fields = build_fields(llm_extract(title, body))
+            return fields and {**fields, "extractor": "ollama"}
+        fields = build_fields(rule_extract(title, body))
+        if fields is not None:
+            return {**fields, "extractor": "rules"}
+        # 規則抓不到（賣家沒照範本寫）才問 Claude；配件文、一篇賣多支照舊略過
+        if EXTRACTOR != "claude" or not_single_iphone(art):
+            return None
+        try:
+            parsed = claude_extract(title, body)
+        except Exception:
+            art["extract_failed"] = True  # 與「確定不是單支 iPhone」區分，新文章不寫成略過
+            raise
+        fields = build_fields(parsed)
+        stats["claude"] = stats.get("claude", 0) + 1
+        if fields is None:
+            return None
+        print(f"    [CLAUDE] 規則抓不到，由 Claude 萃取：{fields['model']} {fields['storage']} ${fields['price']}")
+        return {**fields, "color": parse_color(fields["model"], re.sub(r"^\[[^\]]*\]\s*", "", title)) or "",
+                "extractor": "claude"}
     except Exception as e:
-        print(f"    [ERR] LLM 解析失敗：{e}")
+        print(f"    [ERR] 解析失敗：{e}")
         stats["errors"] += 1
         return None
 
@@ -1271,8 +1337,9 @@ def main():
     ap.add_argument("--days", type=int, default=3, help="掃描看板時往回看幾天的新文章（預設 3）")
     ap.add_argument("--max-pages", type=int, default=50, help="掃描看板最多翻幾頁（預設 50）")
     ap.add_argument("--track-days", type=int, default=45, help="在售文章發文後持續回訪幾天（預設 45）")
-    ap.add_argument("--extractor", choices=["rules", "ollama"], default="rules",
-                    help="欄位萃取方式：rules＝依發文範本（預設，雲端可跑）；ollama＝本機 LLM")
+    ap.add_argument("--extractor", choices=["auto", "rules", "claude", "ollama"], default="auto",
+                    help="欄位萃取方式：rules＝只用發文範本規則；claude＝規則抓不到時改問 Claude（需 ANTHROPIC_API_KEY）；"
+                         "ollama＝本機 LLM；auto（預設）＝有 ANTHROPIC_API_KEY 用 claude，否則 rules")
     ap.add_argument("--no-llm", "--track-only", dest="no_llm", action="store_true",
                     help="不解析新文章，只回訪既有文章更新狀態")
     ap.add_argument("--report-only", action="store_true", help="只重算行情彙整")
@@ -1289,10 +1356,13 @@ def main():
         save_listings(listings)
 
     if not args.report_only and not args.migrate:
-        stats = {"new": 0, "sold": 0, "deleted": 0, "price_changes": 0, "errors": 0}
+        stats = {"new": 0, "sold": 0, "deleted": 0, "price_changes": 0, "errors": 0, "claude": 0}
         use_llm = not args.no_llm  # 是否解析新文章／被編輯的文章
         global EXTRACTOR, REPARSE
         EXTRACTOR = args.extractor
+        if EXTRACTOR == "auto":
+            EXTRACTOR = "claude" if os.environ.get("ANTHROPIC_API_KEY") else "rules"
+        print(f"[INFO] 欄位萃取：{EXTRACTOR}")
         REPARSE = args.reparse
 
         print("=" * 60 + "\n[INFO] 第一階段：掃描看板\n" + "=" * 60)
@@ -1324,7 +1394,7 @@ def main():
         save_multi(multi)
         print("\n" + "=" * 60)
         print(f"[DONE] 新刊登 {stats['new']}｜新售出 {stats['sold']}｜刪文 {stats['deleted']}"
-              f"｜價格變動 {stats['price_changes']}｜錯誤 {stats['errors']}")
+              f"｜價格變動 {stats['price_changes']}｜錯誤 {stats['errors']}｜Claude 萃取 {stats['claude']}")
 
     dropped = drop_misparsed(listings)
     colored = backfill_colors(listings)
