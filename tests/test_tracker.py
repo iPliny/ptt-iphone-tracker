@@ -460,7 +460,7 @@ class PipelineTest(unittest.TestCase):
         row = self.run_main()[T.BASE_URL + pa]
         self.assertEqual(row["color"], "原色鈦金屬")
         with open(T.LISTINGS_FILE, encoding="utf-8-sig") as f:
-            self.assertEqual(next(csv.reader(f))[-2:], ["price_checked_at", "color"])
+            self.assertEqual(next(csv.reader(f))[-3:], ["price_checked_at", "color", "extractor"])
         self.arts[pa] = (title.replace(" 白色", ""), body.replace("原鈦色", "未標示"), "")
         self.assertEqual(self.run_main()[T.BASE_URL + pa]["color"], "原色鈦金屬")
         self.arts[pa] = (title, body.replace("原鈦色", "黑色"), "")
@@ -529,8 +529,9 @@ class PipelineTest(unittest.TestCase):
         self.assertIsNone(rows["old"].get("private_msg_count"))
         T.save_listings(rows)
         self.assertEqual(T.load_listings()["old"]["private_msg_count"], "")
-        self.assertEqual(T.LISTING_FIELDS[-5:],
-                         ["days_to_sell_basis", "private_msg_count", "last_edit_at", "price_checked_at", "color"])
+        self.assertEqual(T.LISTING_FIELDS[-6:],
+                         ["days_to_sell_basis", "private_msg_count", "last_edit_at", "price_checked_at", "color",
+                          "extractor"])
 
     def test_reparse_fixes_old_wrong_price(self):
         a = T.BASE_URL + self.paths[0]
@@ -757,3 +758,59 @@ class MultiItemTest(unittest.TestCase):
         self.assertEqual(self.items("[販售] 台北 iPhone SE3 黑 128G", body), [])
         f = T.rule_extract("[販售] 台北 iPhone SE3 黑 128G", body)
         self.assertEqual((f["model"], f["price"]), ("iPhone SE3", 4650))
+
+
+class ClaudeFallbackTest(unittest.TestCase):
+    """規則抓不到才問 Claude；配件文、一篇賣多支不問；沒有金鑰時不呼叫。測試不連網，claude_extract 被替換。"""
+
+    FREEFORM = ("[販售] 台北 17 Pro 256 宇宙橙",
+                "自用一手，今年九月買的 17pro 256g 橙色\n電池 100%，保固到 2026/9/20\n想要 36000 出 面交台北車站")
+    CLAUDE_OUT = {"model": "iPhone 17 Pro", "storage": "256GB", "battery_health": 100, "price": 36000,
+                  "warranty": "2026/9/20", "notes": "一手自用", "is_brand_new": False}
+
+    def extract(self, extractor, title, body, claude=None):
+        stats = {"errors": 0}
+        fake = claude or (lambda t, b: self.CLAUDE_OUT)
+        with patch.object(T, "EXTRACTOR", extractor), patch.object(T, "claude_extract", side_effect=fake) as m:
+            return T.safe_extract({"title": title, "body": body}, stats), m, stats
+
+    def test_rules_result_is_kept_and_claude_not_called(self):
+        body = "[型號] iPhone 15 Pro\n[規格] 256G\n[售價] 25,000\n"
+        fields, m, _ = self.extract("claude", "[販售] 台北 iPhone 15 Pro 256", body)
+        self.assertEqual((fields["price"], fields["extractor"]), (25000, "rules"))
+        m.assert_not_called()
+
+    def test_freeform_post_goes_to_claude(self):
+        self.assertIsNone(T.build_fields(T.rule_extract(*self.FREEFORM)))
+        fields, m, stats = self.extract("claude", *self.FREEFORM)
+        m.assert_called_once()
+        self.assertEqual((fields["model"], fields["storage"], fields["price"], fields["extractor"]),
+                         ("iPhone 17 Pro", "256GB", 36000, "claude"))
+        self.assertEqual(stats["claude"], 1)
+
+    def test_rules_only_mode_never_calls_claude(self):
+        fields, m, _ = self.extract("rules", *self.FREEFORM)
+        self.assertIsNone(fields)
+        m.assert_not_called()
+
+    def test_accessory_post_not_sent_to_claude(self):
+        fields, m, _ = self.extract("claude", "[販售] 台北 iphone 17 pro max 原廠織紋殼",
+                                    "[型號] iPhone 17 Pro Max 原廠織紋殼\n[售價] 1,200\n")
+        self.assertIsNone(fields)
+        m.assert_not_called()
+
+    def test_claude_error_is_counted_not_raised(self):
+        def boom(t, b):
+            raise RuntimeError("API 無法連線")
+        fields, _, stats = self.extract("claude", *self.FREEFORM, claude=boom)
+        self.assertIsNone(fields)
+        self.assertEqual(stats["errors"], 1)
+
+    def test_claude_without_price_is_skipped(self):
+        fields, _, _ = self.extract("claude", *self.FREEFORM, claude=lambda t, b: {**self.CLAUDE_OUT, "price": None})
+        self.assertIsNone(fields)
+
+    def test_schema_requires_every_field(self):
+        props = T.CLAUDE_SCHEMA["properties"]
+        self.assertEqual(set(T.CLAUDE_SCHEMA["required"]), set(props))
+        self.assertFalse(T.CLAUDE_SCHEMA["additionalProperties"])
