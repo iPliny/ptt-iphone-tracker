@@ -89,3 +89,7 @@
 - 開發用的沙箱環境通常連不到 ptt.cc；GitHub Actions 可以。請以離線測試驗證，需要看真實頁面時用 Actions。
 - `data/` 裡的 CSV 由排程產生並自動 commit，不要手動編輯；改程式的 PR 不要帶 `data/` 的變動，以免和排程衝突。
 - 改動走 branch + PR，不直接推 main。
+
+### 2026-10-11 網址搬到 macshop.crawlsnek.com
+- GitHub Pages 接上自訂網域 `macshop.crawlsnek.com`（Cloudflare CNAME → ipliny.github.io，DNS only），舊的 github.io 網址由 GitHub 自動轉址。`SITE_URL` 與 `jp/` 頁的 canonical／hreflang 都用新網域。
+- 所有頁面頁尾有「由 CrawlSnek 提供」連到 https://crawlsnek.com/ 。
