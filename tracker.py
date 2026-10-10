@@ -1093,6 +1093,7 @@ def process_article(url, listings, use_llm, stats, multi=None):
     price_confirmed = bool(row and row.get("body_hash") == h)
 
     first_seen = None
+    skipped_row = None
     if REPARSE and use_llm and row is not None and row.get("status") == "略過":
         prev = skipped_from(url) if row.get("model") else None
         if prev and safe_extract(art, stats) is not None:
@@ -1102,7 +1103,7 @@ def process_article(url, listings, use_llm, stats, multi=None):
         else:
             # 規則改進後，先前略過的文章當成新文章重新判斷，但保留第一次看到的時間
             first_seen = row.get("first_seen")
-            del listings[url]
+            skipped_row = listings.pop(url)
             row = None
 
     if row is None:
@@ -1110,6 +1111,12 @@ def process_article(url, listings, use_llm, stats, multi=None):
             return  # 新文章要等有 LLM 時才解析
         print("    [NEW] 新文章，解析欄位。")
         fields = safe_extract(art, stats)
+        if fields is None and art.get("extract_failed"):
+            # Claude 暫時失敗：不記成略過（略過列之後不回訪），留給下次重新萃取
+            if skipped_row is not None:
+                listings[url] = skipped_row
+            print("    [RETRY] 萃取失敗，下次再試。")
+            return
         if multi is not None:
             if fields is None and record_multi(url, art, multi, first_seen):
                 print(f"    [MULTI] 多品項文章，拆出 {len(multi[url])} 支 iPhone（只算刊登價）。")
@@ -1198,7 +1205,12 @@ def safe_extract(art, stats):
         # 規則抓不到（賣家沒照範本寫）才問 Claude；配件文、一篇賣多支照舊略過
         if EXTRACTOR != "claude" or not_single_iphone(art):
             return None
-        fields = build_fields(claude_extract(title, body))
+        try:
+            parsed = claude_extract(title, body)
+        except Exception:
+            art["extract_failed"] = True  # 與「確定不是單支 iPhone」區分，新文章不寫成略過
+            raise
+        fields = build_fields(parsed)
         stats["claude"] = stats.get("claude", 0) + 1
         if fields is None:
             return None

@@ -806,6 +806,25 @@ class ClaudeFallbackTest(unittest.TestCase):
         self.assertIsNone(fields)
         self.assertEqual(stats["errors"], 1)
 
+    def test_new_post_not_marked_skipped_when_claude_fails(self):
+        url = "/bbs/MacShop/M.1790000000.A.001.html"
+        title, body = self.FREEFORM
+        html = (f'<div id="main-content"><div class="article-metaline"><span class="article-meta-tag">標題'
+                f'</span><span class="article-meta-value">{title}</span></div>{body}\n--\n※ 發信站: x\n</div>')
+
+        def boom(t, b):
+            raise RuntimeError("timeout")
+        listings, stats = {}, {"errors": 0}
+        with patch.object(T, "EXTRACTOR", "claude"), patch.object(T, "claude_extract", side_effect=boom), \
+                patch.object(T, "fetch", return_value=(200, html)), patch.object(T, "log_event"):
+            T.process_article(url, listings, True, stats)
+            self.assertNotIn(url, listings)
+            with patch.object(T, "REPARSE", True):
+                listings[url] = {"source_url": url, "status": "略過", "first_seen": "2026-10-01 10:00"}
+                T.process_article(url, listings, True, stats)
+                self.assertEqual(listings[url]["first_seen"], "2026-10-01 10:00")
+        self.assertEqual(stats["errors"], 2)
+
     def test_claude_without_price_is_skipped(self):
         fields, _, _ = self.extract("claude", *self.FREEFORM, claude=lambda t, b: {**self.CLAUDE_OUT, "price": None})
         self.assertIsNone(fields)
