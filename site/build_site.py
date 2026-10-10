@@ -24,7 +24,7 @@ STATIC_FILES = ["index.html", "model.html", "common.js", "app.js", "model.js", "
                 "prices.html", "prices.js", "prices.css", "official-prices.json"]
 CSV_FILES = ["listings.csv", "events.csv", "market_summary.csv", "price_event_times.csv", "multi_items.csv"]
 TAIPEI = timezone(timedelta(hours=8))
-SITE_URL = "https://ipliny.github.io/ptt-iphone-tracker/"  # sitemap.xml 用的正式網址
+SITE_URL = "https://macshop.crawlsnek.com/"  # sitemap.xml 用的正式網址
 
 TRACKED_STATUSES = {"在售", "交易中", "已售出", "已刪除"}
 MULTI_STATUS = "多品項"  # 一篇賣多支時拆出的 iPhone：只算刊登數與刊登價

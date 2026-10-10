@@ -492,6 +492,7 @@ def page_html(issue, issues, root):
     out.append(f"""  </main>
   <footer class="wrap foot">
     <p>{COLUMN_TITLE}由 <a href="{root}">{BRAND}</a> 依 PTT MacShop 版公開文章自動整理，每週日晚上 8 點（台灣時間）更新。</p>
+    <p class="by-crawlsnek">由 <a href="https://crawlsnek.com/">CrawlSnek</a> 提供</p>
   </footer>
 </body>
 </html>
