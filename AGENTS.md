@@ -86,6 +86,11 @@
 - `listings.csv` 最後一欄新增 `extractor`（`rules`／`claude`／`ollama`），空白＝加此欄前的舊列。網站不使用此欄。
 - 測試以 `claude_extract` 替身執行，不連網、不需要金鑰。
 
+### 2026-10-12 Blogger 週報轉貼
+- POYU 的「iPhone二手週報」由 ChatGPT 排程寫好、Email 投稿到 Blogger（https://tcssh.blogspot.com/）。`site/blog.py` 讀公開 feed（標籤「週報」＋「iPhone」、標題以「iPhone二手週報」開頭），每篇存成 `data/blog/<台灣時間發布日>.json`；Blogger 上改過就覆寫，feed 範圍內消失（轉草稿／刪除）就移除。`.github/workflows/blog.yml` 每天 UTC 12:30 執行並觸發部署；`--feed <檔案>` 可改讀 Blogger 匯出檔，不刪舊檔。
+- 網站 `weekly/`（列表）與 `weekly/<發布日>/`（全文轉貼）。各篇 canonical 指向 Blogger 原文，sitemap 只列 `weekly/`。內文只留 p、h2、strong、a 等排版標籤，指向本站（含舊 github.io）的連結改成站內相對路徑。
+- 和 `column/`（每週日自動產生的統計週報）是兩個系列，互相連結。
+
 ## 開發規則
 - 修改後必須跑 `python -m unittest`，測試不需網路也不需 Ollama（`fetch`、`llm_extract` 皆被替換成假的）。
 - 改動售出判斷（`detect_status`）或規則萃取（`rule_extract`、`is_brand_new`）時，把觸發問題的實際文章本文精簡後加進 `tests/test_tracker.py` 當回歸測試。

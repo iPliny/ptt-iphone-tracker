@@ -1,0 +1,36 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+<!-- 依 Blogger 公開 feed（/feeds/posts/default/-/週報/iPhone）格式手寫的精簡範例 -->
+<title type="text">老鍋見聞錄</title>
+<entry>
+  <id>tag:blogger.com,1999:blog-1.post-3</id>
+  <published>2026-10-11T04:04:02.874-07:00</published>
+  <updated>2026-10-11T04:04:02.874-07:00</updated>
+  <category scheme="http://www.blogger.com/atom/ns#" term="iPhone"/>
+  <category scheme="http://www.blogger.com/atom/ns#" term="週報"/>
+  <category scheme="http://www.blogger.com/atom/ns#" term="iPhone 18 Pro"/>
+  <title type="text">iPhone二手週報#3：18 Pro報價排成一條線，舊Pro怎麼選？（2026/10/11）</title>
+  <content type="html">&lt;p&gt;這週的 MacShop iPhone 刊登，&lt;strong&gt;一邊很整齊&lt;/strong&gt;。&lt;/p&gt;
+&lt;p&gt;想先查，可到&lt;a href="https://ipliny.github.io/ptt-iphone-tracker/"&gt;iPhone 二手交易追蹤網站&lt;/a&gt;。&lt;/p&gt;
+&lt;h2 style="color:red" onclick="x()"&gt;18 Pro：價格已經排好隊&lt;/h2&gt;
+&lt;script&gt;alert(1)&lt;/script&gt;&lt;p&gt;看&lt;a href="https://macshop.crawlsnek.com/model.html?m=iPhone%2018%20Pro"&gt;機型頁&lt;/a&gt;或&lt;a href="javascript:alert(1)"&gt;壞連結&lt;/a&gt;。&lt;/p&gt;
+&lt;small&gt;來源：&lt;a href="https://github.com/iPliny/ptt-iphone-tracker/tree/abc/data"&gt;本期資料&lt;/a&gt;&lt;/small&gt;</content>
+  <link rel="alternate" type="text/html" href="https://tcssh.blogspot.com/2026/10/iphone318-propro20261011.html" title="x"/>
+</entry>
+<entry>
+  <id>tag:blogger.com,1999:blog-1.post-9</id>
+  <published>2026-10-10T04:00:00.000-07:00</published>
+  <updated>2026-10-10T04:00:00.000-07:00</updated>
+  <title type="text">日本好市多週報#3：秋天的餐桌</title>
+  <content type="html">&lt;p&gt;不是 iPhone。&lt;/p&gt;</content>
+  <link rel="alternate" type="text/html" href="https://tcssh.blogspot.com/2026/10/costco.html"/>
+</entry>
+<entry>
+  <id>tag:blogger.com,1999:blog-1.post-2</id>
+  <published>2026-10-04T04:10:28.743-07:00</published>
+  <updated>2026-10-04T04:10:28.743-07:00</updated>
+  <title type="text">iPhone二手週報#2：17 Pro的價差</title>
+  <content type="html">&lt;p&gt;同樣是 iPhone 17 Pro 256GB。&lt;/p&gt;</content>
+  <link rel="alternate" type="text/html" href="https://tcssh.blogspot.com/2026/10/iphone217-pro2026104.html"/>
+</entry>
+</feed>

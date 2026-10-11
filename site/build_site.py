@@ -404,12 +404,13 @@ def write_outlier_report(data_dir=DATA_DIR):
     return len(rows)
 
 
-def sitemap_xml(data, today=None, column_urls=()):
-    """首頁、歷代官方價格頁、每個機型頁（model.html?m=...，和網站內連結相同），以及每週專欄的入口與各期。"""
+def sitemap_xml(data, today=None, column_urls=(), extra_urls=()):
+    """首頁、歷代官方價格頁、每個機型頁（model.html?m=...，和網站內連結相同）、每週專欄的入口與各期，以及 extra_urls。"""
     lastmod = (today or datetime.now(TAIPEI).date()).isoformat()
     urls = [SITE_URL, SITE_URL + "prices.html", SITE_URL + "jp/", SITE_URL + "jp/ja/"] + [SITE_URL + "model.html?" + urlencode({"m": m["model"]}) for m in data["model_totals"]]
     if column_urls:
         urls += [SITE_URL + "column/"] + list(column_urls)
+    urls += list(extra_urls)
     items = "".join(f"  <url><loc>{escape(u)}</loc><lastmod>{lastmod}</lastmod></url>\n" for u in urls)
     return ('<?xml version="1.0" encoding="UTF-8"?>\n'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + items + "</urlset>\n")
@@ -430,6 +431,8 @@ def build(out_dir, data_dir=DATA_DIR):
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
     from column import render_column  # column.py 也會 import 這個檔，放在這裡避免循環
     column_urls = render_column(out_dir, data_dir)
+    from blog import render_blog
+    blog_urls = render_blog(out_dir, data_dir)
     from jp_build import build_jp
     build_jp(out_dir, data_dir)
     # 含日本頁的 HTML 統一代換正式網址；不改站內相對連結或 GA 官方碼。
@@ -440,7 +443,7 @@ def build(out_dir, data_dir=DATA_DIR):
     with open(os.path.join(out_dir, "robots.txt"), "w", encoding="utf-8") as f:
         f.write(f"User-agent: *\nAllow: /\nSitemap: {SITE_URL}sitemap.xml\n")
     with open(os.path.join(out_dir, "sitemap.xml"), "w", encoding="utf-8") as f:
-        f.write(sitemap_xml(data, column_urls=column_urls))
+        f.write(sitemap_xml(data, column_urls=column_urls, extra_urls=blog_urls))
     return data
 
 
