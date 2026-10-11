@@ -6,9 +6,23 @@ import sys
 import tempfile
 import unittest
 from datetime import datetime
+from html.parser import HTMLParser
+from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "site"))
 import build_site as S  # noqa: E402
+
+
+class HeadLinks(HTMLParser):
+    def __init__(self, html):
+        super().__init__()
+        self.links = []
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "link":
+            self.links.append(dict(attrs))
 
 LISTING_HEADER = ["source_url", "post_time", "title", "status", "sold_detected_at", "days_to_sell",
                   "model", "storage", "全新未拆封機", "battery_health", "price", "first_price",
@@ -138,10 +152,46 @@ class BuildSiteTest(unittest.TestCase):
     def test_build_writes_site(self):
         out = os.path.join(self.dir, "out")
         S.build(out, self.dir)
-        for name in S.STATIC_FILES + ["data.json", "data/listings.csv", "sitemap.xml"]:
+        for name in S.STATIC_FILES + ["data.json", "data/listings.csv", "sitemap.xml", "robots.txt"]:
             self.assertTrue(os.path.exists(os.path.join(out, name)), name)
         with open(os.path.join(out, "data.json"), encoding="utf-8") as f:
             self.assertIn("days", json.load(f))
+
+    def test_site_url_drives_robots_and_html_metadata(self):
+        # 換一個正式網址重建，驗證各頁真的共用 SITE_URL，而非剛好寫死相同字串。
+        for base in (S.SITE_URL, "https://preview.example.test/"):
+            with self.subTest(base=base), patch.object(S, "SITE_URL", base):
+                out = Path(self.dir) / "seo-site"
+                S.build(out, self.dir)
+                self.assertEqual((out / "robots.txt").read_text(),
+                                 f"User-agent: *\nAllow: /\nSitemap: {base}sitemap.xml\n")
+                for name, suffix in (("index.html", ""), ("prices.html", "prices.html"),
+                                     ("jp/index.html", "jp/"), ("jp/ja/index.html", "jp/ja/")):
+                    html = (out / name).read_text()
+                    links = HeadLinks(html).links
+                    self.assertEqual([l["href"] for l in links if l.get("rel") == "canonical"],
+                                     [base + suffix], name)
+                    for link in links:
+                        if "hreflang" in link:
+                            self.assertTrue(link["href"].startswith(base), (name, link))
+                model = (out / "model.html").read_text()
+                self.assertIn(f'<meta name="site-url" content="{base}">', model)
+                self.assertFalse(any(l.get("rel") == "canonical" for l in HeadLinks(model).links))
+                for path in out.rglob("*.html"):
+                    self.assertNotIn("{{SITE_URL}}", path.read_text(), path)
+                    self.assertNotIn("ipliny.github.io", path.read_text().lower(), path)
+                from xml.etree import ElementTree
+                root = ElementTree.parse(out / "sitemap.xml")
+                locs = root.findall("{*}url/{*}loc")
+                self.assertTrue(locs)
+                self.assertTrue(all(loc.text.startswith(base) for loc in locs))
+
+    def test_static_sources_have_no_old_host_or_hardcoded_site_url(self):
+        for path in Path(S.SITE_DIR).rglob("*"):
+            if path.suffix in (".html", ".js"):
+                text = path.read_text()
+                self.assertNotIn("ipliny.github.io", text.lower(), path)
+                self.assertNotIn(S.SITE_URL, text, path)
 
     def test_sitemap_lists_home_and_model_pages(self):
         from datetime import date

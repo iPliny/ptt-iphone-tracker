@@ -9,6 +9,13 @@
 
   const params = new URLSearchParams(location.search);
   const model = params.get("m") || "";
+  // 同一機型的容量／篩選參數共用 canonical；空白機型不宣告 canonical。
+  if (model) {
+    const canonical = document.createElement("link");
+    canonical.rel = "canonical";
+    canonical.href = $('meta[name="site-url"]').content + "model.html?" + new URLSearchParams({ m: model });
+    document.head.appendChild(canonical);
+  }
   let storage = params.get("s");  // null = 全部容量
   let D = null;
   let mine = [];       // 這個機型的全部文章

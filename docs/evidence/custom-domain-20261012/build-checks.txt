@@ -1,0 +1,8 @@
+python -m unittest: 151 tests, OK
+node --test tests/*.cjs: 53 tests, 53 pass, 0 fail
+python site/build_site.py --out _site: 800 articles, 90 days, 1000 events
+robots.txt: User-agent: * / Allow: / / Sitemap: https://macshop.crawlsnek.com/sitemap.xml
+sitemap.xml: 41 URLs, all https://macshop.crawlsnek.com/
+grep -r "ipliny.github.io" _site: no output, exit 1
+git diff --check: passed
+Protected paths unchanged; GA scripts and relative links unchanged.

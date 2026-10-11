@@ -1,5 +1,7 @@
 # PTT MacShop iPhone 二手機成交追蹤
 
+網站：[PTT MacShop交易觀測](https://macshop.crawlsnek.com/)。
+
 每 6 小時由 GitHub Actions 自動掃描 PTT MacShop 版的 iPhone 販售文，回訪還在賣的文章判斷是否已售出，結果 commit 回 `data/`。不需要開電腦。
 
 ## 怎麼運作

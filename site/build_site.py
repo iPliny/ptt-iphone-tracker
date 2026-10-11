@@ -13,6 +13,7 @@ import os
 import shutil
 import statistics
 from decimal import Decimal, ROUND_HALF_UP
+from pathlib import Path
 from urllib.parse import urlencode
 from xml.sax.saxutils import escape
 from datetime import date, datetime, timedelta, timezone
@@ -24,7 +25,7 @@ STATIC_FILES = ["index.html", "model.html", "common.js", "app.js", "model.js", "
                 "prices.html", "prices.js", "prices.css", "official-prices.json"]
 CSV_FILES = ["listings.csv", "events.csv", "market_summary.csv", "price_event_times.csv", "multi_items.csv"]
 TAIPEI = timezone(timedelta(hours=8))
-SITE_URL = "https://macshop.crawlsnek.com/"  # sitemap.xml 用的正式網址
+SITE_URL = "https://macshop.crawlsnek.com/"  # sitemap、robots 與 HTML 中繼資料共用的正式網址
 
 TRACKED_STATUSES = {"在售", "交易中", "已售出", "已刪除"}
 MULTI_STATUS = "多品項"  # 一篇賣多支時拆出的 iPhone：只算刊登數與刊登價
@@ -431,6 +432,13 @@ def build(out_dir, data_dir=DATA_DIR):
     column_urls = render_column(out_dir, data_dir)
     from jp_build import build_jp
     build_jp(out_dir, data_dir)
+    # 含日本頁的 HTML 統一代換正式網址；不改站內相對連結或 GA 官方碼。
+    for path in Path(out_dir).rglob("*.html"):
+        html = path.read_text(encoding="utf-8")
+        if "{{SITE_URL}}" in html:
+            path.write_text(html.replace("{{SITE_URL}}", SITE_URL), encoding="utf-8")
+    with open(os.path.join(out_dir, "robots.txt"), "w", encoding="utf-8") as f:
+        f.write(f"User-agent: *\nAllow: /\nSitemap: {SITE_URL}sitemap.xml\n")
     with open(os.path.join(out_dir, "sitemap.xml"), "w", encoding="utf-8") as f:
         f.write(sitemap_xml(data, column_urls=column_urls))
     return data

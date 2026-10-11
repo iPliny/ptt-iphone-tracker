@@ -19,7 +19,8 @@ async function render(colors, listings) {
   const data = { colors, listings, models: [], events: [], last_checked: '' };
   const storage = new Map();
   const context = {
-    document: { querySelector: element }, location: { search: '?m=iPhone+17+Pro+Max' },
+    document: { querySelector: element, createElement: () => ({}), head: { appendChild() {} } },
+    location: { search: '?m=iPhone+17+Pro+Max' },
     history: { replaceState() {} }, URLSearchParams, PttCommon: common, PttWatchlist: watchlist,
     window: { addEventListener() {}, localStorage: {
       getItem: (k) => storage.get(k) || null, setItem: (k, v) => storage.set(k, v), removeItem: (k) => storage.delete(k),

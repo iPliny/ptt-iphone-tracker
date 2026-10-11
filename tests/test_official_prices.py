@@ -92,7 +92,10 @@ class OfficialPriceTests(unittest.TestCase):
             with patch.object(module, 'STATIC_FILES', ASSETS):
                 result = module.build(str(out), str(Path(directory) / 'empty-input'))
             for asset in ASSETS:
-                self.assertEqual((out / asset).read_bytes(), (ROOT / 'site' / asset).read_bytes())
+                expected = (ROOT / 'site' / asset).read_bytes()
+                if asset.endswith('.html'):
+                    expected = expected.replace(b'{{SITE_URL}}', module.SITE_URL.encode())
+                self.assertEqual((out / asset).read_bytes(), expected)
             self.assertEqual(result['counts']['total'], 0)
             self.assertNotIn('official_prices', result)
             self.assertEqual(json.loads((out / 'data.json').read_text(encoding='utf-8')), result)

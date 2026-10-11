@@ -99,3 +99,5 @@
 ### 2026-10-11 網址搬到 macshop.crawlsnek.com
 - GitHub Pages 接上自訂網域 `macshop.crawlsnek.com`（Cloudflare CNAME → ipliny.github.io，DNS only），舊的 github.io 網址由 GitHub 自動轉址。`SITE_URL` 與 `jp/` 頁的 canonical／hreflang 都用新網域。
 - 所有頁面頁尾有「由 CrawlSnek 提供」連到 https://crawlsnek.com/ 。
+- `build_site.py` 由 `SITE_URL` 產生 robots.txt、sitemap 並代換 HTML 的 `{{SITE_URL}}`；首頁／prices 有靜態 canonical，機型頁由 `model.js` 以 `URLSearchParams` 產生只含 `m` 的 canonical，站內連結保持相對路徑。
+- Search Console 新增 `https://macshop.crawlsnek.com/` 網址前置字元資源，優先用原有內嵌 GA 官方碼驗證，必要時才加 HTML 標記；提交新 sitemap、保留舊資源，不對 github.io 子路徑使用網址變更工具。
