@@ -92,5 +92,49 @@ class BlogTest(unittest.TestCase):
         self.assertFalse(any("weekly/2026" in u for u in locs))  # 各篇 canonical 在 Blogger
 
 
+    def draft(self, **kw):
+        d = {"id": "2026-10-18", "title": "iPhone二手週報#4：測試", "description": "本週 iPhone 17 Pro 二手刊登價整理。",
+             "labels": ["iPhone", "二手市場", "週報", "iPhone 17 Pro", "iPhone二手價格"],
+             "html": "<p>" + "內文" * 200 + '<a href="https://macshop.crawlsnek.com/model.html?m=iPhone%2017%20Pro">機型頁</a></p><script>x</script>',
+             "period": "2026/10/11–10/17", "commit": "abc"}
+        d.update(kw)
+        return d
+
+    def test_publish_validates_and_keeps_first_publish_time(self):
+        d = os.path.join(self.dir, "weekly")
+        for bad in (self.draft(description="字" * 151), self.draft(id="10/18"), self.draft(html="<p>太短 <a href='https://macshop.crawlsnek.com/'>站</a></p>"),
+                    self.draft(html="<p>" + "內文" * 200 + "</p>"), self.draft(title=" ")):
+            with self.assertRaises(ValueError):
+                B.publish(bad, d)
+        self.assertFalse(os.path.exists(d))
+        from datetime import datetime
+        t1, t2 = (datetime(2026, 10, 18, h, tzinfo=B.TAIPEI) for h in (20, 22))
+        path = B.publish(self.draft(), d, now=t1)
+        B.publish(self.draft(title="iPhone二手週報#4：改標題"), d, now=t2)
+        post = json.loads(read(path))
+        self.assertEqual(post["published"], "2026-10-18T20:00:00+08:00")
+        self.assertEqual(post["title"], "iPhone二手週報#4：改標題")
+        self.assertNotIn("<script", post["html"])
+
+    def test_site_posts_canonical_to_site_and_listed_in_sitemap(self):
+        write_csv(os.path.join(self.dir, "listings.csv"), LISTING_HEADER, [])
+        write_csv(os.path.join(self.dir, "events.csv"), S_EVENT_HEADER, [])
+        B.sync(self.posts, os.path.join(self.dir, "blog"))
+        B.publish(self.draft(), os.path.join(self.dir, "weekly"))
+        out = os.path.join(self.dir, "out")
+        S.build(out, self.dir)
+        page = read(os.path.join(out, "weekly", "2026-10-18", "index.html"))
+        url = f"{S.SITE_URL}weekly/2026-10-18/"
+        self.assertIn(f'<link rel="canonical" href="{url}">', page)
+        self.assertIn('"@type": "Article"', page)
+        self.assertNotIn("轉貼自", page)
+        self.assertIn('href="../../model.html?m=iPhone%2017%20Pro"', page)
+        self.assertIn("weekly/2026-10-11/", page)  # 歷期列表含 Blogger 轉貼
+        ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+        locs = [e.text for e in ElementTree.parse(os.path.join(out, "sitemap.xml")).findall("s:url/s:loc", ns)]
+        self.assertIn(url, locs)
+        self.assertNotIn(f"{S.SITE_URL}weekly/2026-10-11/", locs)
+
+
 if __name__ == "__main__":
     unittest.main()

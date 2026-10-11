@@ -6,6 +6,10 @@
     python site/blog.py --feed 匯出.atom  # 改讀 Blogger 匯出檔或存下來的 feed
 每篇存成 data/blog/<台灣時間發布日>.json；Blogger 上改過就覆寫，從 feed 消失（轉草稿／刪除）就移除。
 建置網站時 build_site.py 呼叫 render_blog，輸出 weekly/ 與 weekly/<發布日>/，canonical 指向 Blogger 原文。
+
+2026-10-12 起週報改在本站原創發布（POYU 決定，SEO 為主）：每週排程寫好稿後
+    python site/blog.py --publish 草稿.json
+檢查並清理後寫入 data/weekly/<發布日>.json。這些文章 canonical 指向本站、列入 sitemap。
 """
 import argparse
 import html
@@ -27,6 +31,8 @@ BLOG_URL = "https://tcssh.blogspot.com/"
 FEED_URL = BLOG_URL + "feeds/posts/default/-/" + quote("週報") + "/iPhone?max-results=150"
 TITLE_PREFIX = "iPhone二手週報"
 BLOG_DIR = os.path.join(S.DATA_DIR, "blog")
+WEEKLY_DIR = os.path.join(S.DATA_DIR, "weekly")  # 本站原創週報
+DESC_MAX = 150   # 搜尋說明字數上限
 SECTION = "iPhone 二手週報"
 BRAND = "PTT MacShop交易觀測"
 GA_ID = "G-G3GH12TQSZ"
@@ -190,15 +196,54 @@ def sync(posts, blog_dir=BLOG_DIR, prune_since=None):
     return changed, removed
 
 
-def load_posts(blog_dir=BLOG_DIR):
-    if not os.path.isdir(blog_dir):
-        return []
-    posts = []
-    for name in sorted(os.listdir(blog_dir)):
-        if name.endswith(".json"):
-            with open(os.path.join(blog_dir, name), encoding="utf-8") as f:
-                posts.append(json.load(f))
-    return sorted(posts, key=lambda p: p["published"], reverse=True)
+def load_posts(blog_dir=BLOG_DIR, weekly_dir=WEEKLY_DIR):
+    """Blogger 轉貼與本站原創合併，新的在前；同一天兩邊都有時以本站為準。"""
+    by_id = {}
+    for d, origin in ((blog_dir, "blogger"), (weekly_dir, "site")):
+        if not os.path.isdir(d):
+            continue
+        for name in sorted(os.listdir(d)):
+            if name.endswith(".json"):
+                with open(os.path.join(d, name), encoding="utf-8") as f:
+                    p = json.load(f)
+                p["origin"] = origin
+                if origin == "site":
+                    p["url"] = f"{S.SITE_URL}weekly/{p['id']}/"
+                by_id[p["id"]] = p
+    return sorted(by_id.values(), key=lambda p: p["published"], reverse=True)
+
+
+def publish(draft, weekly_dir=WEEKLY_DIR, now=None):
+    """檢查排程寫好的草稿（id、title、description、labels、html，可附 period、commit），清理內文後寫入。
+    有問題丟 ValueError，不寫檔。回傳寫入的路徑。"""
+    missing = [k for k in ("id", "title", "description", "html") if not str(draft.get(k) or "").strip()]
+    if missing:
+        raise ValueError(f"缺少欄位：{missing}")
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", draft["id"]):
+        raise ValueError("id 要是 YYYY-MM-DD")
+    if len(draft["description"]) > DESC_MAX:
+        raise ValueError(f"搜尋說明 {len(draft['description'])} 字，超過 {DESC_MAX}")
+    labels = draft.get("labels") or []
+    if len(labels) != len(set(labels)):
+        raise ValueError("labels 重複")
+    body = clean_html(draft["html"])
+    if "{{ROOT}}" not in body:
+        raise ValueError("內文至少要有一個連回本站的連結")
+    text = re.sub(r"<[^>]+>", "", body)
+    if len(text) < 300:
+        raise ValueError(f"內文只有 {len(text)} 字，可能沒寫完")
+    published = (now or datetime.now(TAIPEI)).isoformat(timespec="seconds")
+    post = {"id": draft["id"], "title": draft["title"].strip(), "published": published,
+            "description": draft["description"].strip(), "labels": labels, "html": body,
+            "period": draft.get("period", ""), "commit": draft.get("commit", "")}
+    os.makedirs(weekly_dir, exist_ok=True)
+    path = os.path.join(weekly_dir, post["id"] + ".json")
+    if os.path.exists(path):  # 重發同一期：保留第一次的發布時間
+        with open(path, encoding="utf-8") as f:
+            post["published"] = json.load(f)["published"]
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(json.dumps(post, ensure_ascii=False, indent=1) + "\n")
+    return path
 
 
 # ---------- 頁面 ----------
@@ -206,7 +251,7 @@ def load_posts(blog_dir=BLOG_DIR):
 E = html.escape
 
 
-def head(title, description, canonical, root, og_type="article"):
+def head(title, description, canonical, root, og_type="article", ld=None):
     return f"""<!doctype html>
 <html lang="zh-Hant-TW">
 <head>
@@ -233,14 +278,14 @@ def head(title, description, canonical, root, og_type="article"):
   <meta property="og:description" content="{E(description)}">
   <meta property="og:url" content="{E(canonical)}">
   <meta property="og:locale" content="zh_TW">
-  <link rel="stylesheet" href="{root}style.css">
+  <link rel="stylesheet" href="{root}style.css">{ld or ""}
 </head>
 <body class="column">
 """
 
 
 FOOT = f"""  <footer class="wrap foot">
-    <p>{SECTION}原文發表於 <a href="{BLOG_URL}" rel="noopener">老鍋見聞錄</a>，本站轉貼全文；統計資料來自 <a href="{{root}}">{BRAND}</a>。</p>
+    <p>{SECTION}以 <a href="{{root}}">{BRAND}</a> 的資料撰寫；#1～#3 原文發表於 <a href="{BLOG_URL}" rel="noopener">老鍋見聞錄</a>。</p>
     <p class="by-crawlsnek">由 <a href="https://crawlsnek.com/">CrawlSnek</a> 提供</p>
   </footer>
 </body>
@@ -259,8 +304,19 @@ def post_html(post, posts, root):
     others = "".join(
         f'<li><a href="{root}weekly/{p["id"]}/"{current if p is post else ""}>{E(p["title"])}</a></li>'
         for p in posts)
-    # 原文在 Blogger，canonical 指回原文，避免兩邊搶同一篇的搜尋排名
-    return (head(post["title"], post["description"], post["url"], root) + f"""  <header class="top">
+    if post["origin"] == "site":
+        source = ""
+        data = {"@context": "https://schema.org", "@type": "Article", "headline": post["title"],
+                "description": post["description"], "inLanguage": "zh-Hant-TW", "keywords": post.get("labels", []),
+                "datePublished": post["published"], "dateModified": post["published"], "mainEntityOfPage": post["url"],
+                "author": {"@type": "Organization", "name": BRAND, "url": S.SITE_URL},
+                "publisher": {"@type": "Organization", "name": BRAND, "url": S.SITE_URL}}
+        ld = '\n  <script type="application/ld+json">' + json.dumps(data, ensure_ascii=False).replace("</", "<\\/") + "</script>"
+    else:
+        source = f'・轉貼自 <a href="{E(post["url"])}" rel="noopener">Blogger 原文</a>'
+        ld = None
+    # canonical：本站原創指本站；Blogger 轉貼指回原文，避免兩邊搶同一篇的搜尋排名
+    return (head(post["title"], post["description"], post["url"], root, ld=ld) + f"""  <header class="top">
     <div class="wrap">
       <nav class="crumbs" aria-label="breadcrumb"><a href="{root}">{BRAND}</a> › <a href="{root}weekly/">{SECTION}</a> › <span>{E(short_date(post["published"]))}</span></nav>
     </div>
@@ -268,7 +324,7 @@ def post_html(post, posts, root):
   <main class="wrap">
     <article class="card col-article blog-post">
       <h1>{E(post["title"])}</h1>
-      <p class="hint"><time datetime="{post["published"]}">{short_date(post["published"])} 發表</time>・轉貼自 <a href="{E(post["url"])}" rel="noopener">Blogger 原文</a></p>
+      <p class="hint"><time datetime="{post["published"]}">{short_date(post["published"])} 發表</time>{source}</p>
       {body}
     </article>
     <section class="card back-issues"><h2>歷期{SECTION}</h2><ul>{others}</ul>
@@ -290,7 +346,7 @@ def index_html(posts, root):
   <main class="wrap">
     <section class="card back-issues blog-index">
       <h1>{SECTION}</h1>
-      <p class="hint">每週一篇的 iPhone 二手市場觀察，原文發表於 Blogger，這裡轉貼全文。</p>
+      <p class="hint">每週一篇的 PTT MacShop iPhone 二手市場觀察：刊登價、改價、售出狀態與買賣取捨。</p>
       <ul>{items}</ul>
     </section>
   </main>
@@ -299,7 +355,7 @@ def index_html(posts, root):
 
 def render_blog(out_dir, data_dir=S.DATA_DIR):
     """輸出 weekly/index.html 與 weekly/<發布日>/index.html；回傳要列入 sitemap 的網址（只有入口頁）。"""
-    posts = load_posts(os.path.join(data_dir, "blog"))
+    posts = load_posts(os.path.join(data_dir, "blog"), os.path.join(data_dir, "weekly"))
     if not posts:
         return []
     base = os.path.join(out_dir, "weekly")
@@ -309,14 +365,26 @@ def render_blog(out_dir, data_dir=S.DATA_DIR):
             f.write(post_html(p, posts, "../../"))
     with open(os.path.join(base, "index.html"), "w", encoding="utf-8") as f:
         f.write(index_html(posts, "../"))
-    return [f"{S.SITE_URL}weekly/"]  # 各篇 canonical 在 Blogger，不列入本站 sitemap
+    # Blogger 轉貼的 canonical 在 Blogger，不列入本站 sitemap
+    return [f"{S.SITE_URL}weekly/"] + [p["url"] for p in posts if p["origin"] == "site"]
 
 
 def main():
     ap = argparse.ArgumentParser(description="把 Blogger 上的 iPhone二手週報同步到 data/blog/")
     ap.add_argument("--feed", help="改讀本機的 Atom 檔（Blogger 匯出或存下來的 feed），不連網、不刪舊檔")
     ap.add_argument("--data", default=S.DATA_DIR, help="資料目錄（預設 data/）")
+    ap.add_argument("--publish", metavar="草稿.json", help="檢查本站原創週報草稿並寫入 data/weekly/")
     args = ap.parse_args()
+    if args.publish:
+        with open(args.publish, encoding="utf-8") as f:
+            draft = json.load(f)
+        try:
+            path = publish(draft, os.path.join(args.data, "weekly"))
+        except ValueError as e:
+            print(f"[WEEKLY] 草稿有問題，未寫入：{e}", file=sys.stderr)
+            sys.exit(1)
+        print(f"[WEEKLY] 已寫入 {path}")
+        return
     if args.feed:
         with open(args.feed, encoding="utf-8") as f:
             text = f.read()
