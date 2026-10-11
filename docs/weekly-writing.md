@@ -32,7 +32,7 @@ POYU 2026-10-12 決定：週報只發在本站（https://macshop.crawlsnek.com/w
 2. `python site/blog.py --publish 草稿.json`：檢查欄位、字數、至少一個站內連結，清理後寫入 `data/weekly/<出刊日>.json`。有錯就修稿再跑。
 3. `python site/build_site.py --out /tmp/site` 確認 `weekly/<出刊日>/index.html` 產生、canonical 指向本站，再跑 `python -m unittest`。
 4. 開分支、commit 只含 `data/weekly/<出刊日>.json`，開 PR，**不要合併**。
-5. 把建好的文章頁存成 `/mnt/project-files/weekly/<出刊日>.html`（可單獨開啟預覽），在專案 thread 回報：期別、標題、資料期間、5 個 labels、搜尋說明、PR 連結，附上預覽檔，請 POYU 看稿。
+5. 把建好的文章頁存成 `/mnt/project-files/weekly/<出刊日>.html`，`style.css` 內嵌進 `<head>`，讓檔案可單獨開啟預覽，在專案 thread 回報：期別、標題、資料期間、5 個 labels、搜尋說明、PR 連結，附上預覽檔，請 POYU 看稿。
 6. POYU 給回饋就改稿，重跑步驟 2–3，推到同一個 PR 並更新預覽檔；改寫時保留 POYU 指定的說法。
 7. POYU 明確說可以上線後，CI 綠燈才合併，確認 `pages.yml` 部署成功，回報文章網址。
 8. 卡住時說明卡在資料、文風或部署哪一層，不要發半成品。
