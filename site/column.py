@@ -423,6 +423,9 @@ def page_html(issue, issues, root):
     gtag('js', new Date());
 
     gtag('config', '{GA_ID}');
+    if (location.hostname === 'macshop.crawlsnek.com') {{
+      gtag('config', 'G-ZCY3R6PPNS', {{content_group: 'PTT MacShop'}});
+    }}
   </script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
