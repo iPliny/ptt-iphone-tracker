@@ -1,0 +1,9 @@
+
+; <<>> DiG 9.10.6 <<>> macshop.crawlsnek.com +noall +answer
+;; global options: +cmd
+macshop.crawlsnek.com.	300	IN	CNAME	ipliny.github.io.
+ipliny.github.io.	3600	IN	A	185.199.109.153
+ipliny.github.io.	3600	IN	A	185.199.108.153
+ipliny.github.io.	3600	IN	A	185.199.111.153
+ipliny.github.io.	3600	IN	A	185.199.110.153
+"21d463dee2473b267e66688263f0cb"

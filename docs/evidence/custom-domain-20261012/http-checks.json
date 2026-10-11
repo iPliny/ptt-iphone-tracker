@@ -1,0 +1,96 @@
+{
+  "checked_at": "2026-10-12T02:05:29.273856+09:00",
+  "results": [
+    {
+      "command": [
+        "curl",
+        "-sS",
+        "-I",
+        "--max-time",
+        "25",
+        "https://ipliny.github.io/ptt-iphone-tracker/"
+      ],
+      "exit_code": 0,
+      "stdout": "HTTP/2 301 \nserver: GitHub.com\ncontent-type: text/html\nlocation: https://macshop.crawlsnek.com/\nx-github-request-id: FC6A:29701B:C9DD68:D0AB14:6ACBC1D7\nx-github-edge-region: japaneast\naccept-ranges: bytes\nage: 0\ndate: Sun, 11 Oct 2026 17:05:27 GMT\nvia: 1.1 varnish\nx-served-by: cache-nrt-rjtf7700065-NRT\nx-cache: MISS\nx-cache-hits: 0\nx-timer: S1791738328.726874,VS0,VE167\nvary: Accept-Encoding\nx-fastly-request-id: 1aac3d2df57aa474a7c2e2345f6df1d7a0ecb30e\ncontent-length: 162\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "curl",
+        "-sS",
+        "-I",
+        "--max-time",
+        "25",
+        "https://ipliny.github.io/ptt-iphone-tracker/model.html?m=iPhone+17+Pro"
+      ],
+      "exit_code": 0,
+      "stdout": "HTTP/2 301 \nserver: GitHub.com\ncontent-type: text/html\nx-github-request-id: 6394:15DC0B:C85621:CF27FC:6ACBC1D7\nx-github-edge-region: japaneast\naccept-ranges: bytes\nage: 0\ndate: Sun, 11 Oct 2026 17:05:28 GMT\nvia: 1.1 varnish\nx-served-by: cache-nrt-rjtf7700083-NRT\nx-cache: MISS\nx-cache-hits: 0\nx-timer: S1791738328.944992,VS0,VE186\nvary: Accept-Encoding\nx-fastly-request-id: e260df315dc136c301408a3396ce988f45b18ee3\nlocation: https://macshop.crawlsnek.com/model.html?m=iPhone+17+Pro\ncontent-length: 162\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "curl",
+        "-sS",
+        "-I",
+        "--max-time",
+        "25",
+        "https://ipliny.github.io/ptt-iphone-tracker/jp/ja/"
+      ],
+      "exit_code": 0,
+      "stdout": "HTTP/2 301 \nserver: GitHub.com\ncontent-type: text/html\nlocation: https://macshop.crawlsnek.com/jp/ja/\nx-github-request-id: 621E:3CF472:CA4594:D1164D:6ACBC1D7\nx-github-edge-region: japaneast\naccept-ranges: bytes\nage: 0\ndate: Sun, 11 Oct 2026 17:05:28 GMT\nvia: 1.1 varnish\nx-served-by: cache-nrt-rjtf7700041-NRT\nx-cache: MISS\nx-cache-hits: 0\nx-timer: S1791738328.178266,VS0,VE175\nvary: Accept-Encoding\nx-fastly-request-id: 43373c94200012360211759efe0a6e598548b121\ncontent-length: 162\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "curl",
+        "-sS",
+        "-I",
+        "--max-time",
+        "25",
+        "https://ipliny.github.io/ptt-iphone-tracker/column/"
+      ],
+      "exit_code": 0,
+      "stdout": "HTTP/2 301 \nserver: GitHub.com\ncontent-type: text/html\nx-origin-cache: HIT\nlocation: https://macshop.crawlsnek.com/column/\nx-github-request-id: 08E2:1014F1:C8A285:CF70FE:6ACBC1D8\nx-github-edge-region: japaneast\naccept-ranges: bytes\nage: 0\ndate: Sun, 11 Oct 2026 17:05:28 GMT\nvia: 1.1 varnish\nx-served-by: cache-nrt-rjtf7700041-NRT\nx-cache: MISS\nx-cache-hits: 0\nx-timer: S1791738328.400591,VS0,VE159\nvary: Accept-Encoding\nx-fastly-request-id: 95facb6ec344fa1f5b4f530351c9ace7e7bb1383\ncontent-length: 162\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "curl",
+        "-sS",
+        "-I",
+        "--max-time",
+        "25",
+        "http://macshop.crawlsnek.com/"
+      ],
+      "exit_code": 0,
+      "stdout": "HTTP/1.1 301 Moved Permanently\nConnection: keep-alive\nContent-Length: 162\nServer: GitHub.com\nContent-Type: text/html\nLocation: https://macshop.crawlsnek.com/\nX-GitHub-Request-Id: 0C52:3B91C8:C8FEB5:CFCD1C:6ACBC1D7\nx-github-edge-region: japaneast\nAccept-Ranges: bytes\nAge: 0\nDate: Sun, 11 Oct 2026 17:05:28 GMT\nVia: 1.1 varnish\nX-Served-By: cache-nrt-rjtf7700045-NRT\nX-Cache: MISS\nX-Cache-Hits: 0\nX-Timer: S1791738329.618460,VS0,VE172\nVary: Accept-Encoding\nX-Fastly-Request-ID: 5a220cc44f665b6eeac87c273352b293d932179e\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "curl",
+        "-sS",
+        "-I",
+        "--max-time",
+        "25",
+        "https://macshop.crawlsnek.com/sitemap.xml"
+      ],
+      "exit_code": 0,
+      "stdout": "HTTP/2 200 \nserver: GitHub.com\ncontent-type: application/xml\nlast-modified: Sun, 11 Oct 2026 12:06:16 GMT\naccess-control-allow-origin: *\netag: \"6acb7bb8-118a\"\nexpires: Sun, 11 Oct 2026 17:15:28 GMT\ncache-control: max-age=600\nx-proxy-cache: MISS\nx-github-request-id: B30A:3AE903:C9687C:D034CA:6ACBC1D6\nx-github-edge-region: japaneast\naccept-ranges: bytes\nage: 0\ndate: Sun, 11 Oct 2026 17:05:29 GMT\nvia: 1.1 varnish\nx-served-by: cache-nrt-rjtf7700103-NRT\nx-cache: MISS\nx-cache-hits: 0\nx-timer: S1791738329.837460,VS0,VE183\nvary: Accept-Encoding\nx-fastly-request-id: dd1bf936c149546385628746a4df2bdc8cc31b44\ncontent-length: 4490\n\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "curl",
+        "-sS",
+        "-I",
+        "--max-time",
+        "25",
+        "https://macshop.crawlsnek.com/robots.txt"
+      ],
+      "exit_code": 0,
+      "stdout": "HTTP/2 404 \nserver: GitHub.com\ncontent-type: text/html; charset=utf-8\naccess-control-allow-origin: *\netag: \"6abcf5c5-24a3\"\ncontent-security-policy: default-src 'none'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'\nx-proxy-cache: MISS\nx-github-request-id: A044:D64F2:CA6EB9:D13D30:6ACBC1D8\nx-github-edge-region: japaneast\naccept-ranges: bytes\nage: 0\ndate: Sun, 11 Oct 2026 17:05:29 GMT\nvia: 1.1 varnish\nx-served-by: cache-nrt-rjtf7700023-NRT\nx-cache: MISS\nx-cache-hits: 0\nx-timer: S1791738329.077308,VS0,VE185\nvary: Accept-Encoding\nx-fastly-request-id: 42f5a7f9bdf161e8d52c70bc51658aff3e6cab2e\ncontent-length: 9379\n\n",
+      "stderr": ""
+    }
+  ]
+}
