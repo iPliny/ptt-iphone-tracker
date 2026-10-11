@@ -18,7 +18,7 @@ import os
 import re
 import sys
 import urllib.request
-from datetime import datetime
+from datetime import date, datetime
 from html.parser import HTMLParser
 from urllib.parse import quote, urlparse
 from xml.etree import ElementTree
@@ -33,6 +33,7 @@ TITLE_PREFIX = "iPhone二手週報"
 BLOG_DIR = os.path.join(S.DATA_DIR, "blog")
 WEEKLY_DIR = os.path.join(S.DATA_DIR, "weekly")  # 本站原創週報
 DESC_MAX = 150   # 搜尋說明字數上限
+FIXED_LABELS = ["iPhone", "二手市場", "週報"]  # 每篇固定的 3 個 labels，另加 2 個本期搜尋詞
 SECTION = "iPhone 二手週報"
 BRAND = "PTT MacShop交易觀測"
 GA_ID = "G-G3GH12TQSZ"
@@ -219,13 +220,17 @@ def publish(draft, weekly_dir=WEEKLY_DIR, now=None):
     missing = [k for k in ("id", "title", "description", "html") if not str(draft.get(k) or "").strip()]
     if missing:
         raise ValueError(f"缺少欄位：{missing}")
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", draft["id"]):
-        raise ValueError("id 要是 YYYY-MM-DD")
+    try:
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", draft["id"]):
+            raise ValueError
+        date.fromisoformat(draft["id"])
+    except ValueError:
+        raise ValueError("id 要是存在的日期 YYYY-MM-DD") from None
     if len(draft["description"]) > DESC_MAX:
         raise ValueError(f"搜尋說明 {len(draft['description'])} 字，超過 {DESC_MAX}")
     labels = draft.get("labels") or []
-    if len(labels) != len(set(labels)):
-        raise ValueError("labels 重複")
+    if len(set(labels)) != 5 or len(labels) != 5 or not set(FIXED_LABELS) <= set(labels):
+        raise ValueError(f"labels 要恰好 5 個不重複，且包含 {FIXED_LABELS}")
     body = clean_html(draft["html"])
     if "{{ROOT}}" not in body:
         raise ValueError("內文至少要有一個連回本站的連結")

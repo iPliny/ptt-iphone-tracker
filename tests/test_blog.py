@@ -102,7 +102,9 @@ class BlogTest(unittest.TestCase):
 
     def test_publish_validates_and_keeps_first_publish_time(self):
         d = os.path.join(self.dir, "weekly")
-        for bad in (self.draft(description="字" * 151), self.draft(id="10/18"), self.draft(html="<p>太短 <a href='https://macshop.crawlsnek.com/'>站</a></p>"),
+        for bad in (self.draft(description="字" * 151), self.draft(id="10/18"), self.draft(id="2026-13-40"),
+                    self.draft(labels=["iPhone", "二手市場", "週報", "iPhone 17 Pro"]),
+                    self.draft(labels=["iPhone", "二手市場", "iPhone 17 Pro", "iPhone二手價格", "17 Pro"]), self.draft(html="<p>太短 <a href='https://macshop.crawlsnek.com/'>站</a></p>"),
                     self.draft(html="<p>" + "內文" * 200 + "</p>"), self.draft(title=" ")):
             with self.assertRaises(ValueError):
                 B.publish(bad, d)
