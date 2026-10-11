@@ -426,6 +426,7 @@ def page_html(issue, issues, root):
   </script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/svg+xml" href="{root}favicon.svg">
   <title>{E(a['title'])}｜{BRAND}</title>
   <meta name="description" content="{E(a['description'])}">
   <link rel="canonical" href="{E(url)}">
