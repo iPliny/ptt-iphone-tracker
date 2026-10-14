@@ -67,7 +67,7 @@
 
 ### 2026-10-07 日本買取價（第一階段）
 - `jp/buyback.py` 是獨立爬蟲，只追 mobile-mix、イオシス、アメモバ的 iPhone 18 Pro／Pro Max，2026-10-09 起加上 iPhone 17、Air、17 Pro、17 Pro Max（POYU 指示；17e 不收）。イオシス、アメモバ每個機型一頁，網址與機型對照在 `IOSYS_PAGES`／`AMEMOBA_PAGES`，每頁只收該頁機型的列（アメモバ 17 Pro 頁曾混入 Air 列）；`海外版SIMフリー` 不算 SIMフリー，不收。不得混入 PTT 資料、修改 `tracker.py` 或既有台灣 CSV。新增店家請新增純 HTML parser 並在 `collect` 登錄。
-- `.github/workflows/jp.yml` 每天三次（UTC `0 0,6,12 * * *`；日本 09:00／15:00／21:00，POYU 2026-10-08 指示深夜不抓），只在 main 寫入 `data/jp/` 並觸發 `pages.yml`。分支驗收只准 `--dry-run`；程式 PR 不帶任何 `data/` 檔案，第一次正式資料由合併後排程產生。
+- `.github/workflows/jp.yml` 每天排程三次（UTC `17 0,6,12 * * *`；約日本 09:17／15:17／21:17，避開整點以降低延遲與漏跑風險，但不保證準時；延遲的抓取照常執行），只在 main 寫入 `data/jp/` 並觸發 `pages.yml`。分支驗收只准 `--dry-run`；程式 PR 不帶任何 `data/` 檔案，第一次正式資料由合併後排程產生。GitHub schedule 會延遲或漏跑，實際抓取時間以 `runs.csv` 為準。
 - 日本時間欄位均為 `Asia/Tokyo`、含 `+09:00` 的 ISO 8601，不改程序全域 `TZ`。`shop_updated` 是店家頁面更新日 `YYYY-MM-DD`，未標示留空。
 - `data/jp/prices.csv` 只附加：`shop,model,storage,condition,carrier,color,price_jpy,observed_at,shop_updated,source_url`。前六欄是鍵；同價不附加，首次觀測、改價、恢復收購才新增，空白 `price_jpy` 表示下架／不收。`observed_at` 是發現該變動的時間，非店家實際改價時間。
 - `data/jp/latest.csv` 整檔覆寫：`shop,model,storage,condition,carrier,color,price_jpy,since,last_checked,shop_updated,source_url`。只保留目前有價格的鍵；`since` 是目前價格第一次被觀測的時間、同價保留，`last_checked` 每次成功更新。價格是整數日圓；`color` 空白表示主價，mobile-mix 可收的精確色價另列。`condition` 為 `未開封`／`中古上限`；`carrier` 為 `SIMフリー`／`docomo`／`au`／`SoftBank`／`Rakuten`。
@@ -78,7 +78,7 @@
 
 ### 2026-10-08 日本買取頁日文版
 - POYU 要日文版、中文版照留：`site/jp/index.html`（中文，`jp/`）與 `site/jp/ja/index.html`（日文，`jp/ja/`）共用 `site/jp/jp.js`，介面字串在 `I18N`（zh／ja），依 `<html lang>` 切換；日文頁 `<body data-base="../">` 讓它讀 `jp/data.json`。兩頁互設 hreflang、頁首互相切換，sitemap 都列入。改頁面文字時兩個 HTML 與 `I18N` 一起改。
-- 2026-10-09 POYU 要在比較表上方加「快報」（日文「速報」）：`jp.js` 的 `flash` 取 `runs.csv` 最後一次成功抓取的時間，從當次的未開封・SIMフリー主價改價中各挑漲最多、跌最多一筆（首次觀測、色價、異常價不算），全部在前端計算，`data.json` 不變。
+- 2026-10-09 POYU 要在比較表上方加「快報」（日文「速報」）：`jp.js` 的 `flash` 取 `runs.csv` 最後一次成功抓取的時間，從當次的未開封・SIMフリー主價改價中各挑漲最多、跌最多一筆（首次觀測、色價、異常價不算），全部在前端計算，`data.json` 不變。最新成功抓取沒有可計主價改價時，回溯最近 7 天內有改價的成功抓取，並標示最新與採用的兩個時間。最近變動預設顯示 10 筆，更多按鈕可展開全部或收起。
 
 ### 2026-10-11 Claude 萃取（規則抓不到時）
 - `--extractor` 預設 `auto`：環境有 `ANTHROPIC_API_KEY` 時為 `claude`，否則 `rules`，本機與沒設 secret 的行為不變。`track.yml` 從 repo secret `ANTHROPIC_API_KEY` 帶入。

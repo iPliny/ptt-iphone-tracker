@@ -11,14 +11,16 @@
       chartLabel:'各店與當下最高買取價階梯走勢，日圓，日本時間', chartTitle:'未開封・SIMフリー主價走勢', highest:'當下最高價',
       loadFailed:'資料暫時無法載入，請稍後重試', checked:'最近確認：', removed:'下架／不收', restored:'重新收購',
       up:'上漲 ', down:'下跌 ', noChanges:'最近 7 天沒有改價紀錄', ok:'抓取正常', failed:'暫時抓不到',
-      notStarted:'尚未開始抓取', lastOk:'最後成功：',
+      notStarted:'尚未開始抓取', lastOk:'最後成功：', moreChanges:n=>'更多（還有 '+n+' 筆）', collapseChanges:'收起',
+      flashFallback:'，各店沒有改價。以下是最近一次有改價的抓取：', flashPastCount:n=>'該次共 '+n+' 筆改價',
       flashAt:'最新一次抓取：', flashNone:'這次各店都沒有改價', flashUp:'提價最多', flashDown:'砍價最多', flashCount:n=>'這次共 '+n+' 筆改價', csv:{latest:'最新報價', prices:'價格歷史', runs:'抓取紀錄'}},
     ja: {none:'記録なし', notBuying:'買取不可', since:'この価格の開始：', jst:'（日本時間）', shopUpdated:'／店舗の更新日：', unmarked:'記載なし',
       storage:'容量', spread:'価格差', best:'最高', preparing:'データ準備中', noPublic:'この期間に公開できる価格はありません',
       chartLabel:'各店と現在の最高買取価格の推移（円・日本時間）', chartTitle:'未開封・SIMフリーの基本価格の推移', highest:'現在の最高価格',
       loadFailed:'データを読み込めませんでした。しばらくしてから再度お試しください', checked:'最終確認：', removed:'掲載終了／買取不可', restored:'買取再開',
       up:'値上げ ', down:'値下げ ', noChanges:'直近 7 日間の価格変更はありません', ok:'取得正常', failed:'一時的に取得できません',
-      notStarted:'未取得', lastOk:'最終取得成功：',
+      notStarted:'未取得', lastOk:'最終取得成功：', moreChanges:n=>'さらに表示（残り '+n+' 件）', collapseChanges:'閉じる',
+      flashFallback:'は価格変更なし。直近で価格変更があった取得：', flashPastCount:n=>'その取得での価格変更 '+n+' 件',
       flashAt:'最新の取得：', flashNone:'今回はどの店舗も価格変更なし', flashUp:'最大の値上げ', flashDown:'最大の値下げ', flashCount:n=>'今回の価格変更 '+n+' 件', csv:{latest:'最新価格', prices:'価格履歴', runs:'取得ログ'}},
   };
   let T = I18N.zh;
@@ -126,25 +128,47 @@
     return changes.reverse();
   }
 
-  // 快報：最新一次成功抓取裡，未開封・SIMフリー主價漲最多與跌最多的各一筆（首次觀測、異常價不算）。
+  // 最新成功抓取沒改價時，回溯最近 7 天內有主價改價的成功抓取。
   function flash(prices, runs) {
-    const at=runs.filter(r=>r.status==='ok' && Number.isFinite(Date.parse(r.run_at))).map(r=>r.run_at)
-      .sort((a,b)=>Date.parse(a)-Date.parse(b)).at(-1);
-    if (!at) return null;
-    const changes=recentChanges(prices, Date.parse(at))
-      .filter(r=>r.observed_at===at && !r.color && Number.isFinite(r.old_price) && Number.isFinite(r.new_price))
-      .map(r=>({...r, delta:r.new_price-r.old_price}));
+    const successes=runs.filter(r=>r.status==='ok' && Number.isFinite(Date.parse(r.run_at)))
+      .slice().sort((a,b)=>Date.parse(b.run_at)-Date.parse(a.run_at));
+    const latest_at=successes[0]?.run_at;
+    if (!latest_at) return null;
+    const batches=new Map();
+    for (const row of recentChanges(prices, Date.parse(latest_at))) {
+      if (row.color || !Number.isFinite(row.old_price) || !Number.isFinite(row.new_price)) continue;
+      const time=Date.parse(row.observed_at);
+      if (!batches.has(time)) batches.set(time, []);
+      batches.get(time).push({...row, delta:row.new_price-row.old_price});
+    }
+    const at=successes.find(r=>batches.has(Date.parse(r.run_at)))?.run_at || latest_at;
+    const changes=batches.get(Date.parse(at)) || [];
     const pick=(sign)=>changes.filter(r=>Math.sign(r.delta)===sign).sort((a,b)=>sign*(b.delta-a.delta))[0] || null;
-    return {at, count:changes.length, up:pick(1), down:pick(-1)};
+    return {latest_at, at, count:changes.length, up:pick(1), down:pick(-1)};
   }
 
   function renderFlash(result) {
     if (!result) return '<p class="empty">'+T.preparing+'</p>';
+    const fallback=result.latest_at && result.latest_at!==result.at;
     const line=(r,label)=>r?'<p class="jp-flash-item '+(r.delta>0?'up':'down')+'"><strong>'+esc(r.shop)+'</strong> '+esc(r.model+' '+r.storage)+' '+label
       +' <span class="amount">'+(r.delta>0?'+':'−')+money(Math.abs(r.delta))+'</span><span class="detail">'+money(r.old_price)+' → '+money(r.new_price)+'</span></p>':'';
-    const body=result.count?line(result.up,T.flashUp)+line(result.down,T.flashDown)+'<p class="hint">'+esc(T.flashCount(result.count))+'</p>'
+    const body=result.count?line(result.up,T.flashUp)+line(result.down,T.flashDown)+'<p class="hint">'+esc((fallback?T.flashPastCount:T.flashCount)(result.count))+'</p>'
       :'<p class="empty">'+T.flashNone+'</p>';
-    return '<p class="hint">'+T.flashAt+esc(dateTime(result.at))+T.jst+'</p>'+body;
+    const intro=fallback?T.flashAt+esc(dateTime(result.latest_at))+T.jst+T.flashFallback+esc(dateTime(result.at))+T.jst
+      :T.flashAt+esc(dateTime(result.at))+T.jst;
+    return '<p class="hint">'+intro+'</p>'+body;
+  }
+
+  function renderChanges(changes, expanded=false) {
+    if (!changes.length) return '<p class="empty">'+T.noChanges+'</p>';
+    const visible=expanded?changes:changes.slice(0,10);
+    const rows=visible.map(r=>{
+      const delta=Number.isFinite(r.new_price)&&Number.isFinite(r.old_price)?r.new_price-r.old_price:null;
+      const change=delta===null?(r.new_price===null?T.removed:T.restored):(delta>0?T.up:T.down)+money(Math.abs(delta));
+      return '<div class="jp-change"><time datetime="'+esc(r.observed_at)+'">'+esc(dateTime(r.observed_at))+'</time><strong>'+esc(r.shop)+'</strong><span class="spec">'+esc(r.model+' '+r.storage+(r.color?' · '+r.color:''))+'</span><span class="amount">'+money(r.old_price)+' → '+money(r.new_price)+'<span class="delta">'+esc(change)+'</span></span></div>';
+    }).join('');
+    const button=changes.length>10?'<button type="button" class="jp-changes-toggle" aria-expanded="'+expanded+'" aria-controls="changes-list">'+esc(expanded?T.collapseChanges:T.moreChanges(changes.length-10))+'</button>':'';
+    return '<div id="changes-list">'+rows+'</div>'+button;
   }
 
   function shopStatuses(runs) {
@@ -207,7 +231,7 @@
     return svg+'</svg>';
   }
 
-  const api={SHOPS, setLang, visiblePrices, comparison, timeline, stepPath, recentChanges, flash, renderFlash, shopStatuses, renderComparison, renderChart, dateTime, money};
+  const api={SHOPS, setLang, visiblePrices, comparison, timeline, stepPath, recentChanges, flash, renderFlash, renderChanges, shopStatuses, renderComparison, renderChart, dateTime, money};
   if(typeof module!=='undefined' && module.exports) module.exports=api;
   if(typeof document==='undefined') return;
 
@@ -242,11 +266,14 @@
     window.addEventListener('resize',chart);
     compare();chart();
     const changes=recentChanges(data.prices,end);
-    get('changes').innerHTML=changes.length?changes.map(r=>{
-      const delta=Number.isFinite(r.new_price)&&Number.isFinite(r.old_price)?r.new_price-r.old_price:null;
-      const change=delta===null?(r.new_price===null?T.removed:T.restored):(delta>0?T.up:T.down)+money(Math.abs(delta));
-      return '<div class="jp-change"><time datetime="'+esc(r.observed_at)+'">'+esc(dateTime(r.observed_at))+'</time><strong>'+esc(r.shop)+'</strong><span class="spec">'+esc(r.model+' '+r.storage+(r.color?' · '+r.color:''))+'</span><span class="amount">'+money(r.old_price)+' → '+money(r.new_price)+'<span class="delta">'+esc(change)+'</span></span></div>';
-    }).join(''):'<p class="empty">'+T.noChanges+'</p>';
+    let expanded=false;
+    get('changes').innerHTML=renderChanges(changes,expanded);
+    get('changes').addEventListener('click',event=>{
+      if (!event.target.closest('.jp-changes-toggle')) return;
+      expanded=!expanded;
+      get('changes').innerHTML=renderChanges(changes,expanded);
+      get('changes').querySelector('.jp-changes-toggle').focus();
+    });
     get('statuses').innerHTML=shopStatuses(data.runs).map(s=>'<article><strong>'+s.shop+'</strong><p'+(s.latest&&s.latest.status!=='ok'?' class="failed"':'')+'>'+(s.latest?(s.latest.status==='ok'?T.ok:T.failed):T.notStarted)+'</p><p>'+T.lastOk+(s.success?esc(dateTime(s.success.run_at))+T.jst:T.none)+'</p></article>').join('');
     get('downloads').innerHTML=(data.downloads||[]).map(name=>['latest','prices','runs'].includes(name)?'<a href="'+base+'../data/jp/'+name+'.csv" download>'+T.csv[name]+' CSV</a>':'').join('');
   }

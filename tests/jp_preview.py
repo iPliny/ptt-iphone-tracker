@@ -28,9 +28,10 @@ def preview(data_root):
         rows = [r for name, (url, model) in zip(names, pages.items()) if name
                 for r in parser(read(name), url)[0] if r["model"] == model]
         base.append(dict(shop=shop, rows=rows))
-    today = datetime.now(TOKYO).replace(hour=9, minute=30, second=0, microsecond=0)
+    today = datetime.now(TOKYO).replace(second=0, microsecond=0)
+    # 最後一次同價，前一次同時有漲有跌，方便驗收快報回溯；不產生未來時間。
     adjustments = [[-4000, -2000, 0], [-1000, -1000, 1000], [-1000, 0, 1000],
-                   [1000, 2000, 0], [0, 1000, 2000], [-2000, 0, 1000], [0, 0, 0]]
+                   [1000, 2000, 0], [0, 1000, 2000], [-2000, 2000, 1000], [-2000, 2000, 1000]]
     for day, offsets in enumerate(adjustments):
         results = copy.deepcopy(base)
         for index, result in enumerate(results):
