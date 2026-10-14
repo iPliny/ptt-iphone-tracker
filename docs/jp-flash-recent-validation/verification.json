@@ -1,0 +1,38 @@
+{
+  "fixture": true,
+  "generated_at": "2026-10-15T03:27:43+09:00",
+  "latest_at": "2026-10-15T03:27:00+09:00",
+  "adopted_at": "2026-10-14T03:27:00+09:00",
+  "flash_count": 28,
+  "total_changes": 214,
+  "checks": [
+    {
+      "view": "desktop-zh-light",
+      "collapsed": 10,
+      "expanded": 214,
+      "remaining": 204,
+      "keyboard": "Enter expands, Space collapses, focus retained",
+      "horizontal_scroll": false,
+      "page_errors": [],
+      "button_styles": {
+        "foreground": "rgb(27, 31, 36)",
+        "background": "rgb(238, 242, 247)",
+        "outline": "solid"
+      }
+    },
+    {
+      "view": "mobile-ja-dark",
+      "collapsed": 10,
+      "expanded": 214,
+      "remaining": 204,
+      "keyboard": "Enter expands, Space collapses, focus retained",
+      "horizontal_scroll": false,
+      "page_errors": [],
+      "button_styles": {
+        "foreground": "rgb(230, 233, 237)",
+        "background": "rgb(35, 42, 51)",
+        "outline": "solid"
+      }
+    }
+  ]
+}

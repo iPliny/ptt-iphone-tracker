@@ -29,6 +29,8 @@
 .jp-change time { color: var(--muted); font-size: 12px; }
 .jp-change .amount { font-variant-numeric: tabular-nums; }
 .jp-change .delta { display: block; color: var(--muted); font-size: 12px; }
+.jp-changes-toggle { margin-top: 12px; max-width: 100%; min-height: 44px; background: var(--chip); }
+.jp-changes-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .jp-flash-item { margin: 6px 0; font-size: 15px; }
 .jp-flash-item .amount { font-weight: 700; font-variant-numeric: tabular-nums; }
 /* 台灣、日本習慣紅漲綠跌 */
