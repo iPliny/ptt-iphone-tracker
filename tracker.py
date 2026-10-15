@@ -432,7 +432,8 @@ def parse_price(text):
 def parse_storage(*texts):
     """依序在各段文字找容量，跳過不合理的數字（如筆誤 265G）。"""
     for t in texts:
-        for m in re.finditer(r"(\d{1,4})\s*(g|gb|t|tb)\b|(?<!\d)(\d{2,3})(?!\d)", t or "", re.I):
+        # 單位後面常直接接顏色（2TB銀色），不能用 \b
+        for m in re.finditer(r"(\d{1,4})\s*(g|gb|t|tb)(?![a-z])|(?<!\d)(\d{2,3})(?!\d)", t or "", re.I):
             if m.group(2):
                 n, unit = int(m.group(1)), m.group(2).lower()
                 if unit.startswith("t") and n in (1, 2):
@@ -601,8 +602,16 @@ def is_accessory_post(title, storage):
     return bool(_ACCESSORY_RE.search(bare)) and storage in ("", "未知", None)
 
 
-def misparsed_reason(row):
+STALE_DAYS = 90  # 發文超過這麼久仍是在售／交易中、早已不再回訪的列，狀態不可信
+
+
+def misparsed_reason(row, now=None):
     """舊規則留下、現在看得出是誤判的列：回傳原因，正常則回傳 None。"""
+    ts = url_timestamp(row.get("source_url", ""))
+    if (row.get("status") in OPEN_STATUSES and ts
+            and (now or datetime.now()).timestamp() - ts > STALE_DAYS * 86400):
+        # 例：v1 匯入的 2026-03 文章，從未被現行排程回訪，一直停在在售
+        return f"發文超過 {STALE_DAYS} 天未再追蹤"
     model = row.get("model") or ""
     if model and not _CANONICAL_MODEL_RE.fullmatch(model):
         return f"不存在的型號 {model}"
@@ -636,6 +645,9 @@ def drop_misparsed(listings):
     for url, row in listings.items():
         if row.get("status") not in (STATUS_ACTIVE, STATUS_PENDING, STATUS_SOLD, STATUS_DELETED):
             continue
+        if row.get("storage") in ("", "未知", None):
+            # 容量規則改進後，用標題補回舊列抓不到的容量（例：「2TB銀色」）
+            row["storage"] = parse_storage(row.get("title")) or row.get("storage")
         reason = misparsed_reason(row)
         if reason:
             log_event(url, "排除誤判", f"{row.get('status')} → 略過（{reason}）")

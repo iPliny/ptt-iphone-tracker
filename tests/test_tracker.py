@@ -833,3 +833,31 @@ class ClaudeFallbackTest(unittest.TestCase):
         props = T.CLAUDE_SCHEMA["properties"]
         self.assertEqual(set(T.CLAUDE_SCHEMA["required"]), set(props))
         self.assertFalse(T.CLAUDE_SCHEMA["additionalProperties"])
+
+
+class StaleAndStorageTest(unittest.TestCase):
+    """POYU 2026-10-15：17 Pro Max 裡的兩筆污染資料。"""
+
+    def test_storage_followed_by_color(self):
+        # M.1791442010.A.D43：「2TB銀色」的容量被記成未知
+        self.assertEqual(T.parse_storage("[販售] 全國 iPhone 17 Pro Max 2TB銀色"), "2TB")
+        self.assertEqual(T.parse_storage("256G藍"), "256GB")
+
+    def test_stale_open_row_is_dropped(self):
+        # M.1774537642.A.6A6：v1 匯入的 2026-03 文章，從未再回訪，一直停在在售
+        url = "https://www.ptt.cc/bbs/MacShop/M.1774537642.A.6A6.html"
+        row = {"source_url": url, "status": "在售", "title": "[販售] 台中iPhone 17 pro max 256橘",
+               "model": "iPhone 17 Pro Max", "storage": "256GB"}
+        now = T.datetime(2026, 10, 15)
+        self.assertIn("未再追蹤", T.misparsed_reason(row, now))
+        self.assertIsNone(T.misparsed_reason({**row, "status": "已售出"}, now))  # 已有結果的不動
+        self.assertIsNone(T.misparsed_reason(row, T.datetime(2026, 4, 30)))
+
+    def test_drop_fixes_unknown_storage(self):
+        url = "https://www.ptt.cc/bbs/MacShop/M.1791442010.A.D43.html"
+        rows = {url: {"source_url": url, "status": "已刪除", "title": "[販售] 全國 iPhone 17 Pro Max 2TB銀色",
+                      "model": "iPhone 17 Pro Max", "storage": "未知"}}
+        with patch.object(T, "log_event"):
+            self.assertEqual(T.drop_misparsed(rows), 0)
+        self.assertEqual((rows[url]["storage"], rows[url]["status"]), ("2TB", "已刪除"))
+
