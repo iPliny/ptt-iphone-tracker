@@ -107,3 +107,10 @@
 - 所有頁面頁尾有「由 CrawlSnek 提供」連到 https://crawlsnek.com/ 。
 - `build_site.py` 由 `SITE_URL` 產生 robots.txt、sitemap 並代換 HTML 的 `{{SITE_URL}}`；首頁／prices 有靜態 canonical，機型頁由 `model.js` 以 `URLSearchParams` 產生只含 `m` 的 canonical，站內連結保持相對路徑。
 - Search Console 新增 `https://macshop.crawlsnek.com/` 網址前置字元資源，優先用原有內嵌 GA 官方碼驗證，必要時才加 HTML 標記；提交新 sitemap、保留舊資源，不對 github.io 子路徑使用網址變更工具。
+
+### 2026-10-16 機型頁預先產生 HTML
+- `site/model_pages.py` 在建置時輸出 `models/<機型 slug>.html`，包含各機型的 title、description、canonical、主標題、公開統計、容量表與前 10 筆單支文章；只用 `build_data` 已排除異常值的資料，不改 CSV 或資料語意。
+- 首頁機型連結與 sitemap 改指向靜態頁。原有 `model.html?m=...&s=...` 仍可使用，容量切換維持舊格式，canonical 改指向對應靜態頁；沒有伺服器或 JavaScript 轉址。
+- 靜態頁使用 `data-model` 固定機型身分，容量以 `?s=` 切換；所有容量共用不含參數的 canonical。`model.js` 共用既有互動，重用靜態 canonical，資料請求失敗時保留預產內容。
+- slug 由 Python `model_path` 與 JavaScript `modelPageUrl` 同規則產生；若不同機型產生相同路徑，建置應失敗，不可默默覆蓋。重建時清除輸出目錄內自有的 `models/`，避免過期頁殘留。
+- 建置維持 Python 標準函式庫，GitHub Pages workflow 不增加 Node 或瀏覽器依賴。驗證見 `docs/model-prerender-validation.md`。

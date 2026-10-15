@@ -1,0 +1,62 @@
+[
+  {
+    "canonical": [
+      "https://macshop.crawlsnek.com/models/iphone-18-pro.html"
+    ],
+    "h1": "iPhone 18 Pro",
+    "listTitle": "256GB的文章（107）",
+    "overflow": false,
+    "step": "static-256gb-watch",
+    "url": "http://127.0.0.1:18766/models/iphone-18-pro.html?s=256GB",
+    "watch": "true"
+  },
+  {
+    "prices": [
+      "$43,000",
+      "$43,000",
+      "$43,000",
+      "$42,900",
+      "$42,500",
+      "$42,500",
+      "$42,500",
+      "$42,500",
+      "$42,000",
+      "$41,800"
+    ],
+    "sort": "price-desc",
+    "status": "已售出",
+    "step": "static-filter-sort",
+    "title": "256GB的文章（10）",
+    "url": "http://127.0.0.1:18766/models/iphone-18-pro.html?s=256GB"
+  },
+  {
+    "canonical": [
+      "https://macshop.crawlsnek.com/models/iphone-18-pro.html"
+    ],
+    "step": "legacy-bookmark-watch-restored",
+    "title": "256GB的文章（107）",
+    "url": "http://127.0.0.1:18766/model.html?m=iPhone+18+Pro&s=256GB",
+    "watch": "true"
+  },
+  {
+    "listCount": 20,
+    "more": "顯示更多（還有 14 篇）",
+    "step": "legacy-512gb-more",
+    "url": "http://127.0.0.1:18766/model.html?m=iPhone+18+Pro&s=512GB"
+  },
+  {
+    "canonicalCount": 1,
+    "overflow": false,
+    "scrollWidth": 375,
+    "step": "mobile-375-static",
+    "url": "http://127.0.0.1:18766/models/iphone-18-pro.html?s=256GB",
+    "watch": "true",
+    "width": 375
+  },
+  {
+    "overflow": false,
+    "scrollWidth": 320,
+    "step": "mobile-320-static",
+    "width": 320
+  }
+]

@@ -14,7 +14,6 @@ import shutil
 import statistics
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
-from urllib.parse import urlencode
 from xml.sax.saxutils import escape
 from datetime import date, datetime, timedelta, timezone
 
@@ -405,9 +404,10 @@ def write_outlier_report(data_dir=DATA_DIR):
 
 
 def sitemap_xml(data, today=None, column_urls=(), extra_urls=()):
-    """首頁、歷代官方價格頁、每個機型頁（model.html?m=...，和網站內連結相同）、每週專欄的入口與各期，以及 extra_urls。"""
+    """首頁、價格頁、各機型靜態標準頁、專欄與 extra_urls；舊查詢網址仍由 model.html 支援。"""
+    from model_pages import model_path
     lastmod = (today or datetime.now(TAIPEI).date()).isoformat()
-    urls = [SITE_URL, SITE_URL + "prices.html", SITE_URL + "jp/", SITE_URL + "jp/ja/"] + [SITE_URL + "model.html?" + urlencode({"m": m["model"]}) for m in data["model_totals"]]
+    urls = [SITE_URL, SITE_URL + "prices.html", SITE_URL + "jp/", SITE_URL + "jp/ja/"] + [SITE_URL + model_path(m["model"]) for m in data["model_totals"]]
     if column_urls:
         urls += [SITE_URL + "column/"] + list(column_urls)
     urls += list(extra_urls)
@@ -429,6 +429,8 @@ def build(out_dir, data_dir=DATA_DIR):
     data = build_data(data_dir)
     with open(os.path.join(out_dir, "data.json"), "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+    from model_pages import build_model_pages
+    build_model_pages(out_dir, data, SITE_URL)
     from column import render_column  # column.py 也會 import 這個檔，放在這裡避免循環
     column_urls = render_column(out_dir, data_dir)
     from blog import render_blog
