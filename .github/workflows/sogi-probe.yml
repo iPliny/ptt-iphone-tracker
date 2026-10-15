@@ -1,0 +1,56 @@
+name: sogi-probe
+on:
+  push:
+    branches: [claude/project-thread-cuu3bk]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install curl_cffi
+      - name: probe
+        shell: python
+        run: |
+          import re, time, html
+          from curl_cffi import requests as r
+          urls = [
+            "https://www.sogi.com.tw/robots.txt",
+            "https://www.sogi.com.tw/usedprices/apple-iphone-18-pro-256gb/1515",
+            "https://www.sogi.com.tw/usedprices",
+            "https://www.sogi.com.tw/usedprices/apple",
+          ]
+          import os
+          os.makedirs("out", exist_ok=True)
+          for imp in ["plain", "chrome"]:
+            for i, u in enumerate(urls):
+              try:
+                if imp == "plain":
+                  resp = r.get(u, timeout=30, headers={"User-Agent": "python-requests/2.32"})
+                else:
+                  resp = r.get(u, timeout=30, impersonate="chrome")
+                t = resp.text
+                title = re.search(r"<title[^>]*>(.*?)</title>", t, re.S)
+                print(f"=== {imp} {u} -> {resp.status_code} len={len(t)} server={resp.headers.get('server')} cf={resp.headers.get('cf-ray')} title={title.group(1).strip()[:120] if title else None}")
+                open(f"out/{imp}_{i}.html", "w").write(t)
+              except Exception as e:
+                print(f"=== {imp} {u} ERR {e}")
+              time.sleep(5)
+          print(open("out/chrome_0.html").read()[:3000])
+          t = open("out/chrome_1.html").read()
+          txt = re.sub(r"<script.*?</script>|<style.*?</style>", " ", t, flags=re.S)
+          txt = html.unescape(re.sub(r"<[^>]+>", " ", txt))
+          txt = re.sub(r"\s+", " ", txt)
+          print("----- TEXT -----")
+          print(txt[:8000])
+          print("----- LD/JSON -----")
+          for m in re.findall(r'<script[^>]*type="application/(?:ld\+)?json"[^>]*>(.*?)</script>', t, re.S):
+            print(m[:2000])
+          print("----- API hints -----")
+          for m in sorted(set(re.findall(r'["\'](/[a-zA-Z0-9_/\-]*(?:api|ajax|json)[^"\']*)["\']', t)))[:50]:
+            print(m)
+          print("----- links usedprices -----")
+          for m in sorted(set(re.findall(r'href="([^"]*usedprices[^"]*)"', t)))[:80]:
+            print(m)
+      - uses: actions/upload-artifact@v4
+        with: {name: sogi, path: out}
