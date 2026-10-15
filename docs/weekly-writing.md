@@ -24,7 +24,7 @@ POYU 2026-10-12 決定：週報只發在本站（https://macshop.crawlsnek.com/w
 - `description`（搜尋說明）150 字以內，建議 60–120 字，概括本文並帶核心型號，不寫成交價。
 - `labels` 恰好 5 個：「iPhone」「二手市場」「週報」＋2 個本文有實質討論的搜尋詞（優先核心型號＋意圖，如「iPhone 17 Pro」「iPhone二手價格」）。
 - 小標用 h2（必要時 h3），寫成讀者會問的問題或有張力的短句。
-- 內部連結至少三個，連結文字要說清楚能做什麼：首頁 `https://macshop.crawlsnek.com/`、機型頁 `https://macshop.crawlsnek.com/model.html?m=iPhone%2017%20Pro`（型號名稱 URL 編碼）、本期統計週報 `https://macshop.crawlsnek.com/column/<本期週日>/`。建置時會自動改成站內相對路徑。
+- 內部連結至少三個，連結文字要說清楚能做什麼：首頁 `https://macshop.crawlsnek.com/`、機型頁 `https://macshop.crawlsnek.com/models/iphone-17-pro.html`（型號小寫、非英數字改成 -）、本期統計週報 `https://macshop.crawlsnek.com/column/<本期週日>/`。建置時會自動改成站內相對路徑。
 - 可用標籤：p、h2、h3、strong、em、a、small、ul、ol、li、table 系列、blockquote；其他會被清掉。文末用 `<small>` 寫資料說明：期間、樣本數、排除規則、固定 commit 的資料連結（`https://github.com/iPliny/ptt-iphone-tracker/tree/<SHA>/data`）。
 
 ## 五、審稿與發布（POYU 2026-10-12：要先看過才上線）

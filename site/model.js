@@ -84,7 +84,7 @@
     const query = new URLSearchParams();
     if (storage !== null) query.set("s", storage);
     history.replaceState(null, "", staticModel
-      ? location.pathname + (query.size ? "?" + query : "") : modelUrl(model, storage));
+      ? location.pathname + (query.toString() ? "?" + query : "") : modelUrl(model, storage));
     render();
   }
 
