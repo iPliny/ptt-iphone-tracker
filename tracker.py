@@ -639,15 +639,24 @@ def skipped_from(url, path=None):
     return prev
 
 
+def backfill_storage(listings):
+    """容量規則改進後，用標題補回舊列抓不到的容量（例：「2TB銀色」）。回傳補上的筆數。"""
+    n = 0
+    for row in listings.values():
+        if row.get("status") != "略過" and row.get("storage") in ("", "未知", None):
+            storage = parse_storage(row.get("title"))
+            if storage:
+                row["storage"] = storage
+                n += 1
+    return n
+
+
 def drop_misparsed(listings):
     """把誤判成 iPhone 的列改成「略過」，網站、週報、行情都不再計入。回傳處理筆數。"""
     n = 0
     for url, row in listings.items():
         if row.get("status") not in (STATUS_ACTIVE, STATUS_PENDING, STATUS_SOLD, STATUS_DELETED):
             continue
-        if row.get("storage") in ("", "未知", None):
-            # 容量規則改進後，用標題補回舊列抓不到的容量（例：「2TB銀色」）
-            row["storage"] = parse_storage(row.get("title")) or row.get("storage")
         reason = misparsed_reason(row)
         if reason:
             log_event(url, "排除誤判", f"{row.get('status')} → 略過（{reason}）")
@@ -1408,13 +1417,16 @@ def main():
         print(f"[DONE] 新刊登 {stats['new']}｜新售出 {stats['sold']}｜刪文 {stats['deleted']}"
               f"｜價格變動 {stats['price_changes']}｜錯誤 {stats['errors']}｜Claude 萃取 {stats['claude']}")
 
+    sized = backfill_storage(listings)  # 先補容量，配件判斷才看得到
     dropped = drop_misparsed(listings)
     colored = backfill_colors(listings)
+    if sized:
+        print(f"[STORAGE] {sized} 篇由既存標題補上容量")
     if colored:
         print(f"[COLOR] {colored} 篇由既存標題補上顏色")
     if dropped:
         print(f"[CLEAN] {dropped} 篇誤判（配件、不存在的型號）改為略過")
-    if dropped or colored:
+    if dropped or colored or sized:
         save_listings(listings)
     rows = build_summary(listings, multi=multi)
     print(f"[REPORT] 行情彙整 {len(rows)} 組 → {SUMMARY_FILE}")

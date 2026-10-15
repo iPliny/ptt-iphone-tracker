@@ -853,10 +853,11 @@ class StaleAndStorageTest(unittest.TestCase):
         self.assertIsNone(T.misparsed_reason({**row, "status": "已售出"}, now))  # 已有結果的不動
         self.assertIsNone(T.misparsed_reason(row, T.datetime(2026, 4, 30)))
 
-    def test_drop_fixes_unknown_storage(self):
+    def test_backfill_unknown_storage(self):
         url = "https://www.ptt.cc/bbs/MacShop/M.1791442010.A.D43.html"
         rows = {url: {"source_url": url, "status": "已刪除", "title": "[販售] 全國 iPhone 17 Pro Max 2TB銀色",
                       "model": "iPhone 17 Pro Max", "storage": "未知"}}
+        self.assertEqual(T.backfill_storage(rows), 1)
         with patch.object(T, "log_event"):
             self.assertEqual(T.drop_misparsed(rows), 0)
         self.assertEqual((rows[url]["storage"], rows[url]["status"]), ("2TB", "已刪除"))
