@@ -3,7 +3,7 @@
   "use strict";
 
   const $ = (s) => document.querySelector(s);
-  const { esc, money, modelUrl, itemHtml, soldNote, daysCell, priceEventText,
+  const { esc, money, modelPageUrl: modelUrl, itemHtml, soldNote, daysCell, priceEventText,
     periodRange, sumPeriod, previousPeriod, periodNavigation, periodTitle, inPeriod, periodItems } = PttCommon;
   const PAGE = 10;
 

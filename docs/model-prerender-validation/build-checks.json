@@ -1,0 +1,287 @@
+{
+  "data_schema_and_values_unchanged": true,
+  "published_csv_bytes_unchanged": true,
+  "model_pages": 36,
+  "listing_count": 1016,
+  "sitemap_model_urls": 36,
+  "raw_html_checks": [
+    {
+      "model": "iPhone 11",
+      "path": "models/iphone-11.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-11.html",
+      "bytes": 11670
+    },
+    {
+      "model": "iPhone 11 Pro",
+      "path": "models/iphone-11-pro.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-11-pro.html",
+      "bytes": 7326
+    },
+    {
+      "model": "iPhone 12",
+      "path": "models/iphone-12.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-12.html",
+      "bytes": 11475
+    },
+    {
+      "model": "iPhone 12 Pro",
+      "path": "models/iphone-12-pro.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-12-pro.html",
+      "bytes": 11392
+    },
+    {
+      "model": "iPhone 12 Pro Max",
+      "path": "models/iphone-12-pro-max.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-12-pro-max.html",
+      "bytes": 9047
+    },
+    {
+      "model": "iPhone 12 mini",
+      "path": "models/iphone-12-mini.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-12-mini.html",
+      "bytes": 7007
+    },
+    {
+      "model": "iPhone 13",
+      "path": "models/iphone-13.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-13.html",
+      "bytes": 11503
+    },
+    {
+      "model": "iPhone 13 Pro",
+      "path": "models/iphone-13-pro.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-13-pro.html",
+      "bytes": 12162
+    },
+    {
+      "model": "iPhone 13 Pro Max",
+      "path": "models/iphone-13-pro-max.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-13-pro-max.html",
+      "bytes": 11846
+    },
+    {
+      "model": "iPhone 13 mini",
+      "path": "models/iphone-13-mini.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-13-mini.html",
+      "bytes": 10598
+    },
+    {
+      "model": "iPhone 14",
+      "path": "models/iphone-14.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-14.html",
+      "bytes": 11321
+    },
+    {
+      "model": "iPhone 14 Plus",
+      "path": "models/iphone-14-plus.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-14-plus.html",
+      "bytes": 9726
+    },
+    {
+      "model": "iPhone 14 Pro",
+      "path": "models/iphone-14-pro.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-14-pro.html",
+      "bytes": 11711
+    },
+    {
+      "model": "iPhone 14 Pro Max",
+      "path": "models/iphone-14-pro-max.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-14-pro-max.html",
+      "bytes": 12226
+    },
+    {
+      "model": "iPhone 15",
+      "path": "models/iphone-15.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-15.html",
+      "bytes": 11288
+    },
+    {
+      "model": "iPhone 15 Plus",
+      "path": "models/iphone-15-plus.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-15-plus.html",
+      "bytes": 7059
+    },
+    {
+      "model": "iPhone 15 Pro",
+      "path": "models/iphone-15-pro.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-15-pro.html",
+      "bytes": 12023
+    },
+    {
+      "model": "iPhone 15 Pro Max",
+      "path": "models/iphone-15-pro-max.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-15-pro-max.html",
+      "bytes": 12166
+    },
+    {
+      "model": "iPhone 16",
+      "path": "models/iphone-16.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-16.html",
+      "bytes": 9198
+    },
+    {
+      "model": "iPhone 16 Plus",
+      "path": "models/iphone-16-plus.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-16-plus.html",
+      "bytes": 9675
+    },
+    {
+      "model": "iPhone 16 Pro",
+      "path": "models/iphone-16-pro.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-16-pro.html",
+      "bytes": 11967
+    },
+    {
+      "model": "iPhone 16 Pro Max",
+      "path": "models/iphone-16-pro-max.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-16-pro-max.html",
+      "bytes": 12082
+    },
+    {
+      "model": "iPhone 16e",
+      "path": "models/iphone-16e.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-16e.html",
+      "bytes": 6996
+    },
+    {
+      "model": "iPhone 17",
+      "path": "models/iphone-17.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-17.html",
+      "bytes": 11595
+    },
+    {
+      "model": "iPhone 17 Pro",
+      "path": "models/iphone-17-pro.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-17-pro.html",
+      "bytes": 11262
+    },
+    {
+      "model": "iPhone 17 Pro Max",
+      "path": "models/iphone-17-pro-max.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-17-pro-max.html",
+      "bytes": 12340
+    },
+    {
+      "model": "iPhone 17e",
+      "path": "models/iphone-17e.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-17e.html",
+      "bytes": 8714
+    },
+    {
+      "model": "iPhone 18 Pro",
+      "path": "models/iphone-18-pro.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-18-pro.html",
+      "bytes": 11429
+    },
+    {
+      "model": "iPhone 18 Pro Max",
+      "path": "models/iphone-18-pro-max.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-18-pro-max.html",
+      "bytes": 11605
+    },
+    {
+      "model": "iPhone 8 Plus",
+      "path": "models/iphone-8-plus.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-8-plus.html",
+      "bytes": 7631
+    },
+    {
+      "model": "iPhone Air",
+      "path": "models/iphone-air.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-air.html",
+      "bytes": 11462
+    },
+    {
+      "model": "iPhone SE2",
+      "path": "models/iphone-se2.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-se2.html",
+      "bytes": 6549
+    },
+    {
+      "model": "iPhone SE3",
+      "path": "models/iphone-se3.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-se3.html",
+      "bytes": 6727
+    },
+    {
+      "model": "iPhone X",
+      "path": "models/iphone-x.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-x.html",
+      "bytes": 6008
+    },
+    {
+      "model": "iPhone XR",
+      "path": "models/iphone-xr.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-xr.html",
+      "bytes": 6334
+    },
+    {
+      "model": "iPhone XS",
+      "path": "models/iphone-xs.html",
+      "canonical": "https://macshop.crawlsnek.com/models/iphone-xs.html",
+      "bytes": 8057
+    }
+  ],
+  "browser_checks": [
+    {
+      "canonical": [
+        "https://macshop.crawlsnek.com/models/iphone-18-pro.html"
+      ],
+      "h1": "iPhone 18 Pro",
+      "listTitle": "256GB的文章（107）",
+      "overflow": false,
+      "step": "static-256gb-watch",
+      "url": "http://127.0.0.1:18766/models/iphone-18-pro.html?s=256GB",
+      "watch": "true"
+    },
+    {
+      "prices": [
+        "$43,000",
+        "$43,000",
+        "$43,000",
+        "$42,900",
+        "$42,500",
+        "$42,500",
+        "$42,500",
+        "$42,500",
+        "$42,000",
+        "$41,800"
+      ],
+      "sort": "price-desc",
+      "status": "已售出",
+      "step": "static-filter-sort",
+      "title": "256GB的文章（10）",
+      "url": "http://127.0.0.1:18766/models/iphone-18-pro.html?s=256GB"
+    },
+    {
+      "canonical": [
+        "https://macshop.crawlsnek.com/models/iphone-18-pro.html"
+      ],
+      "step": "legacy-bookmark-watch-restored",
+      "title": "256GB的文章（107）",
+      "url": "http://127.0.0.1:18766/model.html?m=iPhone+18+Pro&s=256GB",
+      "watch": "true"
+    },
+    {
+      "listCount": 20,
+      "more": "顯示更多（還有 14 篇）",
+      "step": "legacy-512gb-more",
+      "url": "http://127.0.0.1:18766/model.html?m=iPhone+18+Pro&s=512GB"
+    },
+    {
+      "canonicalCount": 1,
+      "overflow": false,
+      "scrollWidth": 375,
+      "step": "mobile-375-static",
+      "url": "http://127.0.0.1:18766/models/iphone-18-pro.html?s=256GB",
+      "watch": "true",
+      "width": 375
+    },
+    {
+      "overflow": false,
+      "scrollWidth": 320,
+      "step": "mobile-320-static",
+      "width": 320
+    }
+  ]
+}

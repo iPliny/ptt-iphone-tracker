@@ -77,6 +77,13 @@
     return "model.html?" + p.toString();
   }
 
+  // 新連結使用預先產生的標準頁；modelUrl 保留舊書籤與查詢網址的操作行為。
+  function modelPageUrl(model, storage) {
+    const slug = String(model).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "model";
+    const path = "models/" + slug + ".html";
+    return storage == null || storage === "" ? path : path + "?" + new URLSearchParams({ s: storage });
+  }
+
   // 容量依實際大小排序（64GB < 128GB < … < 1TB < 2TB），無法辨識的放最後。
   function storageSize(s) {
     const m = /^(\d+(?:\.\d+)?)\s*(GB|TB)$/i.exec(String(s || "").trim());
@@ -131,5 +138,5 @@
   }
 
   return { esc, money, dayOf, periodRange, sumPeriod, previousPeriod, periodNavigation, periodTitle, inPeriod, periodItems,
-    modelUrl, storageSize, compareStorage, itemHtml, soldNote, daysCell, priceEventText, setMore };
+    modelUrl, modelPageUrl, storageSize, compareStorage, itemHtml, soldNote, daysCell, priceEventText, setMore };
 });

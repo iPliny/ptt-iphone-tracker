@@ -1,20 +1,24 @@
-// 機型獨立頁：同一機型的所有容量共用一頁，用容量分頁切換。網址 model.html?m=<型號>&s=<容量>。
+// 預產靜態機型頁與原有 model.html?m=<型號>&s=<容量> 共用互動行為。
 (function () {
   "use strict";
 
   const $ = (s) => document.querySelector(s);
-  const { esc, money, dayOf, modelUrl, compareStorage, itemHtml, soldNote, daysCell, priceEventText } = PttCommon;
+  const { esc, money, dayOf, modelUrl, modelPageUrl, compareStorage, itemHtml, soldNote, daysCell, priceEventText } = PttCommon;
   const PAGE = 10;
   const EVENT_LIMIT = 10;
 
   const params = new URLSearchParams(location.search);
-  const model = params.get("m") || "";
+  const staticModel = document.body && document.body.dataset.model || "";
+  const model = staticModel || params.get("m") || "";
   // 同一機型的容量／篩選參數共用 canonical；空白機型不宣告 canonical。
   if (model) {
-    const canonical = document.createElement("link");
+    let canonical = $('link[rel="canonical"]');
+    if (!canonical || !canonical.href) {
+      canonical = document.createElement("link");
+      document.head.appendChild(canonical);
+    }
     canonical.rel = "canonical";
-    canonical.href = $('meta[name="site-url"]').content + "model.html?" + new URLSearchParams({ m: model });
-    document.head.appendChild(canonical);
+    canonical.href = $('meta[name="site-url"]').content + modelPageUrl(model);
   }
   let storage = params.get("s");  // null = 全部容量
   let D = null;
@@ -24,21 +28,27 @@
   const watchlist = PttWatchlist.createStore(() => window.localStorage);
   let watchFeedbackTimer;
 
-  document.title = (model || "機型行情") + " · PTT MacShop交易觀測";
+  if (!staticModel) document.title = (model || "機型行情") + " · PTT MacShop交易觀測";
   $("#model-name").textContent = model || "未指定機型";
 
-  fetch("data.json", { cache: "no-cache" })
+  fetch((staticModel ? "../" : "") + "data.json", { cache: "no-cache" })
     .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(init)
-    .catch((e) => { $("#updated").textContent = "資料載入失敗（" + e.message + "）"; });
+    .catch((e) => {
+      const message = "資料載入失敗（" + e.message + "）";
+      $("#updated").textContent = staticModel
+        ? $("#updated").textContent + " · 即時" + message + "，顯示建置時資料" : message;
+    });
 
   function init(data) {
     D = data;
     mine = D.listings.filter((r) => r.model === model);
     $("#updated").textContent = "最後回訪 " + (D.last_checked || "—") + " · 這個機型共追蹤 " + mine.length + " 篇";
-    if (!model || !mine.length) {
+    if (!model || (!mine.length && !(D.model_totals || []).some((r) => r.model === model))) {
+      $("#model-main").hidden = true;
+      $("#watch-model").hidden = true;
       $("#missing-text").innerHTML = (model ? "目前資料裡沒有「" + esc(model) + "」的文章。" : "網址沒有指定機型。") +
-        ' <a href="./">回到總覽</a>，從型號行情表點選機型。';
+        ' <a href="' + (staticModel ? "../" : "./") + '">回到總覽</a>，從型號行情表點選機型。';
       $("#model-missing").hidden = false;
       return;
     }
@@ -71,7 +81,10 @@
   function choose(s) {
     storage = s;
     listLimit = PAGE;
-    history.replaceState(null, "", modelUrl(model, storage));
+    const query = new URLSearchParams();
+    if (storage !== null) query.set("s", storage);
+    history.replaceState(null, "", staticModel
+      ? location.pathname + (query.toString() ? "?" + query : "") : modelUrl(model, storage));
     render();
   }
 

@@ -200,8 +200,8 @@ class BuildSiteTest(unittest.TestCase):
         root = ElementTree.fromstring(S.sitemap_xml(data, today=date(2026, 10, 4)))
         ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
         locs = [e.text for e in root.findall("s:url/s:loc", ns)]
-        self.assertEqual(locs, [S.SITE_URL, S.SITE_URL + "prices.html", S.SITE_URL + "jp/", S.SITE_URL + "jp/ja/", S.SITE_URL + "model.html?m=iPhone+15+Pro",
-                                S.SITE_URL + "model.html?m=iPhone+16e"])
+        self.assertEqual(locs, [S.SITE_URL, S.SITE_URL + "prices.html", S.SITE_URL + "jp/", S.SITE_URL + "jp/ja/", S.SITE_URL + "models/iphone-15-pro.html",
+                                S.SITE_URL + "models/iphone-16e.html"])
         self.assertEqual({e.text for e in root.findall("s:url/s:lastmod", ns)}, {"2026-10-04"})
 
     def test_estimated_sold_date(self):

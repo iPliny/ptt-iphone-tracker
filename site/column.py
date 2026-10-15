@@ -12,7 +12,6 @@ import json
 import os
 import statistics
 from datetime import date, datetime, timedelta
-from urllib.parse import urlencode
 
 import build_site as S
 
@@ -395,7 +394,8 @@ def page_html(issue, issues, root):
     url = issue_url(issue)
     published = issue["generated_at"][:10]
     label = week_label(issue)
-    model_link = lambda m: f"{root}model.html?{urlencode({'m': m})}"  # noqa: E731
+    from model_pages import model_path
+    model_link = lambda m: root + model_path(m)  # noqa: E731
 
     json_ld = [
         {"@context": "https://schema.org", "@type": "Article", "headline": a["title"],

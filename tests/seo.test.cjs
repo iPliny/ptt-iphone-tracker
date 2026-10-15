@@ -45,7 +45,8 @@ test('機型 canonical 與 sitemap 編碼一致，排除容量、追蹤參數與
     return links;
   }
   for (const model of models) {
-    const url = locs.find(loc => new URL(loc).searchParams.get('m') === model);
+    const url = base + common.modelPageUrl(model);
+    assert.ok(locs.includes(url));
     assert.ok(url, model);
     const query = '?m=' + encodeURIComponent(model) + '&s=256GB&utm_source=test&m=ignored';
     const links = canonical(query);
@@ -54,6 +55,6 @@ test('機型 canonical 與 sitemap 編碼一致，排除容量、追蹤參數與
     assert.equal(links[0].rel, 'canonical');
     assert.equal(links[0].href, url);
   }
-  assert.equal(canonical('?m=iPhone+17+Pro')[0].href, base + 'model.html?m=iPhone+17+Pro');
+  assert.equal(canonical('?m=iPhone+17+Pro')[0].href, base + 'models/iphone-17-pro.html');
   for (const query of ['', '?s=256GB', '?m=']) assert.deepEqual(canonical(query), []);
 });
