@@ -231,18 +231,23 @@
       s += `<text class="axis" x="${x(i)}" y="${H - 8}" text-anchor="${k === 0 ? "start" : k === ticks ? "end" : "middle"}">${dates[i].slice(5)}</text>`;
     }
     lines.forEach((l) => {
-      // 在架篇數不夠的日子留空，線斷開；只有一天的段落畫成點
-      let d = "", run = 0;
+      // 在架篇數不夠的日子沒有行情：前後兩個有行情的點用虛線連起來
+      let d = "", gaps = "", prev = -1;
       l.values.forEach((v, i) => {
-        if (v == null) { run = 0; return; }
-        d += (run ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1);
-        run++;
+        if (v == null) return;
+        const p = x(i).toFixed(1) + " " + y(v).toFixed(1);
+        if (prev < 0) d += "M" + p;
+        else if (prev === i - 1) d += "L" + p;
+        else {
+          gaps += "M" + x(prev).toFixed(1) + " " + y(l.values[prev]).toFixed(1) + "L" + p;
+          d += "M" + p;
+        }
+        prev = i;
       });
+      if (gaps) s += `<path class="trend-line trend-gap ${l.cls}" d="${gaps}"/>`;
       s += `<path class="trend-line ${l.cls}" d="${d}"/>`;
-      l.values.forEach((v, i) => {
-        const lone = v != null && l.values[i - 1] == null && l.values[i + 1] == null;
-        if (lone || i === lastIndex(l.values)) s += `<circle class="trend-dot ${l.cls}" cx="${x(i)}" cy="${y(v)}" r="4"/>`;
-      });
+      const last = lastIndex(l.values);
+      s += `<circle class="trend-dot ${l.cls}" cx="${x(last)}" cy="${y(l.values[last])}" r="4"/>`;
     });
     s += `<line class="crosshair" id="trend-x" x1="0" x2="0" y1="${T0}" y2="${H - B}" visibility="hidden"/>`;
     s += `<rect class="trend-hit" x="${L}" y="${T0}" width="${W - L - R}" height="${H - T0 - B}"/>`;
