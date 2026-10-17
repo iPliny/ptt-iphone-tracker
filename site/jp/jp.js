@@ -278,6 +278,11 @@
       document.querySelectorAll('[data-cond-label]').forEach(el=>{el.textContent=condLabel();});
       document.querySelectorAll('[data-cond-only]').forEach(el=>{el.hidden=el.dataset.condOnly!==COND;});
       document.querySelectorAll('.jp-cond button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.cond===COND)));
+      // 切換語言時保留目前狀態。
+      document.querySelectorAll('.jp-lang').forEach(el=>{
+        el.dataset.href=el.dataset.href||el.getAttribute('href');
+        el.setAttribute('href',el.dataset.href+(COND==='中古上限'?'?c=used':''));
+      });
       get('flash').innerHTML=renderFlash(flash(data.prices,data.runs||[]));
       compare();chart();
       changes=recentChanges(data.prices,end);expanded=false;
