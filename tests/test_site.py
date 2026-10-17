@@ -297,6 +297,55 @@ class BuildSiteTest(unittest.TestCase):
         self.assertGreater(data["counts"]["total"], 0)
 
 
+class PriceTrendsTest(unittest.TestCase):
+    def row(self, url, post, price, status="在售", sold_at="", brand_new=False, storage="256GB"):
+        return {"url": url, "post_time": post, "price": price, "status": status, "sold_at": sold_at,
+                "model": "iPhone 17 Pro", "storage": storage, "brand_new": brand_new,
+                "last_checked": "2026-10-05 12:00:00"}
+
+    def test_on_shelf_median_with_price_history(self):
+        listings = [
+            self.row("a", "2026-10-01 10:00:00", 30000),
+            self.row("b", "2026-10-01 11:00:00", 32000),
+            # 10/03 從 36000 降到 34000
+            self.row("c", "2026-10-01 12:00:00", 34000),
+            # 10/03 售出：10/03 起不在架
+            self.row("d", "2026-10-02 09:00:00", 20000, status="已售出", sold_at="2026-10-03 08:00:00"),
+            # 10/04 刪文
+            self.row("e", "2026-10-02 09:00:00", 40000, status="已刪除"),
+            # 不知道刪文日的已刪除文章不列入
+            self.row("f", "2026-10-02 09:00:00", 99000, status="已刪除"),
+            # 全新另外一組，只有兩篇，不夠算行情
+            self.row("n1", "2026-10-01 09:00:00", 40000, brand_new=True),
+            self.row("n2", "2026-10-01 09:00:00", 41000, brand_new=True),
+        ]
+        events = [
+            {"time": "2026-10-03 15:00:00", "source_url": "c", "event": "價格變動", "detail": "36000 → 34000"},
+            {"time": "2026-10-04 07:00:00", "source_url": "e", "event": "狀態變更", "detail": "在售 → 已刪除"},
+        ]
+        t = S.price_trends(listings, events, start="2026-10-02")
+        self.assertEqual(t["start"], "2026-10-02")  # 開始日之前不算
+        (used,) = t["series"]
+        self.assertFalse(used["brand_new"])
+        # 10/02：30000 32000 36000 20000 40000；10/03：30000 32000 34000 40000；10/04 起：30000 32000 34000
+        self.assertEqual(used["values"], [32000, 33000, 32000, 32000])
+
+    def test_reconstructed_outlier_price_dropped(self):
+        listings = [self.row(u, "2026-10-01 10:00:00", 30000) for u in "abcd"] + [self.row("x", "2026-10-01 10:00:00", 31000)]
+        events = [{"time": "2026-10-03 15:00:00", "source_url": "x", "event": "價格變動", "detail": "70000 → 31000"}]
+        (s,) = S.price_trends(listings, events, start="2026-10-02")["series"]
+        self.assertEqual(s["values"][0], 30000)  # 10/02 的 70000 不列入
+
+    def test_too_few_on_shelf_left_blank(self):
+        listings = [self.row("a", "2026-10-04 10:00:00", 30000), self.row("b", "2026-10-04 10:00:00", 31000),
+                    self.row("c", "2026-10-05 10:00:00", 32000)]
+        (s,) = S.price_trends(listings, [], start="2026-10-01")["series"]
+        self.assertEqual(s["values"], [None, None, None, None, 31000])
+
+    def test_build_data_has_trends(self):
+        self.assertIn("series", S.build_data()["trends"])
+
+
 S_EVENT_HEADER = ["time", "source_url", "event", "detail"]
 
 if __name__ == "__main__":

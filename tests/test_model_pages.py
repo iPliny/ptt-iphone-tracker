@@ -41,6 +41,24 @@ class ModelHtmlTest(unittest.TestCase):
     def render(self, **kwargs):
         return M.render_model_html(self.template, self.data, self.model, self.canonical, **kwargs)
 
+    def test_trend_summary_prerendered(self):
+        self.data["trends"] = {"start": "2026-10-01", "series": [
+            dict(model=self.model, storage="256GB", brand_new=False, values=[None] + [31000] * 7 + [30000]),
+            dict(model=self.model, storage="256GB", brand_new=True, values=[40000] * 8)]}
+        html = self.render()
+        card = next(a for t, a in Page(html).elements if a.get("id") == "trend-card")
+        self.assertNotIn("hidden", card)
+        self.assertIn("256GB 二手", html)
+        self.assertNotIn("全新未拆</div>", html)  # 全部容量只列二手
+        self.assertIn("7 天 −3.2% · 30 天 —", html)
+
+    def test_trend_change_rounds_half_up_like_javascript(self):
+        self.assertEqual(M.trend_change([40000] + [None] * 6 + [40900], 7), "+2.3%")
+
+    def test_trend_card_hidden_without_series(self):
+        card = next(a for t, a in Page(self.render()).elements if a.get("id") == "trend-card")
+        self.assertIn("hidden", card)
+
     def test_contains_readable_content_and_single_canonical_without_javascript(self):
         html = self.render()
         page = Page(html)

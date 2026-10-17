@@ -1,4 +1,5 @@
 """機型頁的建置時內容；只使用 build_data 已排除異常值的公開資料。"""
+import math
 import re
 import shutil
 from html import escape
@@ -110,6 +111,33 @@ def apple_table(info):
             f'<p class="hint">{escape(note)}{sources}</p>')
 
 
+def trend_change(values, days):
+    """最新一天和 days 天前的漲跌，格式與 model.js 的 changeText 相同。"""
+    idx = [i for i, v in enumerate(values) if v is not None]
+    if not idx or idx[-1] - days < 0 or values[idx[-1] - days] is None:
+        return "—"
+    last, before = values[idx[-1]], values[idx[-1] - days]
+    pct = math.floor((last - before) / before * 100 * 10 + 0.5) / 10  # 和 JavaScript 的 Math.round 一樣，.5 往正方向進位
+    return "持平" if pct == 0 else ("+" if pct > 0 else "−") + f"{abs(pct):.1f}%"
+
+
+def trend_summary(data, model):
+    """全部容量分頁的行情摘要：每個容量的二手行情（沒有二手時用全新），JavaScript 會再重畫。"""
+    series = [x for x in data.get("trends", {}).get("series", []) if x["model"] == model]
+    used = [x for x in series if not x["brand_new"]]
+    rows = sorted(used or series, key=lambda x: storage_key(x["storage"]))
+    storages = sorted({r["storage"] for r in data["listings"] if r["model"] == model}, key=storage_key)
+    out = []
+    for x in rows:
+        latest = next(v for v in reversed(x["values"]) if v is not None)
+        label = (x["storage"] or "容量未提供") + (" 全新未拆" if x["brand_new"] else " 二手")
+        cls = "s" + str((storages.index(x["storage"]) if x["storage"] in storages else 0) % 5 + 1)
+        out.append(f'<div class="trend-item"><div class="label"><span class="key {cls}"></span>{escape(label)}</div>'
+                   f'<div class="value">{escape(money(latest))}</div>'
+                   f'<div class="note">7 天 {trend_change(x["values"], 7)} · 30 天 {trend_change(x["values"], 30)}</div></div>')
+    return "".join(out)
+
+
 def render_model_html(template, data, model, canonical_url, asset_prefix=""):
     """保留互動元件 ID 與腳本，預先填入可直接閱讀的機型內容。"""
     stats = next(row for row in data["model_totals"] if row["model"] == model)
@@ -134,6 +162,11 @@ def render_model_html(template, data, model, canonical_url, asset_prefix=""):
     html = html.replace('<div id="list"></div>', '<div id="list">' + listing_cards(listings) + '</div>')
     html = html.replace('<div id="chart" class="chart"></div>',
                         '<div id="chart" class="chart"><p class="hint">啟用 JavaScript 可查看價格分布圖及篩選文章。</p></div>')
+    trend = trend_summary(data, model)
+    if trend:
+        html = html.replace('<section class="card" id="trend-card" hidden>', '<section class="card" id="trend-card">', 1)
+        html = html.replace('<div id="trend-summary" class="trend-summary"></div>',
+                            '<div id="trend-summary" class="trend-summary">' + trend + '</div>', 1)
     apple = apple_table(data.get("apple", {}).get(model))
     if apple:
         html = html.replace('<section class="card apple" id="apple" hidden></section>',

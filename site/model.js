@@ -104,6 +104,7 @@
     renderWatch();
     renderApple();
     renderKpis();
+    renderTrend();
     renderChart();
     renderCompare();
     renderColors();
@@ -156,6 +157,138 @@
     $("#kpis").innerHTML = cards.map(([label, v, note]) =>
       `<div class="kpi"><div class="label">${label}</div><div class="value">${esc(v)}</div><div class="note">${esc(note) || "&nbsp;"}</div></div>`
     ).join("");
+  }
+
+  // ---------- 行情走勢：每天在架文章的標價中位數 ----------
+  const TREND_COLORS = 5;  // style.css 的 .s1～.s5，顏色跟著容量（或全新／二手）走
+
+  function trendLines() {
+    const T = D.trends || { series: [] };
+    const all = T.series.filter((x) => x.model === model);
+    if (storage !== null) {
+      return all.filter((x) => x.storage === storage).sort((a, b) => a.brand_new - b.brand_new)
+        .map((x) => ({ ...x, label: storageLabel(x.storage) + (x.brand_new ? " 全新未拆" : " 二手"), cls: x.brand_new ? "s2" : "s1" }));
+    }
+    // 全部容量：每個容量一條二手線；整個機型都沒有二手行情時改用全新
+    const used = all.filter((x) => !x.brand_new);
+    const pick = used.length ? used : all;
+    return pick.sort((a, b) => compareStorage(a.storage, b.storage)).map((x) => ({
+      ...x, label: storageLabel(x.storage) + (x.brand_new ? " 全新未拆" : " 二手"),
+      cls: "s" + (storages.indexOf(x.storage) % TREND_COLORS + 1),
+    }));
+  }
+
+  function lastIndex(values) {
+    for (let i = values.length - 1; i >= 0; i--) if (values[i] != null) return i;
+    return -1;
+  }
+
+  function changeText(values, days) {
+    const i = lastIndex(values);
+    const before = i - days >= 0 ? values[i - days] : null;
+    if (i < 0 || before == null) return "—";
+    const pct = (values[i] - before) / before * 100;
+    const r = Math.round(pct * 10) / 10;
+    return r === 0 ? "持平" : (r > 0 ? "+" : "−") + Math.abs(r).toFixed(1) + "%";
+  }
+
+  function renderTrend() {
+    const T = D.trends || {};
+    const lines = trendLines();
+    $("#trend-card").hidden = !lines.length;
+    if (!lines.length) return;
+    const dates = lines[0].values.map((_, i) => {
+      const d = new Date(T.start + "T00:00:00Z");
+      d.setUTCDate(d.getUTCDate() + i);
+      return d.toISOString().slice(0, 10);
+    });
+    $("#trend-summary").innerHTML = lines.map((l) => {
+      const i = lastIndex(l.values);
+      return `<div class="trend-item"><div class="label"><span class="key ${l.cls}"></span>${esc(l.label)}</div>` +
+        `<div class="value">${money(l.values[i])}</div>` +
+        `<div class="note">7 天 ${changeText(l.values, 7)} · 30 天 ${changeText(l.values, 30)}</div></div>`;
+    }).join("");
+
+    const W = 900, H = 220, L = 64, R = 16, T0 = 12, B = 26;
+    const vals = lines.flatMap((l) => l.values.filter((v) => v != null));
+    // 縱軸用整數刻度（$500、$1,000…），線不貼著上下緣
+    const lo = Math.min(...vals), hi = Math.max(...vals);
+    const step = [100, 200, 250, 500, 1000, 2000, 2500, 5000, 10000, 20000].find((w) => Math.max(hi - lo, 1) / w <= 3) || 50000;
+    let y0 = Math.floor(lo / step) * step, y1 = Math.ceil(hi / step) * step;
+    if (lo - y0 < step * 0.2) y0 = Math.max(0, y0 - step);
+    if (y1 - hi < step * 0.2) y1 += step;
+    const n = dates.length;
+    const x = (i) => L + (W - L - R) * (n > 1 ? i / (n - 1) : 0.5);
+    const y = (v) => T0 + (H - T0 - B) * (1 - (v - y0) / (y1 - y0));
+    let s = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(model)} 每日行情走勢">`;
+    for (let v = y0; v <= y1; v += step) {
+      s += `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/>`;
+      s += `<text class="axis" x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${money(v)}</text>`;
+    }
+    const ticks = Math.min(5, n - 1);
+    for (let k = 0; k <= ticks; k++) {
+      const i = ticks ? Math.round((n - 1) * k / ticks) : 0;
+      s += `<text class="axis" x="${x(i)}" y="${H - 8}" text-anchor="${k === 0 ? "start" : k === ticks ? "end" : "middle"}">${dates[i].slice(5)}</text>`;
+    }
+    lines.forEach((l) => {
+      // 在架篇數不夠的日子留空，線斷開；只有一天的段落畫成點
+      let d = "", run = 0;
+      l.values.forEach((v, i) => {
+        if (v == null) { run = 0; return; }
+        d += (run ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1);
+        run++;
+      });
+      s += `<path class="trend-line ${l.cls}" d="${d}"/>`;
+      l.values.forEach((v, i) => {
+        const lone = v != null && l.values[i - 1] == null && l.values[i + 1] == null;
+        if (lone || i === lastIndex(l.values)) s += `<circle class="trend-dot ${l.cls}" cx="${x(i)}" cy="${y(v)}" r="4"/>`;
+      });
+    });
+    s += `<line class="crosshair" id="trend-x" x1="0" x2="0" y1="${T0}" y2="${H - B}" visibility="hidden"/>`;
+    s += `<rect class="trend-hit" x="${L}" y="${T0}" width="${W - L - R}" height="${H - T0 - B}"/>`;
+    $("#trend").innerHTML = s + '</svg><div class="tip" id="trend-tip" hidden></div>';
+
+    const svg = $("#trend svg"), tip = $("#trend-tip"), cross = $("#trend-x");
+    const move = (e) => {
+      const box = svg.getBoundingClientRect();
+      const px = (e.clientX - box.left) / box.width * W;
+      const i = Math.max(0, Math.min(n - 1, Math.round((px - L) / (W - L - R) * (n - 1))));
+      cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i));
+      cross.setAttribute("visibility", "visible");
+      tip.innerHTML = `<div class="tip-date">${dates[i]}</div>` + lines.map((l) =>
+        `<div class="tip-row"><span class="key ${l.cls}"></span><strong>${money(l.values[i])}</strong> <span class="muted">${esc(l.label)}</span></div>`).join("");
+      tip.hidden = false;
+      const left = x(i) / W * box.width;
+      tip.style.left = Math.min(left + 12, box.width - tip.offsetWidth - 4) + "px";
+    };
+    const leave = () => { tip.hidden = true; cross.setAttribute("visibility", "hidden"); };
+    svg.addEventListener("pointermove", move);
+    svg.addEventListener("pointerleave", leave);
+    renderDist(lines);
+  }
+
+  // 目前在架價格區間：只在單一容量時畫，避免不同容量混在一起
+  function renderDist(lines) {
+    const box = $("#dist");
+    const first = lines[0];
+    const prices = storage === null || !first ? [] : mine.filter((r) => r.storage === storage &&
+      r.brand_new === first.brand_new && r.price && (r.status === "在售" || r.status === "交易中")).map((r) => r.price);
+    box.hidden = prices.length < 3;
+    if (box.hidden) return;
+    const lo = Math.min(...prices), hi = Math.max(...prices);
+    const step = [500, 1000, 2000, 2500, 5000, 10000, 20000].find((w) => Math.floor(hi / w) - Math.floor(lo / w) < 8) || 50000;
+    const start = Math.floor(lo / step) * step;
+    const bins = Array.from({ length: Math.floor(hi / step) - Math.floor(lo / step) + 1 }, (_, k) => ({ from: start + k * step, n: 0 }));
+    prices.forEach((p) => { bins[Math.floor((p - start) / step)].n++; });
+    const top = bins.reduce((a, b) => (b.n > a.n ? b : a));
+    const pct = (b) => Math.round(b.n / prices.length * 100);
+    box.innerHTML = `<h3>目前在架價格區間（${esc(first.label)}）</h3>` +
+      `<p class="dist-top">最多集中在 ${money(top.from)}–${money(top.from + step - 1)}，約占 ${pct(top)}%。</p>` +
+      `<div class="dist-bars">` + bins.map((b) =>
+        `<div class="dist-bar" title="${money(b.from)}–${money(b.from + step - 1)}：${pct(b)}%">` +
+        `<span class="dist-pct">${b.n ? pct(b) + "%" : ""}</span>` +
+        `<span class="dist-fill ${first.cls}" style="height:${Math.max(b.n ? 4 : 0, pct(b) / pct(top) * 80)}px"></span>` +
+        `<span class="dist-label">${money(b.from)}</span></div>`).join("") + "</div>";
   }
 
   // ---------- 價格散布圖 ----------

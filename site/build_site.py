@@ -119,9 +119,9 @@ OUTLIER_MIN_SAMPLES = 5   # 同組至少幾筆才判斷價格是否異常
 OUTLIER_LOW, OUTLIER_HIGH = 0.5, 2.0  # 低於中位數一半、高於兩倍視為抓錯
 
 
-def price_outliers(listings):
-    """明顯不合理的價格（多半是把日期、保固期限抓成售價）：回傳 [(文章, 參考中位數)]。
-    先和同型號、同容量、同為全新或二手的中位數比；那組不到 5 筆時改和同型號比。"""
+def price_references(listings):
+    """判斷異常價格用的參考中位數：同型號、同容量、同為全新或二手；那組不到 5 筆時改用同型號。
+    回傳 ref(model, storage, brand_new) → 中位數或 None。"""
     def medians(key):
         groups = {}
         for r in listings:
@@ -131,12 +131,22 @@ def price_outliers(listings):
 
     fine = medians(lambda r: (r["model"], r["storage"], r["brand_new"]))
     coarse = medians(lambda r: (r["model"], r["brand_new"]))
+    return lambda model, storage, brand_new: fine.get((model, storage, brand_new)) or coarse.get((model, brand_new))
+
+
+def is_outlier(price, med):
+    return bool(med) and not (OUTLIER_LOW * med <= price <= OUTLIER_HIGH * med)
+
+
+def price_outliers(listings):
+    """明顯不合理的價格（多半是把日期、保固期限抓成售價）：回傳 [(文章, 參考中位數)]。"""
+    ref = price_references(listings)
     out = []
     for r in listings:
         if not (r["price"] and r["model"]):
             continue
-        med = fine.get((r["model"], r["storage"], r["brand_new"])) or coarse.get((r["model"], r["brand_new"]))
-        if med and not (OUTLIER_LOW * med <= r["price"] <= OUTLIER_HIGH * med):
+        med = ref(r["model"], r["storage"], r["brand_new"])
+        if is_outlier(r["price"], med):
             out.append((r, med))
     return out
 
@@ -242,6 +252,65 @@ def daily_series(listings, events, max_days=MAX_DAYS):
         out.append(row)
         d += timedelta(days=1)
     return out
+
+
+TREND_START = "2026-09-27"  # 現行排程開始回訪的日子；之前只看得到撐到這天還沒賣掉的文章，行情會偏高
+TREND_MIN_ON_SHELF = 3      # 當天在架少於幾篇就不算行情（線上留空）
+
+
+def price_on(changes, current, day):
+    """某篇文章在 day 結束時的標價：之後第一次改價前的價格，沒有之後的改價就是目前價格。"""
+    for changed, old in changes:
+        if changed > day:
+            return old
+    return current
+
+
+def price_trends(listings, events, start=TREND_START, max_days=MAX_DAYS):
+    """每日行情：型號×容量×全新與否，當天結束時仍在架文章的標價中位數。
+
+    在架的認定和 daily_series 相同（發文日起，到售出日或刪文日前一天）；價格用改價事件倒推當天的標價。
+    """
+    del_day = deleted_dates(events)
+    changes = {}
+    for e in sorted(events, key=lambda e: e.get("time", "")):
+        if e.get("event") != "價格變動":
+            continue
+        parts = (e.get("detail") or "").split("→")
+        old, d = (to_int(parts[0]) if len(parts) == 2 else None), day_of(e.get("time"))
+        if old and d:
+            changes.setdefault(e.get("source_url", ""), []).append((d, old))
+    ends = [day_of(r["last_checked"]) or day_of(r["post_time"]) for r in listings]
+    ends = [d for d in ends if d]
+    if not ends:
+        return {"start": None, "series": []}
+    end = date.fromisoformat(max(ends))
+    first = max(date.fromisoformat(start), end - timedelta(days=max_days - 1))
+    if first > end:
+        return {"start": None, "series": []}
+    days = [(first + timedelta(days=i)).isoformat() for i in range((end - first).days + 1)]
+    groups = {}
+    ref = price_references(listings)
+    for r in listings:
+        posted = day_of(r["post_time"])
+        if not (r["price"] and r["model"] and posted):
+            continue
+        gone = day_of(r["sold_at"]) if r["status"] == "已售出" else del_day.get(r["url"]) if r["status"] == "已刪除" else None
+        if r["status"] == "已刪除" and gone is None:
+            continue  # 不知道哪天刪的，不猜
+        per_day = groups.setdefault((r["model"], r["storage"], r["brand_new"]), [[] for _ in days])
+        med = ref(r["model"], r["storage"], r["brand_new"])
+        for i, d in enumerate(days):
+            if posted <= d and (gone is None or gone > d):
+                price = price_on(changes.get(r["url"], []), r["price"], d)
+                if not is_outlier(price, med):  # 倒推出來的舊價格也套用異常價格規則
+                    per_day[i].append(price)
+    series = []
+    for (model, storage, brand_new), per_day in sorted(groups.items()):
+        values = [int(statistics.median(v)) if len(v) >= TREND_MIN_ON_SHELF else None for v in per_day]
+        if any(v is not None for v in values):
+            series.append({"model": model, "storage": storage, "brand_new": brand_new, "values": values})
+    return {"start": days[0], "series": series}
 
 
 def group_stats(items):
@@ -365,6 +434,7 @@ def build_data(data_dir=DATA_DIR, now=None):
         "last_checked": max(checked) if checked else "",
         "counts": {"total": len(listings), **counts},
         "days": daily_series(listings, events),
+        "trends": price_trends(listings, events),
         # 型號統計另外納入多品項文章拆出的 iPhone（只影響刊登數與刊登價）
         "models": model_stats(listings + multi),
         "model_totals": model_totals(listings + multi),
