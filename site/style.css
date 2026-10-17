@@ -192,3 +192,31 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outlin
   .color-card td::before { content: attr(data-label); color: var(--muted); font-weight: 400; text-align: left; }
   .color-card td:first-child { font-weight: 650; }
 }
+
+/* 機型頁行情走勢：線色依序對應 .s1～.s5（明暗模式各自驗證過的分類色） */
+:root { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; }
+@media (prefers-color-scheme: dark) { :root { --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; } }
+.s1 { --c: var(--s1); } .s2 { --c: var(--s2); } .s3 { --c: var(--s3); } .s4 { --c: var(--s4); } .s5 { --c: var(--s5); }
+.trend-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px 16px; margin-bottom: 8px; }
+.trend-item .label { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.trend-item .value { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.trend-item .note { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.key { display: inline-block; width: 14px; height: 2px; border-radius: 1px; background: var(--c); vertical-align: middle; }
+.chart.trend { position: relative; }
+#model-main .chart.trend svg { height: 220px; }
+.chart .trend-line { fill: none; stroke: var(--c); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.chart .trend-dot { fill: var(--c); stroke: var(--card); stroke-width: 2; }
+.chart .crosshair { stroke: var(--muted); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.chart .trend-hit { fill: transparent; cursor: crosshair; }
+.chart .tip { position: absolute; top: 4px; pointer-events: none; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.12); white-space: nowrap; }
+.tip-date { color: var(--muted); margin-bottom: 2px; }
+.tip-row { display: flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.dist { margin-top: 14px; }
+.dist h3 { font-size: 14px; margin: 0 0 2px; }
+.dist-top { margin: 0 0 8px; font-size: 13px; }
+.dist-bars { display: flex; align-items: flex-end; gap: 2px; overflow-x: auto; }
+.dist-bar { flex: 1 1 0; min-width: 56px; display: flex; flex-direction: column; align-items: stretch; text-align: center; }
+.dist-pct { font-size: 12px; color: var(--ink); font-variant-numeric: tabular-nums; min-height: 16px; }
+.dist-fill { display: block; background: var(--c); border-radius: 4px 4px 0 0; }
+.dist-label { font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 2px; font-variant-numeric: tabular-nums; }
+.tip .muted { color: var(--muted); }
