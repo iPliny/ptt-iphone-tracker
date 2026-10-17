@@ -220,3 +220,4 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outlin
 .dist-fill { display: block; background: var(--c); border-radius: 4px 4px 0 0; }
 .dist-label { font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 2px; font-variant-numeric: tabular-nums; }
 .tip .muted { color: var(--muted); }
+.chart .trend-gap { stroke-dasharray: 4 4; }
