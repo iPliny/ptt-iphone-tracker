@@ -74,6 +74,7 @@ class JpPagesTest(unittest.TestCase):
             self.assertTrue((out / "jp/iphone-18-pro/index.html").exists())
             self.assertTrue((out / "jp/ja/iphone-18-pro/index.html").exists())
             self.assertFalse((out / "jp/iphone-air").exists())
+            self.assertNotIn("iphone-air/", (out / "jp/iphone-18-pro/index.html").read_text())
             sitemap = (out / "sitemap.xml").read_text()
             self.assertIn(SITE + "jp/iphone-18-pro/", sitemap)
             self.assertIn(SITE + "jp/ja/iphone-18-pro/", sitemap)

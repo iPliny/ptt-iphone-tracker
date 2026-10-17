@@ -145,7 +145,8 @@ def model_url(site_url, lang, model):
     return site_url + ("jp/ja/" if lang == "ja" else "jp/") + slug(model) + "/"
 
 
-def page_html(payload, model, lang, site_url):
+def page_html(payload, model, lang, site_url, models=MODELS):
+    """models 是本次實際產生頁面的機型，「其他機型」只連到這些頁。"""
     t = TEXT[lang]
     latest = payload.get("latest") or []
     when = checked_at(latest)
@@ -175,7 +176,7 @@ def page_html(payload, model, lang, site_url):
                         f'<p class="intro">{E(t["cond_note"][cond])}</p>{content}'
                         f'<p class="hint"><a href="{home}?m={E(model.replace(" ", "+"))}'
                         f'{"&amp;c=used" if cond != "未開封" else ""}">{t["interactive"]}</a></p></section>')
-    others = "".join(f'<li><a href="../{slug(m)}/">{E(m)}</a></li>' for m in MODELS if m != model)
+    others = "".join(f'<li><a href="../{slug(m)}/">{E(m)}</a></li>' for m in models if m != model)
     switch = f'{jp_root}{slug(model)}/' if lang == "ja" else f'../ja/{slug(model)}/'
     hreflang = "".join(f'  <link rel="alternate" hreflang="{TEXT[l]["lang"]}" href="{E(model_url(site_url, l, model))}">\n'
                        for l in ("zh", "ja"))
@@ -240,7 +241,7 @@ def render_jp_pages(out_dir, payload, site_url):
         for lang in ("zh", "ja"):
             path = out / ("ja" if lang == "ja" else "") / slug(model) / "index.html"
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(page_html(payload, model, lang, site_url), encoding="utf-8")
+            path.write_text(page_html(payload, model, lang, site_url, models), encoding="utf-8")
             urls.append(model_url(site_url, lang, model))
     for lang, index in (("zh", out / "index.html"), ("ja", out / "ja" / "index.html")):
         html = index.read_text(encoding="utf-8")
