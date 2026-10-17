@@ -530,7 +530,8 @@ def build(out_dir, data_dir=DATA_DIR):
     from market import render_market
     render_market(out_dir, data)
     from jp_build import build_jp
-    build_jp(out_dir, data_dir)
+    from jp_pages import render_jp_pages
+    jp_urls = render_jp_pages(out_dir, build_jp(out_dir, data_dir), SITE_URL)
     # 含日本頁的 HTML 統一代換正式網址；不改站內相對連結或 GA 官方碼。
     for path in Path(out_dir).rglob("*.html"):
         html = path.read_text(encoding="utf-8")
@@ -539,7 +540,7 @@ def build(out_dir, data_dir=DATA_DIR):
     with open(os.path.join(out_dir, "robots.txt"), "w", encoding="utf-8") as f:
         f.write(f"User-agent: *\nAllow: /\nSitemap: {SITE_URL}sitemap.xml\n")
     with open(os.path.join(out_dir, "sitemap.xml"), "w", encoding="utf-8") as f:
-        f.write(sitemap_xml(data, column_urls=column_urls, extra_urls=blog_urls))
+        f.write(sitemap_xml(data, column_urls=column_urls, extra_urls=jp_urls + blog_urls))
     return data
 
 

@@ -202,7 +202,7 @@
     const groups=comparison(data.latest,model);
     if (!groups.length) return '<p class="empty">'+T.preparing+'</p>';
     // 整份資料都沒有這個狀態的店（mobile-mix 只收未開封）標示不收，不和「—」待確認混在一起。
-    const offered=SHOPS.map(shop=>data.latest.some(r=>r.shop===shop && mainRow(r)));
+    const offered=SHOPS.map(shop=>COND==='未開封' || data.latest.some(r=>r.shop===shop && mainRow(r)));
     return '<table class="jp-table"><thead><tr><th scope="col">'+T.storage+'</th>'+SHOPS.map(s=>'<th scope="col">'+s+'</th>').join('')+'<th scope="col">'+T.spread+'</th></tr></thead><tbody>'+groups.map(group=>
       '<tr><th scope="row">'+group.storage+'</th>'+group.rows.map((row,i)=>{
         const price=group.values[i], best=price!==null && price===group.highest;
@@ -263,6 +263,11 @@
     get('updated').textContent=last?T.checked+dateTime(last)+T.jst:T.preparing;
     const params=new URLSearchParams(location.search);
     setCondition(params.get('c')==='used'?'中古上限':'未開封');
+    // 機型頁的「查看價格走勢」帶 ?m=，比較表與走勢都先選該機型。
+    const wanted=params.get('m');
+    if (wanted && [...get('compare-model').options].some(o=>o.value===wanted)) {
+      get('compare-model').value=wanted;get('trend-model').value=wanted;
+    }
     const compare=()=>{get('comparison').innerHTML=renderComparison(data,get('compare-model').value);};
     const chart=()=>{
       const model=get('trend-model').value;
