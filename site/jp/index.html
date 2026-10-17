@@ -17,7 +17,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/svg+xml" href="../favicon.svg">
   <title>iPhone 日本買取價比較｜PTT MacShop交易觀測</title>
-  <meta name="description" content="比較 mobile-mix、イオシス與アメモバ的 iPhone 18 Pro／Pro Max、iPhone 17 系列與 iPhone Air 日本買取價、價差與價格走勢。每天約日本時間 9、15、21 點排程抓取，實際時間可能延後，以日圓顯示。">
+  <meta name="description" content="比較 mobile-mix、イオシス與アメモバ的 iPhone 18 Pro／Pro Max、iPhone 17 系列與 iPhone Air 日本買取價（未開封與中古）、價差與價格走勢。每天約日本時間 9、15、21 點排程抓取，實際時間可能延後，以日圓顯示。">
   <link rel="canonical" href="{{SITE_URL}}jp/">
   <link rel="alternate" hreflang="zh-Hant-TW" href="{{SITE_URL}}jp/">
   <link rel="alternate" hreflang="ja" href="{{SITE_URL}}jp/ja/">
@@ -31,14 +31,15 @@
       <a class="back" href="../">← PTT MacShop交易觀測</a>
       <a class="jp-lang" href="ja/" hreflang="ja" lang="ja">日本語</a>
       <h1>日本買取價比較</h1>
-      <p class="sub">iPhone 18 Pro・17 系列・Air · 未開封 · SIMフリー</p>
+      <p class="sub">iPhone 18 Pro・17 系列・Air · SIMフリー</p>
+      <div class="jp-cond" role="group" aria-label="機身狀態"><button type="button" data-cond="未開封" aria-pressed="true">未開封</button><button type="button" data-cond="中古上限" aria-pressed="false">中古</button></div>
       <p class="sub" id="updated">資料準備中</p>
     </div>
   </header>
   <main class="wrap">
     <section class="card jp-flash" aria-labelledby="flash-title">
       <div class="card-head"><h2 id="flash-title">快報</h2></div>
-      <p class="hint">未開封・SIMフリー主價，和上一次抓到的價格相比。</p>
+      <p class="hint"><span data-cond-label>未開封</span>・SIMフリー主價，和上一次抓到的價格相比。</p>
       <div id="flash" aria-live="polite"><p class="empty">資料準備中</p></div>
     </section>
     <section class="card" aria-labelledby="comparison-title">
@@ -47,6 +48,7 @@
         <label>機型 <select id="compare-model"><option value="iPhone 18 Pro">18 Pro</option><option value="iPhone 18 Pro Max">18 Pro Max</option><option value="iPhone 17 Pro">17 Pro</option><option value="iPhone 17 Pro Max">17 Pro Max</option><option value="iPhone 17">17</option><option value="iPhone Air">Air</option></select></label>
       </div>
       <p class="intro">各店標示的最高可收價，實際依顏色與店家條件。點價格查看原頁。</p>
+      <p class="intro" data-cond-only="中古上限" hidden>中古價是各店中古機的收購上限（外觀、電池等狀態最好時），實際金額依店家查定；mobile-mix 只收未開封。</p>
       <div id="comparison" aria-live="polite"><p class="empty">資料準備中</p></div>
       <p class="hint">最高價以底色與「最高」標示；價差為可比較店家的最高價減最低價。「—」表示未提供或價格待確認。</p>
     </section>
@@ -63,7 +65,7 @@
     </section>
     <section class="card" aria-labelledby="changes-title">
       <div class="card-head"><h2 id="changes-title">最近變動</h2><span class="hint">最近 7 天 · 日本時間</span></div>
-      <p class="hint">未開封・SIMフリー，含 mobile-mix 精確色價；首次觀測不算漲跌。</p>
+      <p class="hint"><span data-cond-label>未開封</span>・SIMフリー<span data-cond-only="未開封">，含 mobile-mix 精確色價</span>；首次觀測不算漲跌。</p>
       <div id="changes"><p class="empty">資料準備中</p></div>
     </section>
     <section class="card" aria-labelledby="status-title">
@@ -73,7 +75,7 @@
     <footer class="jp-footer">
       <p>資料來源：<a href="https://mobile-mix.jp/?category=7">mobile-mix</a>、<a href="https://k-tai-iosys.com/pricelist/smartphone/iphone/iphone18-pro/">イオシス</a>、<a href="https://amemoba.com/smartphone/iphone/iphone-18-pro/">アメモバ</a>。</p>
       <p>每天排程三次（約日本時間 9、15、21 點，實際時間可能延後）。價格以店家頁面為準，實際可能有顏色、數量、版本、付屬品、期間等條件。イオシス「未使用品」與アメモバ「新品」統一列在未開封比較，實際驗收標準依各店規定。</p>
-      <p>中古上限與電信版本已分開保存，頁面暫不顯示（第二階段）。本頁只顯示日圓，時間皆為日本時間。</p>
+      <p>電信版本價格已分開保存，頁面暫不顯示。本頁只顯示日圓，時間皆為日本時間。</p>
       <p id="downloads"></p>
       <p class="by-crawlsnek">由 <a href="https://crawlsnek.com/">CrawlSnek</a> 提供</p>
     </footer>

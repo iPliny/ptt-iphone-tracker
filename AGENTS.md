@@ -81,6 +81,8 @@
 - POYU 要日文版、中文版照留：`site/jp/index.html`（中文，`jp/`）與 `site/jp/ja/index.html`（日文，`jp/ja/`）共用 `site/jp/jp.js`，介面字串在 `I18N`（zh／ja），依 `<html lang>` 切換；日文頁 `<body data-base="../">` 讓它讀 `jp/data.json`。兩頁互設 hreflang、頁首互相切換，sitemap 都列入。改頁面文字時兩個 HTML 與 `I18N` 一起改。
 - 2026-10-09 POYU 要在比較表上方加「快報」（日文「速報」）：`jp.js` 的 `flash` 取 `runs.csv` 最後一次成功抓取的時間，從當次的未開封・SIMフリー主價改價中各挑漲最多、跌最多一筆（首次觀測、色價、異常價不算），全部在前端計算，`data.json` 不變。最新成功抓取沒有可計主價改價時，回溯最近 7 天內有改價的成功抓取，並標示最新與採用的兩個時間。最近變動預設顯示 10 筆，更多按鈕可展開全部或收起。
 
+- 2026-10-18 POYU 同意加「未開封／中古」切換：頁首按鈕切換整頁（快報、比較表、走勢、最近變動）用 `未開封` 或 `中古上限`，`jp.js` 的 `setCondition` 控制 `mainRow`／`publicRow`；中古網址為 `?c=used`。整份資料沒有該狀態的店（mobile-mix 只收未開封）在比較表顯示「不收中古」。說明文字中的狀態名用 `data-cond-label`，只在某狀態顯示的用 `data-cond-only`。電信版本仍不顯示。
+
 ### 2026-10-11 Claude 萃取（規則抓不到時）
 - `--extractor` 預設 `auto`：環境有 `ANTHROPIC_API_KEY` 時為 `claude`，否則 `rules`，本機與沒設 secret 的行為不變。`track.yml` 從 repo secret `ANTHROPIC_API_KEY` 帶入。
 - `claude` 模式先跑 `rule_extract`，結果可用就照用；規則抓不到、且 `not_single_iphone` 不成立（不是配件文、不是一篇賣多支）時，才由 `claude_extract` 呼叫 `CLAUDE_MODEL`（`claude-haiku-5-5`，effort low），用 `CLAUDE_SCHEMA` JSON schema 限定輸出，再經 `build_fields` 同一套檢查。顏色仍由 `parse_color` 從標題判斷。Claude 失敗只記錯誤、文章留到下次。
