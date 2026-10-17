@@ -111,14 +111,24 @@ def apple_table(info):
             f'<p class="hint">{escape(note)}{sources}</p>')
 
 
-def trend_change(values, days):
-    """最新一天和 days 天前的漲跌，格式與 model.js 的 changeText 相同。"""
+def trend_pct(values, days):
+    """最新一天和 days 天前相比的漲跌百分比（四捨五入到 0.1），算不出來回傳 None。"""
     idx = [i for i, v in enumerate(values) if v is not None]
     if not idx or idx[-1] - days < 0 or values[idx[-1] - days] is None:
-        return "—"
+        return None
     last, before = values[idx[-1]], values[idx[-1] - days]
-    pct = math.floor((last - before) / before * 100 * 10 + 0.5) / 10  # 和 JavaScript 的 Math.round 一樣，.5 往正方向進位
+    return math.floor((last - before) / before * 100 * 10 + 0.5) / 10  # 和 JavaScript 的 Math.round 一樣，.5 往正方向進位
+
+
+def pct_text(pct):
+    if pct is None:
+        return "—"
     return "持平" if pct == 0 else ("+" if pct > 0 else "−") + f"{abs(pct):.1f}%"
+
+
+def trend_change(values, days):
+    """最新一天和 days 天前的漲跌，格式與 model.js 的 changeText 相同。"""
+    return pct_text(trend_pct(values, days))
 
 
 def trend_summary(data, model):
@@ -172,7 +182,7 @@ def render_model_html(template, data, model, canonical_url, asset_prefix=""):
         html = html.replace('<section class="card apple" id="apple" hidden></section>',
                             '<section class="card apple" id="apple">' + apple + '</section>')
     if asset_prefix:
-        for value in ["favicon.svg", "style.css", "./", "column/", "prices.html", "common.js", "watchlist.js", "model.js"]:
+        for value in ["favicon.svg", "style.css", "./", "column/", "market/", "prices.html", "common.js", "watchlist.js", "model.js"]:
             for attr in ["src", "href"]:
                 html = html.replace(f'{attr}="{value}"', f'{attr}="{asset_prefix}{value}"')
     return html

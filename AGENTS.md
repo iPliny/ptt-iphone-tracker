@@ -120,3 +120,7 @@
 - POYU 參考 used-lab.jp 的相場推移，要機型頁顯示每日行情。`build_site.price_trends` 產生 `data.json` 的 `trends`（`start` 加每組型號×容量×全新與否的 `values`，與日期逐日對齊）：每天結束時仍在架文章的當天標價中位數。在架的認定與 `daily_series` 相同，當天標價用 `價格變動` 事件倒推；異常價格與不合理改價沿用既有排除；不知道刪文日的已刪除文章不列入。
 - 從 `TREND_START`（2026-09-27，現行排程開始回訪）起算，最多 `MAX_DAYS` 天；在架少於 `TREND_MIN_ON_SHELF`（3）篇的日子留空。POYU 2026-10-18 指示不標樣本數。
 - 機型頁「行情走勢」卡：全部容量分頁每個容量一條二手線（整個機型沒有二手時改用全新），單一容量分頁畫二手與全新兩條，並附 7／30 天漲跌與目前在架價格區間（只在單一容量分頁）。`model_pages.trend_summary` 預先產生摘要，漲跌格式要與 `model.js` 的 `changeText` 一致。CSV 不變。
+
+### 2026-10-18 二手 iPhone 行情總覽頁
+- `site/market.py` 在建置時輸出 `market/index.html`（靜態、不需 JavaScript），標題帶資料月份與「每日更新」，列入 sitemap（排在首頁後），首頁與機型頁頁首有入口。只讀 `build_data` 的 `trends` 與 `models`，不另存資料檔。
+- 內容：近 N 天降價最多（有 30 天資料就用 30 天，否則 7 天）、二手行情最便宜、賣得最快（售出天數中位數，至少 `FAST_MIN`＝3 筆售出）各前 10 名，以及全部機型容量的行情一覽與 FAQ（FAQPage 結構化資料）。只列最新一天仍算得出行情的機型容量；漲跌格式共用 `model_pages.trend_pct`／`pct_text`。

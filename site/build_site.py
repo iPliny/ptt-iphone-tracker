@@ -474,10 +474,10 @@ def write_outlier_report(data_dir=DATA_DIR):
 
 
 def sitemap_xml(data, today=None, column_urls=(), extra_urls=()):
-    """首頁、價格頁、各機型靜態標準頁、專欄與 extra_urls；舊查詢網址仍由 model.html 支援。"""
+    """首頁、行情總覽、價格頁、各機型靜態標準頁、專欄與 extra_urls；舊查詢網址仍由 model.html 支援。"""
     from model_pages import model_path
     lastmod = (today or datetime.now(TAIPEI).date()).isoformat()
-    urls = [SITE_URL, SITE_URL + "prices.html", SITE_URL + "jp/", SITE_URL + "jp/ja/"] + [SITE_URL + model_path(m["model"]) for m in data["model_totals"]]
+    urls = [SITE_URL, SITE_URL + "market/", SITE_URL + "prices.html", SITE_URL + "jp/", SITE_URL + "jp/ja/"] + [SITE_URL + model_path(m["model"]) for m in data["model_totals"]]
     if column_urls:
         urls += [SITE_URL + "column/"] + list(column_urls)
     urls += list(extra_urls)
@@ -505,6 +505,8 @@ def build(out_dir, data_dir=DATA_DIR):
     column_urls = render_column(out_dir, data_dir)
     from blog import render_blog
     blog_urls = render_blog(out_dir, data_dir)
+    from market import render_market
+    render_market(out_dir, data)
     from jp_build import build_jp
     build_jp(out_dir, data_dir)
     # 含日本頁的 HTML 統一代換正式網址；不改站內相對連結或 GA 官方碼。
