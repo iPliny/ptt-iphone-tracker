@@ -178,3 +178,26 @@ test('最近變動：25 筆收合為 10 筆，更多剩 15 筆，展開全部並
   }
 });
 function SHOPS_RUNS(day){return jp.SHOPS.map(shop=>({run_at:at(day),shop,status:'ok',rows:'10',error:''}));}
+
+test('中古切換：比較表、走勢、變動改用中古上限；沒有中古的店標示不收中古',()=>{
+  const used=(shop,day,price,extra={})=>row(shop,day,price,{condition:'中古上限',...extra});
+  const latest=[row('mobile-mix',1,212000),row('イオシス',1,192000),row('アメモバ',1,200000),
+    used('イオシス',1,170000),used('アメモバ',1,175000)];
+  const prices=[used('イオシス',1,171000),used('アメモバ',1,175000),used('イオシス',2,170000),row('mobile-mix',2,213000)];
+  try {
+    assert.equal(jp.setCondition('中古上限'),'中古上限');
+    const group=jp.comparison(latest,'iPhone 18 Pro')[0];
+    assert.equal(group.highest,175000);assert.equal(group.spread,5000);
+    const html=jp.renderComparison({latest,prices:[]},'iPhone 18 Pro');
+    assert.match(html,/不收中古/);assert.doesNotMatch(html,/212,000|192,000/);
+    const chart=jp.timeline(prices,'iPhone 18 Pro','256GB','all',Date.parse(at(3)));
+    assert.deepEqual(chart.series[1],[171000,170000,170000]);assert.ok(chart.series[0].every(v=>v===null));
+    assert.match(jp.renderChart(chart,315),/中古・SIMフリー主價走勢/);
+    const changes=jp.recentChanges(prices,Date.parse(at(3)));
+    assert.equal(changes.length,1);assert.equal(changes[0].new_price,170000);
+    jp.setLang('ja');
+    assert.match(jp.renderComparison({latest,prices:[]},'iPhone 18 Pro'),/中古買取なし/);
+  } finally { jp.setLang('zh'); jp.setCondition('未開封'); }
+  assert.equal(jp.setCondition('bogus'),'未開封');
+  assert.equal(jp.comparison(latest,'iPhone 18 Pro')[0].highest,212000);
+});

@@ -17,7 +17,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/svg+xml" href="../../favicon.svg">
   <title>iPhone 買取価格比較｜mobile-mix・イオシス・アメモバ</title>
-  <meta name="description" content="mobile-mix、イオシス、アメモバの iPhone 18 Pro／Pro Max、iPhone 17 シリーズ、iPhone Air の買取価格（未開封・SIMフリー）を比較。店舗ごとの最高価格、価格差、価格推移を掲載。毎日 9 時・15 時・21 時ごろ（日本時間）の取得を予定しています。実際の取得は遅れることがあります。">
+  <meta name="description" content="mobile-mix、イオシス、アメモバの iPhone 18 Pro／Pro Max、iPhone 17 シリーズ、iPhone Air の買取価格（未開封・中古、SIMフリー）を比較。店舗ごとの最高価格、価格差、価格推移を掲載。毎日 9 時・15 時・21 時ごろ（日本時間）の取得を予定しています。実際の取得は遅れることがあります。">
   <link rel="canonical" href="{{SITE_URL}}jp/ja/">
   <link rel="alternate" hreflang="ja" href="{{SITE_URL}}jp/ja/">
   <link rel="alternate" hreflang="zh-Hant-TW" href="{{SITE_URL}}jp/">
@@ -31,14 +31,15 @@
       <a class="back" href="../../" lang="zh-Hant-TW">← PTT MacShop交易觀測</a>
       <a class="jp-lang" href="../" hreflang="zh-Hant-TW" lang="zh-Hant-TW">中文</a>
       <h1>iPhone 買取価格比較</h1>
-      <p class="sub">iPhone 18 Pro・17 シリーズ・Air · 未開封 · SIMフリー</p>
+      <p class="sub">iPhone 18 Pro・17 シリーズ・Air · SIMフリー</p>
+      <div class="jp-cond" role="group" aria-label="状態"><button type="button" data-cond="未開封" aria-pressed="true">未開封</button><button type="button" data-cond="中古上限" aria-pressed="false">中古</button></div>
       <p class="sub" id="updated">データ準備中</p>
     </div>
   </header>
   <main class="wrap">
     <section class="card jp-flash" aria-labelledby="flash-title">
       <div class="card-head"><h2 id="flash-title">速報</h2></div>
-      <p class="hint">未開封・SIMフリーの基本価格を前回の取得と比較。</p>
+      <p class="hint"><span data-cond-label>未開封</span>・SIMフリーの基本価格を前回の取得と比較。</p>
       <div id="flash" aria-live="polite"><p class="empty">データ準備中</p></div>
     </section>
     <section class="card" aria-labelledby="comparison-title">
@@ -47,6 +48,7 @@
         <label>機種 <select id="compare-model"><option value="iPhone 18 Pro">18 Pro</option><option value="iPhone 18 Pro Max">18 Pro Max</option><option value="iPhone 17 Pro">17 Pro</option><option value="iPhone 17 Pro Max">17 Pro Max</option><option value="iPhone 17">17</option><option value="iPhone Air">Air</option></select></label>
       </div>
       <p class="intro">各店が掲載している最高買取価格です。実際の金額はカラーや店舗の条件によって変わります。価格をクリックすると各店のページを開きます。</p>
+      <p class="intro" data-cond-only="中古上限" hidden>中古の価格は各店が掲載している中古買取の上限額（外装・バッテリーなどの状態が最も良い場合）です。実際の金額は各店の査定によります。mobile-mix は未開封のみ買取しています。</p>
       <div id="comparison" aria-live="polite"><p class="empty">データ準備中</p></div>
       <p class="hint">最高価格は背景色と「最高」で表示しています。価格差は比較できる店舗の最高価格と最低価格の差です。「—」は掲載なし、または確認中の価格です。</p>
     </section>
@@ -63,7 +65,7 @@
     </section>
     <section class="card" aria-labelledby="changes-title">
       <div class="card-head"><h2 id="changes-title">最近の価格変更</h2><span class="hint">直近 7 日間 · 日本時間</span></div>
-      <p class="hint">未開封・SIMフリー。mobile-mix のカラー別価格を含みます。初回取得は値上げ・値下げに含めません。</p>
+      <p class="hint"><span data-cond-label>未開封</span>・SIMフリー。<span data-cond-only="未開封">mobile-mix のカラー別価格を含みます。</span>初回取得は値上げ・値下げに含めません。</p>
       <div id="changes"><p class="empty">データ準備中</p></div>
     </section>
     <section class="card" aria-labelledby="status-title">
@@ -73,7 +75,7 @@
     <footer class="jp-footer">
       <p>データ元：<a href="https://mobile-mix.jp/?category=7">mobile-mix</a>、<a href="https://k-tai-iosys.com/pricelist/smartphone/iphone/iphone18-pro/">イオシス</a>、<a href="https://amemoba.com/smartphone/iphone/iphone-18-pro/">アメモバ</a>。</p>
       <p>1 日 3 回の取得を予定（日本時間 9 時・15 時・21 時ごろ。実際の取得は遅れることがあります）。価格は各店のページが優先です。実際の買取にはカラー、数量、キャリア、付属品、期間などの条件がある場合があります。イオシスの「未使用品」とアメモバの「新品」は未開封としてまとめて比較していますが、査定基準は各店の規定に従います。</p>
-      <p>中古の上限価格とキャリア版の価格は別途保存しており、現在このページには表示していません。価格はすべて円、時刻はすべて日本時間です。</p>
+      <p>キャリア版の価格は別途保存しており、現在このページには表示していません。価格はすべて円、時刻はすべて日本時間です。</p>
       <p>このページは個人が運営する価格比較で、各買取店とは関係ありません。</p>
       <p id="downloads"></p>
       <p class="by-crawlsnek">提供：<a href="https://crawlsnek.com/">CrawlSnek</a></p>
