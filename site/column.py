@@ -76,8 +76,7 @@ def week_counts(listings, events, del_day, start, end):
         posted = S.day_of(r["post_time"])
         if not posted or posted > end:
             continue
-        gone = S.day_of(r["sold_at"]) if r["status"] == "已售出" else (
-            del_day.get(r["url"]) if r["status"] == "已刪除" else None)
+        gone = S.gone_day(r, del_day)
         if gone is None or gone > end:
             on_shelf += 1
     return new, sold, deleted, {

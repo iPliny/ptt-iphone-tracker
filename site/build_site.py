@@ -26,7 +26,8 @@ CSV_FILES = ["listings.csv", "events.csv", "market_summary.csv", "price_event_ti
 TAIPEI = timezone(timedelta(hours=8))
 SITE_URL = "https://macshop.crawlsnek.com/"  # sitemap、robots 與 HTML 中繼資料共用的正式網址
 
-TRACKED_STATUSES = {"在售", "交易中", "已售出", "已刪除"}
+TRACKED_STATUSES = {"在售", "交易中", "已售出", "已刪除", "逾期未售"}
+EXPIRE_DAYS = 90    # 和 tracker.py 的 STALE_DAYS 相同：發文滿這麼多天沒賣掉就是「逾期未售」，當天下架
 MULTI_STATUS = "多品項"  # 一篇賣多支時拆出的 iPhone：只算刊登數與刊登價
 MAX_DAYS = 90       # 每日序列最多保留幾天
 MAX_EVENTS = 1000   # 網頁上最多帶幾筆事件
@@ -213,6 +214,26 @@ def deleted_dates(events):
     return out
 
 
+def gone_day(r, del_day):
+    """文章離開架上的日子：售出日、刪文日或逾期日；還在架上，或不知道哪天刪的，回傳 None。"""
+    if r["status"] == "已售出":
+        return day_of(r["sold_at"])
+    if r["status"] == "已刪除":
+        return del_day.get(r["url"])
+    if r["status"] == "逾期未售" and day_of(r["post_time"]):
+        return (date.fromisoformat(day_of(r["post_time"])) + timedelta(days=EXPIRE_DAYS)).isoformat()
+    return None
+
+
+def model_change_dates(events):
+    """沿用舊文改賣另一支（「型號變更」事件）：每篇最後一次換機的日期，行情從這天起才算這支。"""
+    out = {}
+    for e in events:
+        if e.get("event") == "型號變更" and day_of(e.get("time")):
+            out[e.get("source_url", "")] = max(out.get(e.get("source_url", ""), ""), day_of(e.get("time")))
+    return out
+
+
 def daily_series(listings, events, max_days=MAX_DAYS):
     """每天的新刊登、售出、刪文、改價數，以及當天結束時仍在架上的數量。"""
     del_day = deleted_dates(events)
@@ -226,11 +247,10 @@ def daily_series(listings, events, max_days=MAX_DAYS):
     for r in listings:
         posted = day_of(r["post_time"])
         bump(posted, "new")
-        sold = day_of(r["sold_at"]) if r["status"] == "已售出" else None
-        bump(sold, "sold")
-        gone = sold
-        if r["status"] == "已刪除":
-            gone = del_day.get(r["url"])
+        gone = gone_day(r, del_day)
+        if r["status"] == "已售出":
+            bump(gone, "sold")
+        elif r["status"] == "已刪除":
             bump(gone, "deleted")
         if posted:
             spans.append((posted, gone))
@@ -269,9 +289,11 @@ def price_on(changes, current, day):
 def price_trends(listings, events, start=TREND_START, max_days=MAX_DAYS):
     """每日行情：型號×容量×全新與否，當天結束時仍在架文章的標價中位數。
 
-    在架的認定和 daily_series 相同（發文日起，到售出日或刪文日前一天）；價格用改價事件倒推當天的標價。
+    在架的認定和 daily_series 相同（發文日起，到售出、刪文或逾期前一天）；價格用改價事件倒推當天的標價。
+    沿用舊文改賣另一支的文章，從換機那天起才算。
     """
     del_day = deleted_dates(events)
+    switched = model_change_dates(events)
     changes = {}
     for e in sorted(events, key=lambda e: e.get("time", "")):
         if e.get("event") != "價格變動":
@@ -292,10 +314,10 @@ def price_trends(listings, events, start=TREND_START, max_days=MAX_DAYS):
     groups = {}
     ref = price_references(listings)
     for r in listings:
-        posted = day_of(r["post_time"])
+        posted = max(day_of(r["post_time"]) or "", switched.get(r["url"], ""))
         if not (r["price"] and r["model"] and posted):
             continue
-        gone = day_of(r["sold_at"]) if r["status"] == "已售出" else del_day.get(r["url"]) if r["status"] == "已刪除" else None
+        gone = gone_day(r, del_day)
         if r["status"] == "已刪除" and gone is None:
             continue  # 不知道哪天刪的，不猜
         per_day = groups.setdefault((r["model"], r["storage"], r["brand_new"]), [[] for _ in days])
@@ -419,7 +441,7 @@ def build_data(data_dir=DATA_DIR, now=None):
     events = tracked_events(events, listings)
     listings.sort(key=lambda r: r["post_time"], reverse=True)
 
-    counts = {s: 0 for s in ("在售", "交易中", "已售出", "已刪除")}
+    counts = {s: 0 for s in ("在售", "交易中", "已售出", "已刪除", "逾期未售")}
     for r in listings:
         counts[r["status"]] += 1
     checked = [r["last_checked"] for r in listings if r["last_checked"]]

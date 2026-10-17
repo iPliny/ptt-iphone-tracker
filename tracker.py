@@ -83,7 +83,9 @@ STATUS_ACTIVE = "在售"
 STATUS_PENDING = "交易中"
 STATUS_SOLD = "已售出"
 STATUS_DELETED = "已刪除"
+STATUS_EXPIRED = "逾期未售"  # 發文滿 STALE_DAYS 天仍沒賣掉：留在刊登與價格統計，不算在架、不再回訪
 OPEN_STATUSES = {STATUS_ACTIVE, STATUS_PENDING}
+LISTED_STATUSES = (STATUS_ACTIVE, STATUS_PENDING, STATUS_SOLD, STATUS_DELETED, STATUS_EXPIRED)  # 計入行情的狀態
 MULTI_STATUS = "多品項"  # multi_items.csv 的品項，只在彙整時使用
 
 SYSTEM_PROMPT = """
@@ -256,8 +258,13 @@ PENDING_KW = ["交易中", "已保留", "保留中", "已預訂", "已預定", "
 RULE_NOISE = ["售出後修改價格至不可視者水桶並劣退"]
 _SOLD_KW_RE = r"(已售出|已售|售出|已賣出|已賣|賣出|sold|已出售)"
 # 行首是售出字樣（排除「售出後…」這類規則句），或整行以售出字樣結尾（如「iPhone 15 已售出 謝謝」）
-_SOLD_LINE_RE = re.compile(r"^[\s\[\(【（]*" + _SOLD_KW_RE + r"(?![後前時])", re.I)
-_SOLD_TAIL_RE = re.compile(_SOLD_KW_RE + r"[\s\W]*(謝謝.*|感謝.*)?$", re.I)
+# 「售出後／售出不退／售出概不退換」是交易規則，不是已經賣掉
+_SOLD_LINE_RE = re.compile(r"^[\s\[\(【（]*" + _SOLD_KW_RE + r"(?![後前時不概恕一])", re.I)
+# 結尾的冒號表示這行只是其中一支的標籤（「藍(已售)：」，下一行才是那支的說明），整篇不算售出
+_SOLD_TAIL_RE = re.compile(_SOLD_KW_RE + r"(?:(?![:：])[\s\W])*(謝謝.*|感謝.*)?$", re.I)
+# 說明為什麼要賣（「換新機故售出」「因換手機，故售出」「便宜售出」），判斷前先剔除
+_SELL_REASON_RE = re.compile(r"(?:故|因此|所以|才|想|欲|將|打算|準備|預計|割愛|忍痛|便宜|低價|優惠|換機|換新機|閒置|升級|用不到)"
+                             r"\s*(?:售出|賣出)")
 
 
 PM_KEYWORD_RE = re.compile(r"私|站內|密你|已密")
@@ -304,7 +311,13 @@ def parse_article(html):
         for tag in main.find_all("div", class_=cls):
             tag.decompose()
     text = main.get_text()
-    body = re.split(r"\n--\n※ 發信站|※ 發信站", text)[0].strip()
+    if not title:
+        # 賣家把標頭改成內文（「標題: [販售] …」）時，從前幾行找回標題；整個刪掉時留空，由呼叫端沿用舊標題
+        m = re.search(r"^\s*標題[:：]?\s+(.+?)\s*$", "\n".join(text.splitlines()[:15]), re.M)
+        title = m.group(1) if m else ""
+    body = re.split(r"\n--\n※ 發信站|※ 發信站", text)[0]
+    # 發信站那行也被刪掉時，文末的「※ 編輯」等系統行會留在本文
+    body = "\n".join(l for l in body.splitlines() if not re.match(r"\s*※ (編輯|文章網址|發信站)", l)).strip()
     return {"title": title, "body": body, "last_edit": last_edit_time(text), "pm_count": pm_count}
 
 
@@ -328,14 +341,14 @@ def body_hash(body):
 
 def detect_status(title, body):
     """只看標題與本文判斷：已售出 / 交易中 / 在售。"""
-    t = (title or "").lower()
+    t = _SELL_REASON_RE.sub("", (title or "").lower())
     if any(kw in t for kw in SOLD_TITLE_KW):
         return STATUS_SOLD
     clean = body or ""
     for noise in RULE_NOISE:
         clean = clean.replace(noise, "")
     for line in clean.splitlines():
-        line = line.strip()
+        line = _SELL_REASON_RE.sub("", line).strip()
         if not line:
             continue
         # 賣家通常在本文開頭或單獨一行寫「已售出」；長句中提到「售出」多半是規則說明，不採計
@@ -552,7 +565,7 @@ def backfill_colors(listings):
     n = 0
     for row in listings.values():
         if (not row.get("color") and row.get("model") and
-                row.get("status") in (STATUS_ACTIVE, STATUS_PENDING, STATUS_SOLD, STATUS_DELETED)):
+                row.get("status") in LISTED_STATUSES):
             color = parse_color(row["model"], row.get("title", ""))
             if color:
                 row["color"] = color
@@ -602,28 +615,74 @@ def is_accessory_post(title, storage):
     return bool(_ACCESSORY_RE.search(bare)) and storage in ("", "未知", None)
 
 
-STALE_DAYS = 90  # 發文超過這麼久仍是在售／交易中、早已不再回訪的列，狀態不可信
+_TITLE_CAPACITY_RE = re.compile(r"(?<![\d.])(32|64|128|256|512|1|2)\s*(?:gb|tb|g|t)(?![a-z])", re.I)
+# 「17 Pro/17 Pro Max」「18 Pro/Pro Max」「16 Pro Max/15 Pro Max/15」：斜線兩邊都是型號
+_TITLE_MODEL_SLASH_RE = re.compile(
+    r"(?:(?<![\d.])\d{1,2}|pro|max|plus|mini|air|se\d?|xr|xs|e)\s*[/／]\s*(?:i\s*phone\s*)?"
+    r"(?:(?<![\d.])\d{1,2}(?![\d.])|(?:pro|air|se\d?|xr|xs)(?![a-z]))", re.I)
+_TITLE_COUNT_RE = re.compile(r"(?<!\d)[2二兩]\s*[隻支]|各[一1]")
 
 
-def misparsed_reason(row, now=None):
+def multi_phone_title(title):
+    """標題提到兩支以上 iPhone：兩個 iPhone／Air、兩個容量、斜線分隔的型號，或「兩支」「各一」。"""
+    bare = re.sub(r"^\[[^\]]*\]\s*", "", title or "")
+    phones = len(re.findall(r"i\s*phone|(?<![a-z])air(?![a-z])", bare, re.I))
+    phones -= len(re.findall(r"(?:i\s*phone|i\s*pad|macbook)\s*air", bare, re.I))  # iPhone Air、iPad Air 不重複算
+    return (phones > 1 or len(_TITLE_CAPACITY_RE.findall(bare)) > 1
+            or bool(_TITLE_MODEL_SLASH_RE.search(bare)) or bool(_TITLE_COUNT_RE.search(bare)))
+
+
+STALE_DAYS = 90  # 發文滿這麼多天仍在售／交易中 → 逾期未售，不再回訪
+SLOW_REVISIT_HOURS = 20  # 超過 --track-days、未滿 STALE_DAYS 的在售文章，距上次檢查這麼久才回訪（約每天一次）
+
+
+def misparsed_reason(row):
     """舊規則留下、現在看得出是誤判的列：回傳原因，正常則回傳 None。"""
-    ts = url_timestamp(row.get("source_url", ""))
-    if (row.get("status") in OPEN_STATUSES and ts
-            and (now or datetime.now()).timestamp() - ts > STALE_DAYS * 86400):
-        # 例：v1 匯入的 2026-03 文章，從未被現行排程回訪，一直停在在售
-        return f"發文超過 {STALE_DAYS} 天未再追蹤"
     model = row.get("model") or ""
     if model and not _CANONICAL_MODEL_RE.fullmatch(model):
         return f"不存在的型號 {model}"
     if is_accessory_post(row.get("title"), row.get("storage")):
         return "配件"
+    if model and multi_phone_title(row.get("title")):
+        return "一篇多支"
     return None
 
 
 def not_single_iphone(art):
     """新規則明確判定不是單支 iPhone：配件文，或一篇賣多支。只是抓不到售價之類的不算。"""
     raw = rule_extract(art["title"], art["body"])
-    return is_accessory_post(art["title"], raw["storage"]) or bool(extract_items(art["title"], art["body"]))
+    return (is_accessory_post(art["title"], raw["storage"]) or multi_phone_title(art["title"])
+            or bool(extract_items(art["title"], art["body"])))
+
+
+def expire_stale(listings, now=None):
+    """發文滿 STALE_DAYS 天仍在售／交易中的列改成逾期未售。回傳筆數。"""
+    cutoff = (now or datetime.now()).timestamp() - STALE_DAYS * 86400
+    n = 0
+    for row in listings.values():
+        ts = url_timestamp(row.get("source_url", ""))
+        if row.get("status") in OPEN_STATUSES and ts and ts < cutoff:
+            mark_status(row, STATUS_EXPIRED)
+            n += 1
+    return n
+
+
+def revisit_urls(listings, track_days, reparse=False, now=None):
+    """要回訪的文章：track_days 內的在售文章每次都看；之後到 STALE_DAYS 為止約每天看一次。"""
+    now = now or datetime.now()
+    track_cutoff = (now - timedelta(days=track_days)).timestamp()
+    stale_cutoff = (now - timedelta(days=STALE_DAYS)).timestamp()
+    slow_before = (now - timedelta(hours=SLOW_REVISIT_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
+    statuses = OPEN_STATUSES | ({STATUS_SOLD, "略過"} if reparse else set())
+    out = []
+    for url, row in listings.items():
+        ts = url_timestamp(url) or 0
+        if row.get("status") not in statuses:
+            continue
+        if ts >= track_cutoff or (row.get("status") in OPEN_STATUSES and ts >= stale_cutoff
+                                  and (row.get("last_checked") or "") < slow_before):
+            out.append(url)
+    return out
 
 
 def skipped_from(url, path=None):
@@ -652,10 +711,10 @@ def backfill_storage(listings):
 
 
 def drop_misparsed(listings):
-    """把誤判成 iPhone 的列改成「略過」，網站、週報、行情都不再計入。回傳處理筆數。"""
+    """把誤判成 iPhone 的列（配件、不存在的型號、一篇多支）改成「略過」，網站、週報、行情都不再計入。回傳處理筆數。"""
     n = 0
     for url, row in listings.items():
-        if row.get("status") not in (STATUS_ACTIVE, STATUS_PENDING, STATUS_SOLD, STATUS_DELETED):
+        if row.get("status") not in LISTED_STATUSES:
             continue
         reason = misparsed_reason(row)
         if reason:
@@ -693,8 +752,8 @@ def rule_extract(title, body):
     note = _field(fields, "補充", "說明", "備註", "附註")
     bare_title = re.sub(r"^\[[^\]]*\]\s*", "", title)
 
-    # 一篇賣多支（型號欄是 1. 2. 編號清單）→ 價格無法對應單機，略過
-    multi = len(_NUMBERED_LINE_RE.findall(model_text)) >= 2
+    # 一篇賣多支（型號欄是 1. 2. 編號清單，或標題寫了兩支）→ 價格無法對應單機，略過
+    multi = len(_NUMBERED_LINE_RE.findall(model_text)) >= 2 or multi_phone_title(title)
     # 型號欄常只寫 A2633、MG6K4ZP/A 這類料號，依序改用規格欄、標題
     # 型號欄只看第一行：下一行常是「可憑商品序號至 Apple官網查詢」之類的附註
     model_line = next((l for l in model_text.splitlines() if l.strip()), "")
@@ -1039,6 +1098,9 @@ def mark_status(row, status, prev_checked="", last_edit=None):
     if status == old:
         return
     row["status"] = status
+    if old == STATUS_SOLD:
+        # 先前誤判售出（例：「故售出」），重新判斷後改回：清掉售出紀錄，之後真的賣掉再重算
+        row["sold_detected_at"] = row["days_to_sell"] = row["days_to_sell_basis"] = ""
     if status == STATUS_SOLD and not row.get("sold_detected_at"):
         row["sold_detected_at"] = now_str()
         set_days_to_sell(row, prev_checked, last_edit)
@@ -1091,7 +1153,7 @@ def scan_board(days, max_pages):
 # ==========================================
 # 第二、三階段：處理單篇文章
 # ==========================================
-def process_article(url, listings, use_llm, stats, multi=None):
+def process_article(url, listings, use_llm, stats, multi=None, list_title=""):
     code, html = fetch(url)
     row = listings.get(url)
     if code == 404:
@@ -1108,6 +1170,9 @@ def process_article(url, listings, use_llm, stats, multi=None):
     art = parse_article(html)
     if art is None:
         return
+    if not art["title"]:
+        # 賣家刪掉頁面標頭時，改用看板列表上的標題，再不行沿用上次的標題
+        art["title"] = list_title or (row or {}).get("title", "")
     checked_at = taipei_now()
     h = body_hash(art["body"])
     status = detect_status(art["title"], art["body"])
@@ -1173,7 +1238,15 @@ def process_article(url, listings, use_llm, stats, multi=None):
             return
         if fields:
             old_price = to_int(row.get("price"))
-            if old_price and fields["price"] != old_price:
+            old_phone = (row.get("model"), row.get("storage"))
+            known = lambda v: v not in ("", "未知", None)
+            if edited and row.get("model") and (row["model"] != fields["model"] or (
+                    known(row.get("storage")) and known(fields["storage"]) and row["storage"] != fields["storage"])):
+                # 沿用舊文改賣另一支：不算改價，首次標價從這支重算
+                log_event(url, "型號變更", f"{' '.join(filter(None, old_phone))} ${old_price} → "
+                                            f"{fields['model']} {fields['storage']} ${fields['price']}")
+                row["first_price"] = fields["price"]
+            elif old_price and fields["price"] != old_price:
                 if edited:
                     log_price_change(row, fields["price"], art["last_edit"], checked_at)
                     stats["price_changes"] += 1
@@ -1272,7 +1345,7 @@ def build_summary(listings, path=None, multi=None):
                 key = (r["model"], r.get("storage", ""), r.get("全新未拆封機", "否"))
                 groups.setdefault(key, []).append(({**r, "status": MULTI_STATUS}, price))
     for r in listings.values():
-        if r.get("status") not in (STATUS_ACTIVE, STATUS_PENDING, STATUS_SOLD, STATUS_DELETED):
+        if r.get("status") not in LISTED_STATUSES:
             continue
         price = to_int(r.get("price"))
         if not price or not r.get("model"):
@@ -1357,7 +1430,7 @@ def main():
     ap = argparse.ArgumentParser(description="PTT MacShop iPhone 成交追蹤")
     ap.add_argument("--days", type=int, default=3, help="掃描看板時往回看幾天的新文章（預設 3）")
     ap.add_argument("--max-pages", type=int, default=50, help="掃描看板最多翻幾頁（預設 50）")
-    ap.add_argument("--track-days", type=int, default=45, help="在售文章發文後持續回訪幾天（預設 45）")
+    ap.add_argument("--track-days", type=int, default=45, help="在售文章發文後每次都回訪的天數（預設 45）；之後到 90 天約每天回訪一次")
     ap.add_argument("--extractor", choices=["auto", "rules", "claude", "ollama"], default="auto",
                     help="欄位萃取方式：rules＝只用發文範本規則；claude＝規則抓不到時改問 Claude（需 ANTHROPIC_API_KEY）；"
                          "ollama＝本機 LLM；auto（預設）＝有 ANTHROPIC_API_KEY 用 claude，否則 rules")
@@ -1390,11 +1463,9 @@ def main():
         targets = [] if not use_llm else scan_board(args.days, args.max_pages)
         print(f"[INFO] 看板上找到 {len(targets)} 篇 iPhone 販售文。")
 
-        track_cutoff = (datetime.now() - timedelta(days=args.track_days)).timestamp()
-        revisit_statuses = OPEN_STATUSES | ({STATUS_SOLD, "略過"} if args.reparse else set())
-        revisit = [u for u, r in listings.items()
-                   if r.get("status") in revisit_statuses and (url_timestamp(u) or 0) >= track_cutoff]
+        revisit = revisit_urls(listings, args.track_days, args.reparse)
         backfill = [u for u, r in listings.items() if needs_days_backfill(r)]
+        titles = {t["link"]: t["title"] for t in targets}
         queue = list(dict.fromkeys([t["link"] for t in targets] + revisit + backfill))
         print(f"[INFO] 另有 {len(revisit)} 篇在售文章需回訪、{len(backfill)} 篇已售出文章補算售出天數，"
               f"合計處理 {len(queue)} 篇。")
@@ -1403,7 +1474,7 @@ def main():
         for i, url in enumerate(queue, 1):
             print(f"\n[{i}/{len(queue)}] {url}")
             try:
-                process_article(url, listings, use_llm, stats, multi)
+                process_article(url, listings, use_llm, stats, multi, titles.get(url, ""))
             except Exception as e:
                 print(f"    [ERR] {e}")
                 stats["errors"] += 1
@@ -1418,15 +1489,18 @@ def main():
               f"｜價格變動 {stats['price_changes']}｜錯誤 {stats['errors']}｜Claude 萃取 {stats['claude']}")
 
     sized = backfill_storage(listings)  # 先補容量，配件判斷才看得到
+    expired = expire_stale(listings)
     dropped = drop_misparsed(listings)
     colored = backfill_colors(listings)
     if sized:
         print(f"[STORAGE] {sized} 篇由既存標題補上容量")
     if colored:
         print(f"[COLOR] {colored} 篇由既存標題補上顏色")
+    if expired:
+        print(f"[EXPIRE] {expired} 篇發文滿 {STALE_DAYS} 天仍沒賣掉，改為逾期未售")
     if dropped:
-        print(f"[CLEAN] {dropped} 篇誤判（配件、不存在的型號）改為略過")
-    if dropped or colored or sized:
+        print(f"[CLEAN] {dropped} 篇誤判（配件、不存在的型號、一篇多支）改為略過")
+    if dropped or colored or sized or expired:
         save_listings(listings)
     rows = build_summary(listings, multi=multi)
     print(f"[REPORT] 行情彙整 {len(rows)} 組 → {SUMMARY_FILE}")

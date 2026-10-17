@@ -8,7 +8,7 @@
   "use strict";
   const STORAGE_KEY = "ptt-iphone-tracker:watchlist:v1";
   const MAX_ITEMS = 30;
-  const STATUSES = ["", "在售", "交易中", "已售出", "已刪除"];
+  const STATUSES = ["", "在售", "交易中", "已售出", "已刪除", "逾期未售"];
 
   function normalize(raw) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
