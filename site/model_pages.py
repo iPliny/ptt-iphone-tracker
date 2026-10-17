@@ -182,7 +182,7 @@ def render_model_html(template, data, model, canonical_url, asset_prefix=""):
         html = html.replace('<section class="card apple" id="apple" hidden></section>',
                             '<section class="card apple" id="apple">' + apple + '</section>')
     if asset_prefix:
-        for value in ["favicon.svg", "style.css", "./", "column/", "market/", "prices.html", "common.js", "watchlist.js", "model.js"]:
+        for value in ["favicon.svg", "style.css", "./", "column/", "market/", "market/#faq", "prices.html", "common.js", "watchlist.js", "model.js"]:
             for attr in ["src", "href"]:
                 html = html.replace(f'{attr}="{value}"', f'{attr}="{asset_prefix}{value}"')
     return html
