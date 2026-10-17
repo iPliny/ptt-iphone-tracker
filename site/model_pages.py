@@ -1,4 +1,5 @@
 """機型頁的建置時內容；只使用 build_data 已排除異常值的公開資料。"""
+import math
 import re
 import shutil
 from html import escape
@@ -116,7 +117,7 @@ def trend_change(values, days):
     if not idx or idx[-1] - days < 0 or values[idx[-1] - days] is None:
         return "—"
     last, before = values[idx[-1]], values[idx[-1] - days]
-    pct = round((last - before) / before * 100, 1)
+    pct = math.floor((last - before) / before * 100 * 10 + 0.5) / 10  # 和 JavaScript 的 Math.round 一樣，.5 往正方向進位
     return "持平" if pct == 0 else ("+" if pct > 0 else "−") + f"{abs(pct):.1f}%"
 
 

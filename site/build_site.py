@@ -119,9 +119,9 @@ OUTLIER_MIN_SAMPLES = 5   # 同組至少幾筆才判斷價格是否異常
 OUTLIER_LOW, OUTLIER_HIGH = 0.5, 2.0  # 低於中位數一半、高於兩倍視為抓錯
 
 
-def price_outliers(listings):
-    """明顯不合理的價格（多半是把日期、保固期限抓成售價）：回傳 [(文章, 參考中位數)]。
-    先和同型號、同容量、同為全新或二手的中位數比；那組不到 5 筆時改和同型號比。"""
+def price_references(listings):
+    """判斷異常價格用的參考中位數：同型號、同容量、同為全新或二手；那組不到 5 筆時改用同型號。
+    回傳 ref(model, storage, brand_new) → 中位數或 None。"""
     def medians(key):
         groups = {}
         for r in listings:
@@ -131,12 +131,22 @@ def price_outliers(listings):
 
     fine = medians(lambda r: (r["model"], r["storage"], r["brand_new"]))
     coarse = medians(lambda r: (r["model"], r["brand_new"]))
+    return lambda model, storage, brand_new: fine.get((model, storage, brand_new)) or coarse.get((model, brand_new))
+
+
+def is_outlier(price, med):
+    return bool(med) and not (OUTLIER_LOW * med <= price <= OUTLIER_HIGH * med)
+
+
+def price_outliers(listings):
+    """明顯不合理的價格（多半是把日期、保固期限抓成售價）：回傳 [(文章, 參考中位數)]。"""
+    ref = price_references(listings)
     out = []
     for r in listings:
         if not (r["price"] and r["model"]):
             continue
-        med = fine.get((r["model"], r["storage"], r["brand_new"])) or coarse.get((r["model"], r["brand_new"]))
-        if med and not (OUTLIER_LOW * med <= r["price"] <= OUTLIER_HIGH * med):
+        med = ref(r["model"], r["storage"], r["brand_new"])
+        if is_outlier(r["price"], med):
             out.append((r, med))
     return out
 
@@ -280,6 +290,7 @@ def price_trends(listings, events, start=TREND_START, max_days=MAX_DAYS):
         return {"start": None, "series": []}
     days = [(first + timedelta(days=i)).isoformat() for i in range((end - first).days + 1)]
     groups = {}
+    ref = price_references(listings)
     for r in listings:
         posted = day_of(r["post_time"])
         if not (r["price"] and r["model"] and posted):
@@ -288,9 +299,12 @@ def price_trends(listings, events, start=TREND_START, max_days=MAX_DAYS):
         if r["status"] == "已刪除" and gone is None:
             continue  # 不知道哪天刪的，不猜
         per_day = groups.setdefault((r["model"], r["storage"], r["brand_new"]), [[] for _ in days])
+        med = ref(r["model"], r["storage"], r["brand_new"])
         for i, d in enumerate(days):
             if posted <= d and (gone is None or gone > d):
-                per_day[i].append(price_on(changes.get(r["url"], []), r["price"], d))
+                price = price_on(changes.get(r["url"], []), r["price"], d)
+                if not is_outlier(price, med):  # 倒推出來的舊價格也套用異常價格規則
+                    per_day[i].append(price)
     series = []
     for (model, storage, brand_new), per_day in sorted(groups.items()):
         values = [int(statistics.median(v)) if len(v) >= TREND_MIN_ON_SHELF else None for v in per_day]

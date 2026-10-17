@@ -52,6 +52,9 @@ class ModelHtmlTest(unittest.TestCase):
         self.assertNotIn("全新未拆</div>", html)  # 全部容量只列二手
         self.assertIn("7 天 −3.2% · 30 天 —", html)
 
+    def test_trend_change_rounds_half_up_like_javascript(self):
+        self.assertEqual(M.trend_change([40000] + [None] * 6 + [40900], 7), "+2.3%")
+
     def test_trend_card_hidden_without_series(self):
         card = next(a for t, a in Page(self.render()).elements if a.get("id") == "trend-card")
         self.assertIn("hidden", card)

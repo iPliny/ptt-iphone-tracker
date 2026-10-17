@@ -330,6 +330,12 @@ class PriceTrendsTest(unittest.TestCase):
         # 10/02：30000 32000 36000 20000 40000；10/03：30000 32000 34000 40000；10/04 起：30000 32000 34000
         self.assertEqual(used["values"], [32000, 33000, 32000, 32000])
 
+    def test_reconstructed_outlier_price_dropped(self):
+        listings = [self.row(u, "2026-10-01 10:00:00", 30000) for u in "abcd"] + [self.row("x", "2026-10-01 10:00:00", 31000)]
+        events = [{"time": "2026-10-03 15:00:00", "source_url": "x", "event": "價格變動", "detail": "70000 → 31000"}]
+        (s,) = S.price_trends(listings, events, start="2026-10-02")["series"]
+        self.assertEqual(s["values"][0], 30000)  # 10/02 的 70000 不列入
+
     def test_too_few_on_shelf_left_blank(self):
         listings = [self.row("a", "2026-10-04 10:00:00", 30000), self.row("b", "2026-10-04 10:00:00", 31000),
                     self.row("c", "2026-10-05 10:00:00", 32000)]
