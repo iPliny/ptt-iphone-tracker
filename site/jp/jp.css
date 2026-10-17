@@ -77,3 +77,5 @@
 .jp-cond button { font: inherit; font-size: 13px; padding: 4px 16px; border: 0; background: transparent; color: var(--ink); cursor: pointer; }
 .jp-cond button[aria-pressed="true"] { background: var(--ink); color: var(--card); font-weight: 650; }
 .jp-none { color: var(--muted); font-size: 13px; }
+.jp-models { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 4px 0 0; list-style: none; }
+.jp-models a { display: inline-block; border: 1px solid var(--line); border-radius: 999px; padding: 4px 14px; font-size: 14px; }
