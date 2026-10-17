@@ -324,7 +324,7 @@
       s += `<line class="median" x1="${L}" x2="${W - R}" y1="${y(m.median_price)}" y2="${y(m.median_price)}"><title>刊登中位數 ${money(m.median_price)}</title></line>`;
     }
     // 已售出畫在最上層，比較容易看到成交價落點
-    const order = { "已刪除": 0, "在售": 1, "交易中": 2, "已售出": 3 };
+    const order = { "逾期未售": 0, "已刪除": 0, "在售": 1, "交易中": 2, "已售出": 3 };
     pts.slice().sort((a, b) => order[a.status] - order[b.status]).forEach((r) => {
       s += `<a href="${esc(r.url)}" target="_blank" rel="noopener"><circle class="pt st-${esc(r.status)}" cx="${x(t(r))}" cy="${y(r.price)}" r="5">` +
         `<title>${esc(r.post_time.slice(0, 16))} · ${esc(storageLabel(r.storage))} · ${money(r.price)} · ${esc(r.status)}</title></circle></a>`;

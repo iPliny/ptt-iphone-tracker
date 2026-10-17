@@ -622,6 +622,61 @@ if __name__ == "__main__":
 
 
 
+    # 2026-10-18 專案審視：沿用舊文改賣另一支、頁面標頭被刪、誤判售出的文章重新判斷
+
+    def events(self):
+        with open(T.EVENTS_FILE, encoding="utf-8-sig") as f:
+            return [(e["event"], e["detail"]) for e in csv.DictReader(f)]
+
+    def test_model_change_is_not_price_change(self):
+        # M.1792196183：17 Pro 256GB $34,700 → 18 Pro Max 256GB $47,000
+        pa = self.paths[0]
+        url = T.BASE_URL + pa
+        self.arts[pa] = ("[販售] 雙北 iPhone 17 Pro 256G", "[型號] iPhone 17 Pro\n[規格] 256G\n[售價] 34700", "")
+        self.run_main()
+        self.arts[pa] = ("[販售] 雙北 iPhone 18 pro max 256G 冰川藍",
+                         "[型號] iPhone 18 Pro Max\n[規格] 256G\n[售價] 47000", "")
+        row = self.run_main()[url]
+        self.assertEqual((row["model"], row["price"], row["first_price"]), ("iPhone 18 Pro Max", "47000", "47000"))
+        mine = [e for e in self.events() if e[0] in ("型號變更", "價格變動")]
+        self.assertEqual(mine, [("型號變更", "iPhone 17 Pro 256GB $34700 → iPhone 18 Pro Max 256GB $47000")])
+
+    def test_headerless_page_keeps_title(self):
+        pa = self.paths[0]
+        url = T.BASE_URL + pa
+        self.run_main()
+        title = self.arts[pa][0]
+        orig = self.fake_fetch
+        def headerless(u, max_retries=3):
+            code, html = orig(u, max_retries)
+            if pa in u:
+                html = re.sub(r'<div class="article-metaline">.*?</div>', "", html)
+            return code, html
+        T.fetch = headerless
+        self.listed = set()
+        self.assertEqual(self.run_main()[url]["title"], title)
+        self.listed = set(self.paths)  # 新文章也一樣：用看板列表的標題
+        self.arts[self.paths[1]] = ("[販售] 新北 iPhone 14 128G 已售出", self.arts[self.paths[1]][1], "")
+        os.remove(T.LISTINGS_FILE)
+        rows = self.run_main()
+        self.assertEqual(rows[url]["title"], title)
+        self.assertEqual(rows[T.BASE_URL + self.paths[1]]["status"], T.STATUS_SOLD)
+
+    def test_reparse_fixes_false_sold(self):
+        pa = self.paths[0]
+        url = T.BASE_URL + pa
+        body = "[型號] iPhone 12\n[規格] 128G\n[售價] 4300\n[補充說明]\n換新機故售出"
+        self.arts[pa] = ("[販售] 雙北 iPhone 12 128g 黑色", body, "")
+        self.run_main()
+        rows = T.load_listings()
+        rows[url].update(status="已售出", sold_detected_at="2026-10-13 21:03:53", days_to_sell_basis="無法推估")
+        T.save_listings(rows)
+        self.listed = set()
+        self.assertEqual(self.run_main()[url]["status"], "已售出")  # 平常不回訪已售出
+        row = self.run_main("--reparse")[url]
+        self.assertEqual((row["status"], row["sold_detected_at"], row["days_to_sell_basis"]), ("在售", "", ""))
+
+
 class TimezoneTest(unittest.TestCase):
     """Actions 主機是 UTC；tracker.py 強制台灣時間，發文時間才會和 PTT 的編輯時間一致。"""
 
@@ -843,15 +898,18 @@ class StaleAndStorageTest(unittest.TestCase):
         self.assertEqual(T.parse_storage("[販售] 全國 iPhone 17 Pro Max 2TB銀色"), "2TB")
         self.assertEqual(T.parse_storage("256G藍"), "256GB")
 
-    def test_stale_open_row_is_dropped(self):
-        # M.1774537642.A.6A6：v1 匯入的 2026-03 文章，從未再回訪，一直停在在售
+    def test_stale_open_row_expires(self):
+        # PR #44 原本把滿 90 天的在售文章改成略過；改成「逾期未售」，仍算刊登與價格、不算在架
         url = "https://www.ptt.cc/bbs/MacShop/M.1774537642.A.6A6.html"
         row = {"source_url": url, "status": "在售", "title": "[販售] 台中iPhone 17 pro max 256橘",
                "model": "iPhone 17 Pro Max", "storage": "256GB"}
-        now = T.datetime(2026, 10, 15)
-        self.assertIn("未再追蹤", T.misparsed_reason(row, now))
-        self.assertIsNone(T.misparsed_reason({**row, "status": "已售出"}, now))  # 已有結果的不動
-        self.assertIsNone(T.misparsed_reason(row, T.datetime(2026, 4, 30)))
+        self.assertIsNone(T.misparsed_reason(row))
+        rows = {url: dict(row), "sold": {**row, "source_url": url.replace("6A6", "6A7"), "status": "已售出"}}
+        with patch.object(T, "log_event") as log:
+            self.assertEqual(T.expire_stale(rows, T.datetime(2026, 4, 30)), 0)
+            self.assertEqual(T.expire_stale(rows, T.datetime(2026, 10, 15)), 1)
+        log.assert_called_once_with(url, "狀態變更", "在售 → 逾期未售")
+        self.assertEqual((rows[url]["status"], rows["sold"]["status"]), ("逾期未售", "已售出"))
 
     def test_backfill_unknown_storage(self):
         url = "https://www.ptt.cc/bbs/MacShop/M.1791442010.A.D43.html"
@@ -861,4 +919,84 @@ class StaleAndStorageTest(unittest.TestCase):
         with patch.object(T, "log_event"):
             self.assertEqual(T.drop_misparsed(rows), 0)
         self.assertEqual((rows[url]["storage"], rows[url]["status"]), ("2TB", "已刪除"))
+
+
+
+class ReviewFixesTest(unittest.TestCase):
+    """2026-10-18 專案審視：售出誤判、一篇多支、逾期未售與回訪排程。"""
+
+    def test_sell_reason_is_not_sold(self):
+        # M.1791870698／M.1791501935（換新機故售出）、M.1791106613、M.1790688947、M.1791790236 的本文精簡
+        for body in ["[型號] iPhone 12\n[商品照/補充說明]\n功能皆正常，沒有維修過\n換新機故售出\n電池健康度80%",
+                     "[型號] iPhone 16 Pro Max\n[補充說明]\n換18系列故售出",
+                     "[型號] iPhone 14 Pro Max\n[補充說明]\n因換手機，故售出\n外觀良好，功能皆正常",
+                     "[型號] iPhone 15\n[補充說明]\n建議面交驗機\n售出不退\n郵寄需先匯款"]:
+            self.assertEqual(T.detect_status("[販售] iPhone", body), T.STATUS_ACTIVE, body)
+        self.assertEqual(T.detect_status("[販售] iPhone 15 換新機故售出", ""), T.STATUS_ACTIVE)
+
+    def test_partial_sale_label_is_not_sold(self):
+        # M.1790527845：一篇兩支，其中一支標「(已售)」
+        body = "[型號] iPhone 17 Pro\n銀白：\n電池健康度98%\n藍(已售)：\n電池健康度92%"
+        self.assertEqual(T.detect_status("[販售] 台北 iPhone 17 Pro 256G 銀白/藍", body), T.STATUS_ACTIVE)
+
+    def test_real_sold_marks_still_detected(self):
+        for line in ["已售出", "iPhone 15 已售出 謝謝", "售出 謝謝", "已售出!!", "sold", "(已售出)"]:
+            self.assertEqual(T.detect_status("[販售] iPhone", "[型號] iPhone\n" + line), T.STATUS_SOLD, line)
+
+    def test_multi_phone_titles(self):
+        for title in ["[販售] 雙北 iphone17 512/iphone16PM 256", "[販售] 台北 iPhone 13 128G白 iPad mini 6 64G",
+                      "[販售] 雙北 iPhone 17 Pro/17 Pro Max 256G藍", "[販售] 台中 iPhone 14 Pro/iPhone SE3 (2022)",
+                      "[販售] 台北 iphone 18 pro max 512g銀/Air 256g", "[販售] 台南 iPhone 18 Pro/Pro Max 256g 紅色",
+                      "[販售] 高雄 iPhone 16 Pro Max/15 Pro Max/15", "[販售] 台北 iPhone 13 Pro 256GB 藍 兩隻",
+                      "[販售] 台中 iPhone 18 pro 256/512各一支"]:
+            self.assertTrue(T.multi_phone_title(title), title)
+        for title in ["[販售] iPhone Air 256G 白", "[販售] iPhone 12 5G 128G", "[販售] 台中 iPhone 15 Pro 256G 藍/白",
+                      "[販售] iPhone 13 pro max/airpods 4 降噪版", "[販售] 台北 iPhone 13 Pro+iPad Air 3",
+                      "[販售] iPhone 14 128G/電池90%", "[販售] 新竹 IPHONE 17 Pro Max 2T 橘"]:
+            self.assertFalse(T.multi_phone_title(title), title)
+
+    def test_multi_phone_title_not_single(self):
+        title = "[販售] 雙北 iPhone 17 Pro/17 Pro Max 256G藍"
+        body = "[型號] iPhone 17 Pro Max\n[規格] 256G\n[售價] 28000"
+        self.assertIsNone(T.rule_extract(title, body)["model"])
+        self.assertTrue(T.not_single_iphone({"title": title, "body": body}))
+        row = {"source_url": "u", "status": "在售", "title": title, "model": "iPhone 17 Pro Max", "storage": "256GB"}
+        self.assertEqual(T.misparsed_reason(row), "一篇多支")
+
+    def test_title_from_header_in_body(self):
+        # M.1790828999：賣家把標頭改成內文
+        html = ('<div id="main-content">\n已售出\n\n作者: soorz (d3llorz) 看板: MacShop\n'
+                '標題: [販售] 台北 iPhone 17 Pro Max 512GB 藍色\n時間: Thu Oct  1 12:29:56 2026\n\n'
+                '[型號] iPhone 17 Pro Max 512GB 藍色\n[售價] 38000\n--\n※ 發信站: 批踢踢實業坊(ptt.cc)</div>')
+        self.assertEqual(T.parse_article(html)["title"], "[販售] 台北 iPhone 17 Pro Max 512GB 藍色")
+
+    def test_edit_lines_stripped_without_signature(self):
+        # M.1791628103：標頭與發信站都被刪掉，「※ 編輯」留在本文
+        html = ('<div id="main-content">[型號] iPhone 16 Pro Max\n[售價] 30000\n[商品照/補充說明]\n\n'
+                '※ 編輯: anton0924 (61.230.70.101 臺灣), 10/12/2026 22:02:49\n</div>')
+        art = T.parse_article(html)
+        self.assertEqual(art["title"], "")
+        self.assertNotIn("編輯", art["body"])
+        self.assertIsNotNone(art["last_edit"])
+
+    def test_revisit_schedule(self):
+        now = T.datetime(2026, 12, 1, 12)
+        def url(days):
+            return f"https://www.ptt.cc/bbs/MacShop/M.{int((now - T.timedelta(days=days)).timestamp())}.A.{days:03d}.html"
+        recent, old = "2026-12-01 06:00:00", "2026-11-30 10:00:00"
+        rows = {url(10): {"status": "在售", "last_checked": recent},
+                url(60): {"status": "在售", "last_checked": recent},
+                url(61): {"status": "交易中", "last_checked": old},
+                url(62): {"status": "已售出", "last_checked": old},
+                url(100): {"status": "在售", "last_checked": old}}
+        self.assertEqual(T.revisit_urls(rows, 45, now=now), [url(10), url(61)])
+        self.assertEqual(T.revisit_urls(rows, 45, reparse=True, now=now), [url(10), url(61)])
+
+    def test_leaving_sold_clears_sold_record(self):
+        row = {"source_url": "u", "status": "已售出", "sold_detected_at": "2026-10-13 21:03:53",
+               "days_to_sell": "0.3", "days_to_sell_basis": "無法推估"}
+        with patch.object(T, "log_event") as log:
+            T.mark_status(row, T.STATUS_ACTIVE)
+        log.assert_called_once_with("u", "狀態變更", "已售出 → 在售")
+        self.assertEqual((row["sold_detected_at"], row["days_to_sell"], row["days_to_sell_basis"]), ("", "", ""))
 

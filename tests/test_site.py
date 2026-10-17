@@ -342,6 +342,26 @@ class PriceTrendsTest(unittest.TestCase):
         (s,) = S.price_trends(listings, [], start="2026-10-01")["series"]
         self.assertEqual(s["values"], [None, None, None, None, 31000])
 
+    def test_model_change_starts_on_switch_day(self):
+        # 沿用舊文改賣另一支：換機前的價格是另一支手機的，行情從換機那天起才算
+        listings = [self.row(u, "2026-10-01 10:00:00", 30000) for u in "abc"] + [self.row("x", "2026-10-01 10:00:00", 30000)]
+        events = [{"time": "2026-10-04 09:00:00", "source_url": "x", "event": "型號變更",
+                   "detail": "iPhone 16 128GB $9000 → iPhone 17 Pro 256GB $30000"}]
+        listings[0]["price"] = 20000
+        (s,) = S.price_trends(listings, events, start="2026-10-02")["series"]
+        self.assertEqual(s["values"], [30000, 30000, 30000, 30000])
+        listings[1]["price"] = 20000  # 10/02、10/03 只剩 a b c 三篇（x 還沒換機）
+        (s,) = S.price_trends(listings, events, start="2026-10-02")["series"]
+        self.assertEqual(s["values"], [20000, 20000, 25000, 25000])
+
+    def test_expired_leaves_shelf_after_90_days(self):
+        rows = [{"url": "a", "post_time": "2026-07-01 10:00:00", "status": "逾期未售", "sold_at": ""},
+                {"url": "b", "post_time": "2026-09-30 10:00:00", "status": "在售", "sold_at": ""}]
+        self.assertEqual(S.gone_day(rows[0], {}), "2026-09-29")
+        days = {d["date"]: d for d in S.daily_series(rows, [], max_days=200)}
+        self.assertEqual((days["2026-09-28"]["on_shelf"], days["2026-09-29"]["on_shelf"]), (1, 0))
+        self.assertEqual(sum(d["sold"] + d["deleted"] for d in days.values()), 0)
+
     def test_build_data_has_trends(self):
         self.assertIn("series", S.build_data()["trends"])
 
