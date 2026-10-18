@@ -11,6 +11,7 @@
     python site/blog.py --publish 草稿.json
 檢查並清理後寫入 data/weekly/<發布日>.json。這些文章 canonical 指向本站、列入 sitemap。
 """
+from seo import social_meta
 import argparse
 import html
 import json
@@ -278,11 +279,7 @@ def head(title, description, canonical, root, og_type="article", ld=None):
   <title>{E(title)}｜{BRAND}</title>
   <meta name="description" content="{E(description)}">
   <link rel="canonical" href="{E(canonical)}">
-  <meta property="og:type" content="{og_type}">
-  <meta property="og:title" content="{E(title)}">
-  <meta property="og:description" content="{E(description)}">
-  <meta property="og:url" content="{E(canonical)}">
-  <meta property="og:locale" content="zh_TW">
+{social_meta(title, description, canonical, S.SITE_URL, og_type=og_type)}
   <link rel="stylesheet" href="{root}style.css">{ld or ""}
 </head>
 <body class="column">

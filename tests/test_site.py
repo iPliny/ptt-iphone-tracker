@@ -236,7 +236,7 @@ class BuildSiteTest(unittest.TestCase):
         locs = [e.text for e in root.findall("s:url/s:loc", ns)]
         self.assertEqual(locs, [S.SITE_URL, S.SITE_URL + "market/", S.SITE_URL + "prices.html", S.SITE_URL + "jp/", S.SITE_URL + "jp/ja/", S.SITE_URL + "models/iphone-15-pro.html",
                                 S.SITE_URL + "models/iphone-16e.html"])
-        self.assertEqual({e.text for e in root.findall("s:url/s:lastmod", ns)}, {"2026-10-04"})
+        self.assertEqual(root.findall("s:url/s:lastmod", ns), [])  # 沒有內容日期，不回填建置日。
 
     def test_estimated_sold_date(self):
         """推估的售出天數要把售出算回發文日＋天數那天，而不是偵測到的那天。"""

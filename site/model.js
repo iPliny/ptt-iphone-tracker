@@ -19,6 +19,8 @@
     }
     canonical.rel = "canonical";
     canonical.href = $('meta[name="site-url"]').content + modelPageUrl(model);
+    const ogUrl = $('meta[property="og:url"]');
+    if (ogUrl) ogUrl.content = canonical.href;
   }
   let storage = params.get("s");  // null = 全部容量
   let D = null;
@@ -28,7 +30,11 @@
   const watchlist = PttWatchlist.createStore(() => window.localStorage);
   let watchFeedbackTimer;
 
-  if (!staticModel) document.title = (model || "機型行情") + " · PTT MacShop交易觀測";
+  if (!staticModel) {
+    document.title = (model || "機型行情") + " · PTT MacShop交易觀測";
+    const ogTitle = $('meta[property="og:title"]');
+    if (ogTitle) ogTitle.content = document.title;
+  }
   $("#model-name").textContent = model || "未指定機型";
 
   fetch((staticModel ? "../" : "") + "data.json", { cache: "no-cache" })

@@ -20,7 +20,7 @@ from datetime import date, datetime, timedelta, timezone
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SITE_DIR = os.path.join(ROOT, "site")
 DATA_DIR = os.path.join(ROOT, "data")
-STATIC_FILES = ["favicon.svg", "index.html", "model.html", "common.js", "app.js", "model.js", "watchlist.js", "style.css",
+STATIC_FILES = ["favicon.svg", "og.png", "index.html", "model.html", "common.js", "app.js", "model.js", "watchlist.js", "style.css",
                 "prices.html", "prices.js", "prices.css", "official-prices.json"]
 CSV_FILES = ["listings.csv", "events.csv", "market_summary.csv", "price_event_times.csv", "multi_items.csv"]
 TAIPEI = timezone(timedelta(hours=8))
@@ -498,15 +498,76 @@ def write_outlier_report(data_dir=DATA_DIR):
     return len(rows)
 
 
-def sitemap_xml(data, today=None, column_urls=(), extra_urls=()):
-    """首頁、行情總覽、價格頁、各機型靜態標準頁、專欄與 extra_urls；舊查詢網址仍由 model.html 支援。"""
+def sitemap_day(value):
+    """內容時間轉成台灣日期；未知或無效值不猜建置日。"""
+    try:
+        dt = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+        return (dt.astimezone(TAIPEI) if dt.tzinfo else dt).date().isoformat()
+    except (TypeError, ValueError):
+        return ""
+
+
+def sitemap_lastmods(data, data_dir=None, jp_latest=()):
+    """只採資料中的觀測、查核及發布時間；不採檔案 mtime 或建置時鐘。"""
     from model_pages import model_path
-    lastmod = (today or datetime.now(TAIPEI).date()).isoformat()
+    lastmods = {}
+
+    def newest(url, values):
+        days = [day for value in values if (day := sitemap_day(value))]
+        if days:
+            lastmods[url] = max(days)
+
+    newest(SITE_URL, [data.get("last_checked")] + [d.get("date") for d in data.get("days", [])])
+    if SITE_URL in lastmods:
+        lastmods[SITE_URL + "market/"] = lastmods[SITE_URL]
+    rows = list(data.get("listings", []))
+    if data_dir is not None:
+        # 多品項專屬的機型頁也使用其公開刊登時間。
+        rows += load_priced(read_csv(os.path.join(data_dir, "listings.csv")), data_dir)[1]
+    by_url = {r.get("url") or r.get("source_url"): r.get("model") for r in rows}
+    per_model = {}
+    for row in rows:
+        per_model.setdefault(row.get("model"), []).extend([row.get("post_time"), row.get("last_checked")])
+    for event in data.get("events", []):
+        model = by_url.get(event.get("url") or event.get("source_url"))
+        if model:
+            per_model.setdefault(model, []).append(event.get("time"))
+    for model, values in per_model.items():
+        if model:
+            newest(SITE_URL + model_path(model), values)
+    if data_dir is not None:
+        prices = Path(SITE_DIR) / "official-prices.json"
+        if prices.exists():
+            newest(SITE_URL + "prices.html", [json.loads(prices.read_text(encoding="utf-8")).get("updated_at")])
+        from column import load_issues, issue_url
+        for issue in load_issues(os.path.join(data_dir, "column")):
+            newest(issue_url(issue), [issue.get("generated_at")])
+        from blog import load_posts
+        posts = load_posts(os.path.join(data_dir, "blog"), os.path.join(data_dir, "weekly"))
+        newest(SITE_URL + "weekly/", [p.get(key) for p in posts for key in ("published", "updated")])
+        for post in posts:
+            if post["origin"] == "site":
+                newest(post["url"], [post.get("published"), post.get("updated")])
+    jp_day = max((day for row in jp_latest if (day := sitemap_day(row.get("last_checked")))), default="")
+    if jp_day:
+        lastmods[SITE_URL + "jp/"] = lastmods[SITE_URL + "jp/ja/"] = jp_day
+    return lastmods
+
+
+def sitemap_xml(data, today=None, column_urls=(), extra_urls=(), lastmods=None):
+    """只列標準網址；today 留作舊呼叫端相容參數，不作為 lastmod。"""
+    from model_pages import model_path
+    lastmods = sitemap_lastmods(data) if lastmods is None else lastmods
     urls = [SITE_URL, SITE_URL + "market/", SITE_URL + "prices.html", SITE_URL + "jp/", SITE_URL + "jp/ja/"] + [SITE_URL + model_path(m["model"]) for m in data["model_totals"]]
-    if column_urls:
-        urls += [SITE_URL + "column/"] + list(column_urls)
+    urls += list(column_urls)
     urls += list(extra_urls)
-    items = "".join(f"  <url><loc>{escape(u)}</loc><lastmod>{lastmod}</lastmod></url>\n" for u in urls)
+    items = ""
+    for url in dict.fromkeys(urls):
+        if url == SITE_URL + "column/":
+            continue  # 入口顯示最新一期全文，canonical 指向該期。
+        day = sitemap_day(lastmods.get(url))
+        modified = f"<lastmod>{day}</lastmod>" if day else ""
+        items += f"  <url><loc>{escape(url)}</loc>{modified}</url>\n"
     return ('<?xml version="1.0" encoding="UTF-8"?>\n'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + items + "</urlset>\n")
 
@@ -537,7 +598,12 @@ def build(out_dir, data_dir=DATA_DIR):
     render_market(out_dir, data)
     from jp_build import build_jp
     from jp_pages import render_jp_pages
-    jp_urls = render_jp_pages(out_dir, build_jp(out_dir, data_dir), SITE_URL)
+    jp_payload = build_jp(out_dir, data_dir)
+    jp_urls = render_jp_pages(out_dir, jp_payload, SITE_URL)
+    lastmods = sitemap_lastmods(data, data_dir, jp_payload["latest"])
+    for url in jp_urls:
+        if SITE_URL + "jp/" in lastmods:
+            lastmods[url] = lastmods[SITE_URL + "jp/"]
     # 含日本頁的 HTML 統一代換正式網址；不改站內相對連結或 GA 官方碼。
     for path in Path(out_dir).rglob("*.html"):
         html = path.read_text(encoding="utf-8")
@@ -546,7 +612,7 @@ def build(out_dir, data_dir=DATA_DIR):
     with open(os.path.join(out_dir, "robots.txt"), "w", encoding="utf-8") as f:
         f.write(f"User-agent: *\nAllow: /\nSitemap: {SITE_URL}sitemap.xml\n")
     with open(os.path.join(out_dir, "sitemap.xml"), "w", encoding="utf-8") as f:
-        f.write(sitemap_xml(data, column_urls=column_urls, extra_urls=jp_urls + blog_urls))
+        f.write(sitemap_xml(data, column_urls=column_urls, extra_urls=jp_urls + blog_urls, lastmods=lastmods))
     return data
 
 

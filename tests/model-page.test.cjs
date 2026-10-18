@@ -58,6 +58,7 @@ test('靜態頁重用 canonical、保留預產標題，讀取根目錄資料，�
   assert.deepEqual(view.requests, ['../data.json']);
   assert.equal(view.links.length, 1);
   assert.equal(view.links[0].href, base + 'models/iphone-18-pro.html');
+  assert.equal(view.element('meta[property="og:url"]').content, view.links[0].href);
   assert.equal(view.document.title, model + ' 預先產生的標題');
   assert.equal(view.element('#model-name').textContent, model);
   assert.match(view.element('#list-title').textContent, /256GB的文章（12）/);
@@ -73,6 +74,8 @@ test('原 model.html 查詢入口保留容量網址與篩選行為，canonical �
   assert.deepEqual(view.requests, ['data.json']);
   assert.equal(view.links.length, 1);
   assert.equal(view.links[0].href, base + 'models/iphone-18-pro.html');
+  assert.equal(view.element('meta[property="og:url"]').content, view.links[0].href);
+  assert.equal(view.element('meta[property="og:title"]').content, view.document.title);
   view.choose('512GB');
   assert.equal(view.history.at(-1), 'model.html?m=iPhone+18+Pro&s=512GB');
   assert.match(view.element('#list-title').textContent, /512GB的文章/);
