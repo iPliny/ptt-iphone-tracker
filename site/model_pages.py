@@ -150,20 +150,20 @@ def trend_summary(data, model):
 
 def render_model_html(template, data, model, canonical_url, asset_prefix=""):
     """保留互動元件 ID 與腳本，預先填入可直接閱讀的機型內容。"""
-    from seo import metadata
+    from seo import metadata, strip_social_meta
     stats = next(row for row in data["model_totals"] if row["model"] == model)
     listings = [row for row in data["listings"] if row["model"] == model]
     capacities = [row for row in data["models"] if row["model"] == model]
     title = model + " 二手行情、各容量價格 · PTT MacShop交易觀測"
     description = (f'{model} 的 PTT MacShop 刊登行情：{stats.get("listed", 0)} 筆刊登，'
                    f'刊登價中位數 {money(stats.get("median_price"))}。售出價格為賣家售出時最後標價，非實際成交價。')
-    html = re.sub(r"<title>.*?</title>", lambda _: f"<title>{escape(title)}</title>", template, count=1)
+    html = re.sub(r"<title>.*?</title>", lambda _: f"<title>{escape(title)}</title>", strip_social_meta(template), count=1)
     html = re.sub(r'<meta name="description" content="[^"]*">',
                   lambda _: f'<meta name="description" content="{escape(description, quote=True)}">', html, count=1)
     html = html.replace("</head>", f'<link rel="canonical" href="{escape(canonical_url, quote=True)}">\n</head>', 1)
     root_url = canonical_url.split("/models/")[0] + "/" if "/models/" in canonical_url else canonical_url.split("model.html")[0]
     html = html.replace("</head>", metadata(title, description, canonical_url,
-                        [("PTT MacShop交易觀測", root_url), (model, canonical_url)]) + "</head>", 1)
+                        [("PTT MacShop交易觀測", root_url), (model, canonical_url)], site_url=root_url) + "</head>", 1)
     html = html.replace("<body>", f'<body data-model="{escape(model, quote=True)}">', 1)
     html = html.replace('<h1 id="model-name">載入中…</h1>', f'<h1 id="model-name">{escape(model)}</h1>')
     updated = f'最後回訪 {data.get("last_checked") or "—"} · 這個機型共追蹤 {len(listings)} 篇'

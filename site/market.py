@@ -2,6 +2,7 @@
 
 只用 build_data 已排除異常值的公開資料，不另存檔案；數字每次建置都更新。
 """
+from seo import social_meta
 import json
 import os
 import re
@@ -173,11 +174,7 @@ def page_html(data, root="../"):
   <title>{E(title)}｜{BRAND}</title>
   <meta name="description" content="{E(description)}">
   <link rel="canonical" href="{E(url)}">
-  <meta property="og:type" content="website">
-  <meta property="og:title" content="{E(title)}">
-  <meta property="og:description" content="{E(description)}">
-  <meta property="og:url" content="{E(url)}">
-  <meta property="og:locale" content="zh_TW">
+{social_meta(title, description, url, S.SITE_URL)}
   <link rel="stylesheet" href="{root}style.css">
   <script type="application/ld+json">{ld}</script>
 </head>

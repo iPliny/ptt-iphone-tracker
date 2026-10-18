@@ -6,6 +6,7 @@
 每期的統計存成 data/column/<週日日期>.json，之後資料再變動也不改舊期數字；
 文章內文在建置網站時由統計套範本產生（build_site.py 會呼叫 render_column）。
 """
+from seo import social_meta
 import argparse
 import html
 import json
@@ -432,11 +433,7 @@ def page_html(issue, issues, root):
   <title>{E(a['title'])}｜{BRAND}</title>
   <meta name="description" content="{E(a['description'])}">
   <link rel="canonical" href="{E(url)}">
-  <meta property="og:type" content="article">
-  <meta property="og:title" content="{E(a['title'])}">
-  <meta property="og:description" content="{E(a['description'])}">
-  <meta property="og:url" content="{E(url)}">
-  <meta property="og:locale" content="zh_TW">
+{social_meta(a['title'], a['description'], url, S.SITE_URL, og_type='article')}
   <link rel="stylesheet" href="{root}style.css">
   <script type="application/ld+json">{ld}</script>
 </head>

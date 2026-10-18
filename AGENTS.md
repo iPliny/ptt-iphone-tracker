@@ -136,3 +136,8 @@
 ### 2026-10-18 二手 iPhone 行情總覽頁
 - `site/market.py` 在建置時輸出 `market/index.html`（靜態、不需 JavaScript），標題帶資料月份與「每日更新」，列入 sitemap（排在首頁後），首頁與機型頁頁首有入口。算法說明與 FAQ 只寫在這頁（POYU 2026-10-18 同意，不在每頁重複），首頁型號表與機型頁行情卡的說明文字後面用「算法說明」連到 `market/#faq`。只讀 `build_data` 的 `trends` 與 `models`，不另存資料檔。
 - 內容：近 N 天降價最多（有 30 天資料就用 30 天，否則 7 天）、二手行情最便宜、賣得最快（售出天數中位數，至少 `FAST_MIN`＝3 筆售出）各前 10 名，以及全部機型容量的行情一覽與 FAQ（FAQPage 結構化資料）。只列最新一天仍算得出行情的機型容量；漲跌格式共用 `model_pages.trend_pct`／`pct_text`。
+
+### 2026-10-18 分享預覽與 sitemap 日期
+- 所有公開頁的分享標籤統一使用 `site/seo.py:social_meta`（靜態模板保留 `{{SITE_URL}}` 佔位符），共用 `site/og.png`（1200×630、100KB 以內）；中文 `zh_TW`、日文 `ja_JP`，Twitter 使用 `summary_large_image`。`og:url` 與 canonical 一致；舊 `model.html?m=` 由 `model.js` 同步設定兩者。GA 官方碼保留。
+- `sitemap_lastmods` 只採來源日期並轉台灣時間：首頁／market 為每日統計與最近回訪的最新日期；機型頁為該機型公開文章的發文、回訪與公開事件時間最大值（多品項也含公開品項的發文日）；prices 為 `official-prices.json:updated_at`；專欄為 `generated_at` 出刊日；週報為 `published`／`updated` 較晚者，列表取各篇最新值；日本頁為 `latest.csv:last_checked` 最新日期。無可靠日期就省略 lastmod，不用建置日或檔案 mtime。
+- sitemap 只列與該頁 canonical 相同的網址；`column/` 保留頁面但不列入，僅收各期。Blogger 轉貼各篇仍指向原文且不列入本站 sitemap；少量樣本的機型頁收錄規則不變。

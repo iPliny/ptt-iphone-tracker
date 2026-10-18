@@ -2,6 +2,7 @@
 
 只讀 jp_build 產生的 payload（latest.csv），不另存資料；價格異常判斷與 jp.js 的 visiblePrices 相同。
 """
+from seo import social_meta
 import json
 import re
 from html import escape as E
@@ -201,10 +202,7 @@ def page_html(payload, model, lang, site_url, models=MODELS):
   <title>{E(title)}</title>
   <meta name="description" content="{E(description)}">
   <link rel="canonical" href="{E(url)}">
-{hreflang}  <meta property="og:type" content="website">
-  <meta property="og:title" content="{E(title)}">
-  <meta property="og:description" content="{E(description)}">
-  <meta property="og:url" content="{E(url)}">
+{hreflang}{social_meta(title, description, url, site_url, locale='ja_JP' if lang == 'ja' else 'zh_TW')}
   <link rel="stylesheet" href="{root}style.css">
   <link rel="stylesheet" href="{jp_root}jp.css">
   <script type="application/ld+json">{ld}</script>

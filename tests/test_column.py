@@ -142,8 +142,8 @@ class ColumnTest(unittest.TestCase):
 
         ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
         locs = [e.text for e in ElementTree.parse(os.path.join(out, "sitemap.xml")).findall("s:url/s:loc", ns)]
-        self.assertEqual(locs[-3:], [S.SITE_URL + "column/", S.SITE_URL + "column/2026-09-27/",
-                                     S.SITE_URL + "column/2026-09-20/"])
+        self.assertEqual(locs[-2:], [S.SITE_URL + "column/2026-09-27/", S.SITE_URL + "column/2026-09-20/"])
+        self.assertNotIn(S.SITE_URL + "column/", locs)
 
     def test_no_issues_no_column(self):
         out = os.path.join(self.dir, "out")
