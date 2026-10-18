@@ -86,10 +86,10 @@ class OfficialPriceTests(unittest.TestCase):
         spec.loader.exec_module(module)
         for asset in ASSETS:
             self.assertIn(asset, module.STATIC_FILES)
-        # 新增功能的離線 fixture：只複製本功能的真實檔案，行情輸入為空。
+        # 包含建置會預產的首頁；行情輸入為空，官方價格資產保持原樣。
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory) / 'out'
-            with patch.object(module, 'STATIC_FILES', ASSETS):
+            with patch.object(module, 'STATIC_FILES', ASSETS + ('index.html',)):
                 result = module.build(str(out), str(Path(directory) / 'empty-input'))
             for asset in ASSETS:
                 expected = (ROOT / 'site' / asset).read_bytes()

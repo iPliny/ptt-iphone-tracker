@@ -519,6 +519,9 @@ def build(out_dir, data_dir=DATA_DIR):
         if os.path.exists(src):
             shutil.copy(src, os.path.join(out_dir, "data", name))
     data = build_data(data_dir)
+    from seo import render_home
+    home_path = Path(out_dir) / "index.html"
+    home_path.write_text(render_home(home_path.read_text(encoding="utf-8"), data, SITE_URL), encoding="utf-8")
     with open(os.path.join(out_dir, "data.json"), "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
     from model_pages import build_model_pages
