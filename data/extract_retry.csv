@@ -1,3 +1,1 @@
 ﻿source_url,first_failed,last_failed,attempts,last_error
-https://www.ptt.cc/bbs/MacShop/M.1792172936.A.F51.html,2026-10-18 18:02:11,2026-10-18 18:02:11,1,"Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011Cg9WZ5zn2eGgCCrFsUps8'}"
-https://www.ptt.cc/bbs/MacShop/M.1792133347.A.600.html,2026-10-18 18:03:42,2026-10-18 18:03:42,1,"Error code: 400 - {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': 'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.'}, 'request_id': 'req_011Cg9Wfp9jbPu86ERuYuXBR'}"
