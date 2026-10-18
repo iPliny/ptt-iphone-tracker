@@ -8,8 +8,12 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -19,3 +23,114 @@ jobs:
         with:
           node-version: "22"
       - run: node --test tests/*.test.cjs
+      # 僅本分支驗收用：不抓 PTT、不提交資料、不觸發正式部署；驗收後移除。
+      - name: 安裝截圖工具
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: 建置前後比較與健康檢查替身
+        run: |
+          python - <<'PYCODE'
+          import json, os, subprocess, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path('site').resolve()))
+          import build_site as S
+          import tracker as T
+          root=Path(os.environ['RUNNER_TEMP'])/'pipeline-evidence'
+          root.mkdir(exist_ok=True)
+          source=subprocess.check_output(['git','show','3ee0362:site/build_site.py'],text=True)
+          namespace={'__file__':str(Path('site/build_site.py').resolve()),'__name__':'before_build'}
+          exec(compile(source,namespace['__file__'],'exec'),namespace)
+          data_dir=str(Path('data').resolve())
+          old=namespace['build_data'](data_dir);new=S.build_data(data_dir)
+          summary={}
+          for label,data in [('before',old),('after',new)]:
+              text=json.dumps(data,ensure_ascii=False,separators=(',',':'))
+              summary[label]={'bytes':len(text.encode()),'events':len(data['events']),
+                              'first_event':min(e['time'] for e in data['events']),
+                              'deleted_0928':sum(e['time'].startswith('2026-09-28') and e['detail'].endswith('已刪除') for e in data['events'])}
+          summary['days_unchanged']=old['days']==new['days']
+          summary['trends_unchanged']=old['trends']==new['trends']
+          summary['daily_0928']=next(d for d in new['days'] if d['date']=='2026-09-28')
+          assert summary['days_unchanged'] and summary['trends_unchanged']
+          (root/'comparison.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2))
+          print(json.dumps(summary,ensure_ascii=False))
+          S.build(str(Path(os.environ['RUNNER_TEMP'])/'preview'), data_dir)
+          # 只用替身產生健康報告，下一步印出並確認 shell 閘門回傳 1。
+          T.write_health_report({'errors':1,'fetched':1,'claude_account_error':True},1)
+          PYCODE
+      - name: 確認健康檢查會拒絕帳號錯誤（替身）
+        run: |
+          report="$RUNNER_TEMP/track-health.txt"
+          cat "$report"
+          rc=0
+          test "$(head -n 1 "$report")" = "OK" || rc=$?
+          test "$rc" -eq 1
+          echo "已確認健康閘門回傳 1；本驗收不 commit、不部署。"
+      - name: 9月28日刪文清單截圖
+        run: |
+          cat > "$RUNNER_TEMP/capture.py" <<'PYCODE'
+          import json
+          import mimetypes
+          import os
+          import sys
+          from pathlib import Path
+          from urllib.parse import urlparse
+          from playwright.sync_api import sync_playwright
+
+          site = Path(sys.argv[1]).resolve()
+          out = Path(sys.argv[2]).resolve()
+          out.mkdir(parents=True, exist_ok=True)
+          with sync_playwright() as p:
+              options = {'headless': True}
+              if os.environ.get('BROWSER_EXECUTABLE'):
+                  options['executable_path'] = os.environ['BROWSER_EXECUTABLE']
+              browser = p.chromium.launch(**options)
+              page = browser.new_page(viewport={'width': 1440, 'height': 1300}, device_scale_factor=1)
+              errors = []
+              page.on('pageerror', lambda error: errors.append(str(error)))
+              def serve(route):
+                  url = urlparse(route.request.url)
+                  if url.hostname != 'preview.test':
+                      route.abort()
+                      return
+                  path = site / url.path.lstrip('/')
+                  if path.is_dir():
+                      path /= 'index.html'
+                  if path.is_file():
+                      route.fulfill(path=path, content_type=mimetypes.guess_type(path)[0] or 'application/octet-stream')
+                  else:
+                      route.fulfill(status=404, body='not found')
+              page.route('**/*', serve)
+              page.goto('http://preview.test/')
+              page.wait_for_selector('#kpis .value')
+              page.locator('#day').fill('2026-09-28')
+              page.locator('#day').dispatch_event('change')
+              page.locator('[data-tab="deleted"]').click()
+              while page.locator('#day-more').is_visible():
+                  page.locator('#day-more').click()
+              expected = int(page.locator('#kpis .kpi').nth(2).locator('.value').inner_text())
+              actual = page.locator('#day-list .item').count()
+              assert actual == expected == 29, (actual, expected)
+              assert not errors, errors
+              # 讓指標卡與刪文分頁同時出現在畫面內。
+              page.locator('#kpis').scroll_into_view_if_needed()
+              page.screenshot(path=out / 'homepage-2026-09-28-deleted-desktop.png')
+              page.locator('#day-list').locator('..').screenshot(path=out / 'homepage-2026-09-28-deleted-full-list.png')
+              page.set_viewport_size({'width': 375, 'height': 1100})
+              assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+              page.locator('#kpis').scroll_into_view_if_needed()
+              page.screenshot(path=out / 'homepage-2026-09-28-deleted-mobile.png')
+              report = {'date': '2026-09-28', 'card_deleted': expected, 'rendered_deleted': actual,
+                        'page_errors': errors, 'mobile_overflow': False}
+              (out / 'browser-check.json').write_text(json.dumps(report, ensure_ascii=False, indent=2))
+              print(json.dumps(report, ensure_ascii=False))
+              browser.close()
+          PYCODE
+          python "$RUNNER_TEMP/capture.py" "$RUNNER_TEMP/preview" "$RUNNER_TEMP/pipeline-evidence"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-health-evidence
+          path: ${{ runner.temp }}/pipeline-evidence/
+          retention-days: 90
+          if-no-files-found: error
