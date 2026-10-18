@@ -68,3 +68,14 @@ jobs:
           done
           echo "推送失敗" >&2
           exit 1
+      # tracker 的健康警訊不提早中斷，讓異常價格報表、資料提交與部署觸發先完成。
+      - name: 檢查執行狀況
+        if: ${{ !cancelled() }}
+        run: |
+          report="$RUNNER_TEMP/track-health.txt"
+          if [ ! -f "$report" ]; then
+            echo "找不到 tracker 健康檢查結果" >&2
+            exit 1
+          fi
+          cat "$report"
+          test "$(head -n 1 "$report")" = "OK"

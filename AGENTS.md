@@ -17,6 +17,8 @@
   - 2026-09-27 新增 `listings.csv` 的 `days_to_sell_basis`（觀測／推估／無法推估）與 `market_summary.csv` 的 `售出天數樣本(觀測/推估)`，都加在最後一欄。推估＝第一次看到就已售出時，用文末最後一筆「※ 編輯」時間減發文時間
   - 2026-09-29：`listings.csv` 新增 `private_msg_count`，加在最後一欄（`days_to_sell_basis` 之後）。正常回訪時只更新在售／交易中文章；排除原 PO、移除私密／私人／隱私／自私／私下／私心／公私／勿私／不私／別私／不要私後，含「私」「站內」「密你」「已密」的推文按 ID 去重計人數，推／噓／→ 都算。空白＝未計算、0＝已計算但無人私訊；售出或刪除後保留最後值，網站不顯示。
 - `legacy/`：v1 程式，只供參考，不要修改
+- 2026-10-18：新增 `data/extract_retry.csv`（`source_url,first_failed,last_failed,attempts,last_error`，以 source_url 為鍵，整檔覆寫）。萃取暫時失敗的新文章每輪獨立加入佇列，不受 `--days` 限制；成功萃取（單支、多品項或略過）、404 後移除，首次失敗滿 `RETRY_DAYS`（14）天改記 `listings.csv` 的「略過」後移除。不改 `listings.csv` 欄位；此檔由排程產生，程式 PR 不帶資料檔。
+- 2026-10-18：tracker 在 Actions 完成存檔與彙整後，把健康結果寫到 `$RUNNER_TEMP/track-health.txt` 與 `$GITHUB_STEP_SUMMARY`；workflow 完成異常價報表、資料 commit／部署觸發後才檢查。看板首頁失敗、有佇列卻沒有 200／404、Claude 帳號／權限／金鑰／額度錯誤，或一般錯誤超過 `HEALTH_ERROR_LIMIT`（10）時讓 job 失敗。`--report-only`、`--migrate` 不產生結果，本機不因此回傳非 0。
 - 每週專欄「二手 iPhone 行情週報」（2026-10-04）：`site/column.py` 為上一個完整週（週日～週六，台灣時間）算統計，存成 `data/column/<週日日期>.json`，每期只產生一次，之後資料變動不改舊期數字；`.github/workflows/column.yml` 每週日 UTC 12:00（日本 21:00／台灣 20:00）執行並觸發部署。內文 1000 字以內（`MAX_CHARS`，POYU 2026-10-04 指定），建置時由 `article()` 依統計套範本產生，改範本會一起改到舊期文字。頁面是靜態 HTML：`column/` 顯示最新一期全文（canonical 指向該期），`column/<週日日期>/` 為各期固定網址，都列入 sitemap.xml，`<head>` 要保留 GA 官方碼。
 
 ### 2026-10-05 機型頁的 Apple 原廠資訊

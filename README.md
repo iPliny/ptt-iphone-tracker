@@ -16,6 +16,7 @@ ptt.cc 前面有 Cloudflare，雲端主機用一般 `requests` 會拿到 403，�
 ```
 data/listings.csv        每篇文章一列的最新狀態（主鍵 source_url）
 data/events.csv          變動紀錄：新刊登、價格變動、狀態變更
+data/extract_retry.csv   萃取暫時失敗的網址與重試紀錄，首次失敗滿 14 天改記略過
 data/market_summary.csv  各型號 × 容量：刊登數、售出率、刊登價／已售標價中位數、售出天數中位數
 data/macshop_raw_data_v1.csv  v1 原始資料（已匯入 listings.csv）
 ```
