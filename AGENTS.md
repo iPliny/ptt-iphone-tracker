@@ -100,6 +100,7 @@
 - `claude` 模式先跑 `rule_extract`，結果可用就照用；規則抓不到、且 `not_single_iphone` 不成立（不是配件文、不是一篇賣多支）時，才由 `claude_extract` 呼叫 `CLAUDE_MODEL`（`claude-haiku-5-5`，effort low），用 `CLAUDE_SCHEMA` JSON schema 限定輸出，再經 `build_fields` 同一套檢查。顏色仍由 `parse_color` 從標題判斷。Claude 失敗只記錯誤、文章留到下次。
 - `listings.csv` 最後一欄新增 `extractor`（`rules`／`claude`／`ollama`），空白＝加此欄前的舊列。網站不使用此欄。
 - 測試以 `claude_extract` 替身執行，不連網、不需要金鑰。
+- 2026-10-18 POYU 決定暫不付費：`track.yml` 固定 `--extractor rules`、不帶入 `ANTHROPIC_API_KEY`（secret 保留）。程式仍支援 claude 模式，恢復時改回 `--extractor auto` 並在該步驟加回 env。
 
 ### 2026-10-12 Blogger 週報轉貼
 - POYU 的「iPhone二手週報」由 ChatGPT 排程寫好、Email 投稿到 Blogger（https://tcssh.blogspot.com/）。`site/blog.py` 讀公開 feed（標籤「週報」＋「iPhone」、標題以「iPhone二手週報」開頭），每篇存成 `data/blog/<台灣時間發布日>.json`；Blogger 上改過就覆寫，feed 範圍內消失（轉草稿／刪除）就移除。`.github/workflows/blog.yml` 每天 UTC 12:30 執行並觸發部署；`--feed <檔案>` 可改讀 Blogger 匯出檔，不刪舊檔。
