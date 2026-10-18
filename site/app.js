@@ -55,7 +55,7 @@
   fetch("data.json", { cache: "no-cache" })
     .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(init)
-    .catch((e) => { $("#updated").textContent = "資料載入失敗（" + e.message + "）"; });
+    .catch(() => { $("#updated").textContent += " · 互動資料載入失敗，目前顯示建置時快照"; });
 
   function init(data) {
     D = data;
