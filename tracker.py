@@ -30,6 +30,7 @@ import os
 import random
 import re
 import statistics
+import tempfile
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -59,6 +60,10 @@ LISTINGS_FILE = os.path.join(DATA_DIR, "listings.csv")
 EVENTS_FILE = os.path.join(DATA_DIR, "events.csv")
 SUMMARY_FILE = os.path.join(DATA_DIR, "market_summary.csv")
 MULTI_FILE = os.path.join(DATA_DIR, "multi_items.csv")  # 一篇賣多樣商品時拆出的各支 iPhone（只算刊登價）
+RETRY_FILE = os.path.join(DATA_DIR, "extract_retry.csv")
+RETRY_FIELDS = ["source_url", "first_failed", "last_failed", "attempts", "last_error"]
+RETRY_DAYS = 14
+HEALTH_ERROR_LIMIT = 10  # 超過此數才讓 Actions 標示失敗
 MULTI_FIELDS = ["source_url", "item_no", "post_time", "title", "model", "storage", "全新未拆封機",
                 "battery_health", "price", "first_seen"]
 
@@ -1115,13 +1120,15 @@ def needs_days_backfill(row):
 # ==========================================
 # 第一階段：掃描看板
 # ==========================================
-def scan_board(days, max_pages):
+def scan_board(days, max_pages, stats=None):
     cutoff = (datetime.now() - timedelta(days=days)).timestamp()
     url, found = INDEX_URL, []
     for page in range(max_pages):
         print(f"\n---> [SCAN] 第 {page + 1} 頁 {url}")
         code, html = fetch(url)
         if code != 200:
+            if page == 0 and stats is not None:
+                stats["board_failed"] = True
             print("[ERROR] 看板頁面連線失敗，停止翻頁。")
             break
         soup = BeautifulSoup(html, "html.parser")
@@ -1153,10 +1160,14 @@ def scan_board(days, max_pages):
 # ==========================================
 # 第二、三階段：處理單篇文章
 # ==========================================
-def process_article(url, listings, use_llm, stats, multi=None, list_title=""):
+def process_article(url, listings, use_llm, stats, multi=None, list_title="", retries=None):
     code, html = fetch(url)
     row = listings.get(url)
+    if code in (200, 404):
+        stats["fetched"] = stats.get("fetched", 0) + 1
     if code == 404:
+        if retries is not None:
+            retries.pop(url, None)
         if row and needs_days_backfill(row):
             row["days_to_sell"], row["days_to_sell_basis"] = "", BASIS_UNKNOWN
         if row and row.get("status") in OPEN_STATUSES:
@@ -1165,10 +1176,12 @@ def process_article(url, listings, use_llm, stats, multi=None, list_title=""):
             stats["deleted"] += 1
         return
     if code != 200:
+        stats["errors"] += 1
         print("    [ERROR] 無法取得文章，下次再試。")
         return
     art = parse_article(html)
     if art is None:
+        stats["errors"] += 1
         return
     if not art["title"]:
         # 賣家刪掉頁面標頭時，改用看板列表上的標題，再不行沿用上次的標題
@@ -1178,7 +1191,7 @@ def process_article(url, listings, use_llm, stats, multi=None, list_title=""):
     status = detect_status(art["title"], art["body"])
     price_confirmed = bool(row and row.get("body_hash") == h)
 
-    first_seen = None
+    first_seen = (retries or {}).get(url, {}).get("first_failed")
     skipped_row = None
     if REPARSE and use_llm and row is not None and row.get("status") == "略過":
         prev = skipped_from(url) if row.get("model") else None
@@ -1201,6 +1214,8 @@ def process_article(url, listings, use_llm, stats, multi=None, list_title=""):
             # Claude 暫時失敗：不記成略過（略過列之後不回訪），留給下次重新萃取
             if skipped_row is not None:
                 listings[url] = skipped_row
+            if retries is not None:
+                record_extract_retry(retries, url, art.get("extract_error", "萃取失敗"))
             print("    [RETRY] 萃取失敗，下次再試。")
             return
         if multi is not None:
@@ -1213,6 +1228,8 @@ def process_article(url, listings, use_llm, stats, multi=None, list_title=""):
             listings[url] = {"source_url": url, "post_time": post_time_from_url(url), "title": art["title"],
                              "status": "略過", "first_seen": first_seen or now_str(), "last_checked": now_str(),
                              "body_hash": h}
+            if retries is not None:
+                retries.pop(url, None)
             return
         row = {"source_url": url, "post_time": post_time_from_url(url), "first_seen": first_seen or now_str(),
                "status": STATUS_ACTIVE, "first_price": fields["price"], **fields}
@@ -1221,6 +1238,8 @@ def process_article(url, listings, use_llm, stats, multi=None, list_title=""):
         stats["new"] += 1
         log_event(url, "新刊登", f"{fields['model']} {fields['storage']} ${fields['price']}")
     elif row.get("status") == "略過":
+        if retries is not None:
+            retries.pop(url, None)
         row["last_checked"] = now_str()
         return
     elif use_llm and (row.get("body_hash") != h or REPARSE):
@@ -1281,6 +1300,8 @@ def process_article(url, listings, use_llm, stats, multi=None, list_title=""):
         row["private_msg_count"] = art["pm_count"]
     if status == STATUS_SOLD and before != STATUS_SOLD:
         stats["sold"] += 1
+    if retries is not None and price_confirmed:
+        retries.pop(url, None)
 
 
 EXTRACTOR = "rules"
@@ -1289,6 +1310,8 @@ REPARSE = False  # --reparse：追蹤期內所有文章都用目前的規則重�
 
 def safe_extract(art, stats):
     title, body = art["title"], art["body"]
+    art.pop("extract_failed", None)
+    art.pop("extract_error", None)
     try:
         if EXTRACTOR == "ollama":
             fields = build_fields(llm_extract(title, body))
@@ -1301,8 +1324,10 @@ def safe_extract(art, stats):
             return None
         try:
             parsed = claude_extract(title, body)
-        except Exception:
+        except Exception as e:
             art["extract_failed"] = True  # 與「確定不是單支 iPhone」區分，新文章不寫成略過
+            if claude_account_error(e):
+                stats["claude_account_error"] = True
             raise
         fields = build_fields(parsed)
         stats["claude"] = stats.get("claude", 0) + 1
@@ -1312,9 +1337,84 @@ def safe_extract(art, stats):
         return {**fields, "color": parse_color(fields["model"], re.sub(r"^\[[^\]]*\]\s*", "", title)) or "",
                 "extractor": "claude"}
     except Exception as e:
+        art["extract_failed"] = True
+        art["extract_error"] = str(e)
         print(f"    [ERR] 解析失敗：{e}")
         stats["errors"] += 1
         return None
+
+
+def claude_account_error(error):
+    """只有帳號／權限／額度需要立即通知；逾時、限流及 overloaded 沿用一般錯誤門檻。"""
+    try:
+        import anthropic
+    except ImportError:
+        return False
+    return (isinstance(error, (anthropic.AuthenticationError, anthropic.PermissionDeniedError)) or
+            (isinstance(error, anthropic.BadRequestError) and "credit balance" in str(error).lower()))
+
+
+def health_failures(stats, queue_size):
+    reasons = []
+    if stats.get("board_failed"):
+        reasons.append("看板第一頁抓取失敗")
+    if queue_size and not stats.get("fetched"):
+        reasons.append(f"佇列有 {queue_size} 篇文章，但沒有任何一篇成功取得 200 或 404")
+    if stats.get("claude_account_error"):
+        reasons.append("Claude 帳號／權限／金鑰／額度錯誤，請檢查 Anthropic 帳號")
+    if stats["errors"] > HEALTH_ERROR_LIMIT:
+        reasons.append(f"錯誤 {stats['errors']} 次，超過門檻 {HEALTH_ERROR_LIMIT}")
+    return reasons
+
+
+def write_health_report(stats, queue_size):
+    """資料存妥後只回報結果；workflow 在 commit／觸發部署之後才依此失敗。"""
+    reasons = health_failures(stats, queue_size)
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    report = ("FAILED" if reasons else "OK") + "\n"
+    report += "\n".join(reasons) + "\n"
+    path = os.path.join(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir(), "track-health.txt")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(report)
+    if os.environ.get("GITHUB_STEP_SUMMARY"):
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
+            f.write("## Tracker 執行狀況\n\n" + ("\n".join(f"- {r}" for r in reasons) or "健康檢查通過") + "\n")
+
+
+def load_extract_retries():
+    if not os.path.exists(RETRY_FILE):
+        return {}
+    with open(RETRY_FILE, encoding="utf-8-sig", newline="") as f:
+        return {r["source_url"]: r for r in csv.DictReader(f)}
+
+
+def save_extract_retries(retries):
+    tmp = RETRY_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8-sig", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=RETRY_FIELDS)
+        w.writeheader()
+        w.writerows(retries.values())
+    os.replace(tmp, RETRY_FILE)
+
+
+def record_extract_retry(retries, url, error):
+    now = now_str()
+    row = retries.setdefault(url, {"source_url": url, "first_failed": now, "attempts": 0})
+    row.update(last_failed=now, attempts=int(row["attempts"]) + 1, last_error=error)
+
+
+def expire_extract_retries(retries, listings):
+    """即使文章抓不到，首次萃取失敗滿 14 天也結案；不覆寫既有的有效刊登。"""
+    cutoff = datetime.now() - timedelta(days=RETRY_DAYS)
+    for url, retry in list(retries.items()):
+        if datetime.fromisoformat(retry["first_failed"]) > cutoff:
+            continue
+        listings.setdefault(url, {"source_url": url, "post_time": post_time_from_url(url), "title": "",
+                                  "status": "略過", "first_seen": retry["first_failed"],
+                                  "last_checked": now_str(), "body_hash": ""})
+        del retries[url]
+        print(f"[RETRY] {url} 萃取失敗滿 {RETRY_DAYS} 天，記為略過。")
 
 
 # ==========================================
@@ -1445,12 +1545,15 @@ def main():
     os.makedirs(DATA_DIR, exist_ok=True)
     listings = load_listings()
     multi = load_multi()
+    stats = None
     if args.migrate:
         migrate(args.migrate, listings)
         save_listings(listings)
 
     if not args.report_only and not args.migrate:
         stats = {"new": 0, "sold": 0, "deleted": 0, "price_changes": 0, "errors": 0, "claude": 0}
+        retries = load_extract_retries()
+        expire_extract_retries(retries, listings)
         use_llm = not args.no_llm  # 是否解析新文章／被編輯的文章
         global EXTRACTOR, REPARSE
         EXTRACTOR = args.extractor
@@ -1460,30 +1563,33 @@ def main():
         REPARSE = args.reparse
 
         print("=" * 60 + "\n[INFO] 第一階段：掃描看板\n" + "=" * 60)
-        targets = [] if not use_llm else scan_board(args.days, args.max_pages)
+        targets = [] if not use_llm else scan_board(args.days, args.max_pages, stats)
         print(f"[INFO] 看板上找到 {len(targets)} 篇 iPhone 販售文。")
 
         revisit = revisit_urls(listings, args.track_days, args.reparse)
         backfill = [u for u, r in listings.items() if needs_days_backfill(r)]
         titles = {t["link"]: t["title"] for t in targets}
-        queue = list(dict.fromkeys([t["link"] for t in targets] + revisit + backfill))
+        pending = list(retries) if use_llm else []
+        queue = list(dict.fromkeys([t["link"] for t in targets] + revisit + backfill + pending))
         print(f"[INFO] 另有 {len(revisit)} 篇在售文章需回訪、{len(backfill)} 篇已售出文章補算售出天數，"
-              f"合計處理 {len(queue)} 篇。")
+              f"{len(pending)} 篇等待重新萃取，合計處理 {len(queue)} 篇。")
 
         print("=" * 60 + "\n[INFO] 第二、三階段：解析新文章 + 回訪追蹤\n" + "=" * 60)
         for i, url in enumerate(queue, 1):
             print(f"\n[{i}/{len(queue)}] {url}")
             try:
-                process_article(url, listings, use_llm, stats, multi, titles.get(url, ""))
+                process_article(url, listings, use_llm, stats, multi, titles.get(url, ""), retries)
             except Exception as e:
                 print(f"    [ERR] {e}")
                 stats["errors"] += 1
             if i % 10 == 0:
                 save_listings(listings)  # 中途存檔，被中斷也不會白跑
                 save_multi(multi)
+                save_extract_retries(retries)
             polite_sleep()
         save_listings(listings)
         save_multi(multi)
+        save_extract_retries(retries)
         print("\n" + "=" * 60)
         print(f"[DONE] 新刊登 {stats['new']}｜新售出 {stats['sold']}｜刪文 {stats['deleted']}"
               f"｜價格變動 {stats['price_changes']}｜錯誤 {stats['errors']}｜Claude 萃取 {stats['claude']}")
@@ -1504,6 +1610,8 @@ def main():
         save_listings(listings)
     rows = build_summary(listings, multi=multi)
     print(f"[REPORT] 行情彙整 {len(rows)} 組 → {SUMMARY_FILE}")
+    if stats is not None:
+        write_health_report(stats, len(queue))
 
 
 if __name__ == "__main__":

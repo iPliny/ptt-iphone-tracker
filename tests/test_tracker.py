@@ -396,10 +396,11 @@ class PipelineTest(unittest.TestCase):
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.orig = {k: getattr(T, k) for k in ("LISTINGS_FILE", "EVENTS_FILE", "SUMMARY_FILE", "MULTI_FILE",
+        self.orig = {k: getattr(T, k) for k in ("LISTINGS_FILE", "EVENTS_FILE", "SUMMARY_FILE", "MULTI_FILE", "RETRY_FILE",
                                                   "fetch", "llm_extract", "polite_sleep", "REPARSE")}
         T.LISTINGS_FILE = os.path.join(self.tmp.name, "listings.csv")
         T.MULTI_FILE = os.path.join(self.tmp.name, "multi_items.csv")
+        T.RETRY_FILE = os.path.join(self.tmp.name, "extract_retry.csv")
         T.EVENTS_FILE = os.path.join(self.tmp.name, "events.csv")
         T.SUMMARY_FILE = os.path.join(self.tmp.name, "summary.csv")
         T.polite_sleep = lambda *a: None

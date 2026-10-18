@@ -30,7 +30,7 @@ TRACKED_STATUSES = {"在售", "交易中", "已售出", "已刪除", "逾期未�
 EXPIRE_DAYS = 90    # 和 tracker.py 的 STALE_DAYS 相同：發文滿這麼多天沒賣掉就是「逾期未售」，當天下架
 MULTI_STATUS = "多品項"  # 一篇賣多支時拆出的 iPhone：只算刊登數與刊登價
 MAX_DAYS = 90       # 每日序列最多保留幾天
-MAX_EVENTS = 1000   # 網頁上最多帶幾筆事件
+PUBLIC_EVENT_TYPES = {"價格變動", "狀態變更"}  # 機型改價與首頁期間清單使用
 
 
 def read_csv(path):
@@ -445,17 +445,20 @@ def build_data(data_dir=DATA_DIR, now=None):
     for r in listings:
         counts[r["status"]] += 1
     checked = [r["last_checked"] for r in listings if r["last_checked"]]
+    days = daily_series(listings, events)
     events_out = sorted(
         ({"time": e.get("time", ""), "url": e.get("source_url", ""),
           "event": e.get("event", ""), "detail": e.get("detail", ""),
-          "detected_at": e.get("detected_at", ""), "time_basis": e.get("time_basis", "")} for e in events),
-        key=lambda e: e["time"], reverse=True)[:MAX_EVENTS]
+          "detected_at": e.get("detected_at", ""), "time_basis": e.get("time_basis", "")} for e in events
+         if e.get("event") in PUBLIC_EVENT_TYPES and days and
+         days[0]["date"] <= day_of(e.get("time")) <= days[-1]["date"]),
+        key=lambda e: e["time"], reverse=True)
 
     return {
         "generated_at": (now or datetime.now()).strftime("%Y-%m-%d %H:%M:%S"),
         "last_checked": max(checked) if checked else "",
         "counts": {"total": len(listings), **counts},
-        "days": daily_series(listings, events),
+        "days": days,
         "trends": price_trends(listings, events),
         # 型號統計另外納入多品項文章拆出的 iPhone（只影響刊登數與刊登價）
         "models": model_stats(listings + multi),

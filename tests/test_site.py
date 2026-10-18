@@ -95,6 +95,40 @@ class BuildSiteTest(unittest.TestCase):
         self.assertNotIn("u4", [r["url"] for r in data["listings"]])
         self.assertEqual(data["counts"]["已售出"], 1)
 
+    def test_events_keep_entire_daily_window_without_count_limit(self):
+        path = os.path.join(self.dir, "events.csv")
+        # 最新一天的 1,200 筆事件不能擠掉更早、仍在每日統計範圍內的刪文。
+        events = S.read_csv(path) + [
+            {"time": "2026-09-03 09:00:00", "source_url": "u3", "event": "價格變動",
+             "detail": "13000 → 12000"} for _ in range(1200)]
+        events += [{"time": "2026-09-01 09:00:00", "source_url": "u2", "event": "狀態變更",
+                    "detail": "在售 → 已刪除"}]
+        write_csv(path, S_EVENT_HEADER, events)
+        data = S.build_data(self.dir)
+        self.assertEqual(len(data["events"]), 1204)
+        self.assertEqual(data["events"][-1]["time"], "2026-09-01 09:00:00")
+
+    def test_public_events_match_daily_dates_and_only_include_used_types(self):
+        path = os.path.join(self.dir, "events.csv")
+        events = S.read_csv(path) + [
+            {"time": "2026-09-03 09:00:00", "source_url": "u3", "event": "新刊登", "detail": "iPhone 15"},
+            {"time": "2026-09-03 10:00:00", "source_url": "u3", "event": "型號變更",
+             "detail": "iPhone 14 → iPhone 15"},
+            {"time": "2026-01-01 00:00:00", "source_url": "u3", "event": "價格變動", "detail": "13000 → 12000"},
+            {"time": "2026-09-03 11:00:00", "source_url": "u3", "event": "價格變動", "detail": "13000 → 1000"}]
+        write_csv(path, S_EVENT_HEADER, events)
+        with patch.object(S, "price_trends", wraps=S.price_trends) as trends:
+            data = S.build_data(self.dir)
+        self.assertEqual(len(data["events"]), 3)
+        self.assertEqual({e["event"] for e in data["events"]}, {"價格變動", "狀態變更"})
+        self.assertTrue(all(data["days"][0]["date"] <= e["time"][:10] <= data["days"][-1]["date"]
+                            for e in data["events"]))
+        # 型號變更與日期範圍外的改價仍提供給行情計算；異常改價則繼續排除。
+        internal = trends.call_args.args[1]
+        self.assertTrue(any(e["event"] == "型號變更" for e in internal))
+        self.assertTrue(any(e["time"] == "2026-01-01 00:00:00" for e in internal))
+        self.assertFalse(any(e["detail"] == "13000 → 1000" for e in internal))
+
     def test_skipped_rows_events_excluded(self):
         # 改成「略過」的配件文，原本的新刊登／改價事件不再出現在網站
         path = os.path.join(self.dir, "events.csv")
