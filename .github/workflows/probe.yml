@@ -1,0 +1,30 @@
+name: probe skipped
+on: push
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/claude/probe-skipped'
+    env:
+      TZ: Asia/Taipei
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: |
+          python - <<'P'
+          import tracker as T
+          for p in ["M.1792333185.A.74C","M.1792328232.A.B1D","M.1792172936.A.F51","M.1792133347.A.600"]:
+              code, html = T.fetch(T.BASE_URL + "/bbs/MacShop/" + p + ".html")
+              print("=====", p, code)
+              art = T.parse_article(html) if code == 200 else None
+              if not art: continue
+              print("TITLE:", art["title"])
+              print(art["body"][:1500])
+              print("--- rule:", T.rule_extract(art["title"], art["body"]) if hasattr(T,"rule_extract") else None)
+              print("--- not_single:", T.not_single_iphone(art))
+              T.polite_sleep()
+          P
