@@ -178,6 +178,21 @@ class RealPostRegressionTest(unittest.TestCase):
         f = self.fields("[販售] 全國 iphone13 128g 紅 過保", "[型號]\n\nA2633\n\n[規格]\n\n128g紅\n\n[售價]\n\n$6500")
         self.assertEqual((f["model"], f["price"]), ("iPhone 13", 6500))
 
+    def test_broken_template_lines(self):
+        # 2026-10-19 每日檢查：四篇單支 iPhone 因範本貼壞被略過
+        f = self.fields("[販售] 台北 iPhone 15 Pro Max 256G",
+                        "1.型號：iPhone 15 Pro Max\n2.容量：256G\n3.電池健康度：90%\n10.欲售價格：NT$19,500\n11.交易方式：面交")
+        self.assertEqual((f["model"], f["storage"], f["price"]), ("iPhone 15 Pro Max", "256GB", 19500))  # M.1792333185
+        f = self.fields("[販售] 新北 iPhone 14 Pro Max 256G",
+                        "[型號] iPhone 14 Pro Max\n[規格] 256G 紫\n[保固] 過保\n售價] 13500\n[交易方式/地點] 面交")
+        self.assertEqual((f["model"], f["price"]), ("iPhone 14 Pro Max", 13500))  # M.1792328232
+        f = self.fields("[販售] iPhone pro 128GB",
+                        ": [型號] iPhone 15 pro\n: [規格] 128GB 藍色鈦金屬\n: [保固] 過保\n: [售價] 16,000\n: [交易方式/地點] 台北")
+        self.assertEqual((f["model"], f["storage"], f["price"]), ("iPhone 15 Pro", "128GB", 16000))  # M.1792172936
+        f = self.fields("[販售] 15",
+                        "型號]\niPhone 15 pro\n[規格]\n128g 原色\n[保固]\n過保\n[售價]\n14500")
+        self.assertEqual((f["model"], f["storage"], f["price"]), ("iPhone 15 Pro", "128GB", 14500))  # M.1792133347
+
     def test_numbered_multi_item_skipped(self):
         body = "[型號]\n1. iPhone 17 256g 白 (全新)\n2. Airpods 5 一般版(全新)\n[售價]\n1.29800\n2.4000"
         self.assertIsNone(self.fields("[販售] 台北 iPhone 17", body))

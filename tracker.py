@@ -387,11 +387,20 @@ _BATTERY_RE = re.compile(r"(?:電池|健康度|battery|bh)[^\d\n]{0,10}(\d{2,3})
 _DATE_RE = re.compile(r"(20\d{2})\s*[/.\-年]\s*(\d{1,2})(?:\s*[/.\-月]\s*(\d{1,2}))?")
 
 
+_FIELD_NAME_RE = re.compile(r"^\s*((?:型號|品名|物品|規格|容量|顏色|保固|盒裝配件|售價|價格|價錢|交易方式|交易地點|連絡方式|聯絡方式|商品照|補充說明)[^\[\]【】［］\n]{0,10}[\]】］])")
+
+
+def _field_line(line):
+    """修正賣家貼壞的範本行：「: [型號] ...」前多了引用冒號、「售價] 13500」少了左括號。"""
+    line = re.sub(r"^\s*[:：]\s*(?=[\[【［])", "", line)
+    return _FIELD_NAME_RE.sub(r"[\1", line, count=1)
+
+
 def split_template(body):
     """把本文依 [欄位] 切開；值可能在同一行或下一行。回傳 {欄位名: 內容}。"""
     fields, key = {}, None
     for line in body.splitlines():
-        m = _FIELD_RE.match(line)
+        m = _FIELD_RE.match(_field_line(line))
         if m:
             key = m.group(1).strip()
             fields[key] = m.group(2).strip()
@@ -407,7 +416,7 @@ def split_blocks(body):
     """
     blocks, fields, key = [], {}, None
     for line in body.splitlines():
-        m = _FIELD_RE.match(line)
+        m = _FIELD_RE.match(_field_line(line))
         if m:
             key = m.group(1).strip()
             if key in fields and re.search(r"型號|品名|物品", key):
@@ -754,6 +763,10 @@ def rule_extract(title, body):
     model_text = _field(fields, "型號", "品名", "物品")
     spec = _field(fields, "規格", "容量", "顏色")
     price_text = _field(fields, "售價", "價格", "價錢")
+    if not price_text and len(blocks) == 1:
+        # 沒用範本、自己編號寫「10.欲售價格：NT$19,500」
+        m = re.search(r"(?:欲售|售|出售)\s*(?:價格|價錢|價)\s*[:：]\s*([^\n]+)", body)
+        price_text = m.group(1) if m else ""
     note = _field(fields, "補充", "說明", "備註", "附註")
     bare_title = re.sub(r"^\[[^\]]*\]\s*", "", title)
 
