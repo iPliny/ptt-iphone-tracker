@@ -110,3 +110,6 @@ run_at,shop,status,rows,error
 2026-10-21T21:05:45+09:00,mobile-mix,ok,73,
 2026-10-21T21:05:45+09:00,イオシス,ok,200,
 2026-10-21T21:05:45+09:00,アメモバ,ok,198,
+2026-10-22T02:23:39+09:00,mobile-mix,fetch_error,0,"https://mobile-mix.jp/?category=7: Timeout: Failed to perform, curl: (28) Connection timed out after 45003 milliseconds. See https://curl.se/libcurl/c/libcurl-errors.html first for more details."
+2026-10-22T02:23:39+09:00,イオシス,fetch_error,0,https://k-tai-iosys.com/pricelist/smartphone/iphone/iphone18-pro/: HTTPError: HTTP Error 503: 
+2026-10-22T02:23:39+09:00,アメモバ,ok,198,
