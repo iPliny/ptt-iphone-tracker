@@ -551,6 +551,11 @@ def sitemap_lastmods(data, data_dir=None, jp_latest=()):
     jp_day = max((day for row in jp_latest if (day := sitemap_day(row.get("last_checked")))), default="")
     if jp_day:
         lastmods[SITE_URL + "jp/"] = lastmods[SITE_URL + "jp/ja/"] = jp_day
+    from jp_pages import MODELS, model_url
+    for model in MODELS:
+        values = [r.get("last_checked") for r in jp_latest if r.get("model") == model]
+        for lang in ("zh", "ja"):
+            newest(model_url(SITE_URL, lang, model), values)
     return lastmods
 
 
@@ -601,9 +606,6 @@ def build(out_dir, data_dir=DATA_DIR):
     jp_payload = build_jp(out_dir, data_dir)
     jp_urls = render_jp_pages(out_dir, jp_payload, SITE_URL)
     lastmods = sitemap_lastmods(data, data_dir, jp_payload["latest"])
-    for url in jp_urls:
-        if SITE_URL + "jp/" in lastmods:
-            lastmods[url] = lastmods[SITE_URL + "jp/"]
     # 含日本頁的 HTML 統一代換正式網址；不改站內相對連結或 GA 官方碼。
     for path in Path(out_dir).rglob("*.html"):
         html = path.read_text(encoding="utf-8")

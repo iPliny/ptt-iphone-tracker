@@ -5,6 +5,8 @@
 from seo import social_meta
 import json
 import re
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from html import escape as E
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -138,8 +140,16 @@ def best_line(groups, t, key):
 
 
 def checked_at(latest):
-    times = sorted(r["last_checked"] for r in latest if r.get("last_checked"))
-    return times[-1][:16].replace("T", " ") if times else ""
+    """依真正時間排序並轉日本時間；沒有時區或格式錯誤的來源不猜測。"""
+    times = []
+    for row in latest:
+        try:
+            value = datetime.fromisoformat(str(row.get("last_checked", "")).replace("Z", "+00:00"))
+            if value.tzinfo:
+                times.append(value.astimezone(ZoneInfo("Asia/Tokyo")))
+        except ValueError:
+            continue
+    return max(times).strftime("%Y-%m-%d %H:%M") if times else ""
 
 
 def model_url(site_url, lang, model):
@@ -150,9 +160,11 @@ def page_html(payload, model, lang, site_url, models=MODELS):
     """models 是本次實際產生頁面的機型，「其他機型」只連到這些頁。"""
     t = TEXT[lang]
     latest = payload.get("latest") or []
-    when = checked_at(latest)
+    when = checked_at([r for r in latest if r.get("model") == model])
     year, month = (when[:4], str(int(when[5:7]))) if when else ("", "")
     title = t["title"].format(m=model, y=year, mo=month)
+    if not when:
+        title = title.replace("【年月】", "")
     new_groups, new_offered = comparison(latest, model, "未開封")
     used_groups, used_offered = comparison(latest, model, "中古上限")
     bests = [b for b in (best_line(new_groups, t, "best"), best_line(used_groups, t, "best_used")) if b]
@@ -245,6 +257,12 @@ def render_jp_pages(out_dir, payload, site_url):
         html = index.read_text(encoding="utf-8")
         links = '<ul class="jp-models">' + "".join(f'<li><a href="{slug(m)}/">{E(m)}</a></li>' for m in models) + "</ul>"
         html = html.replace("<!--JP_MODEL_LINKS-->", links)
+        when = checked_at(latest)
+        if when:
+            label = "最終確認：" if lang == "ja" else "最近確認："
+            html = re.sub(r'<p class="sub" id="updated">.*?</p>',
+                          lambda _: f'<p class="sub" id="updated" data-snapshot="true">{label}{E(when)}（日本時間）</p>',
+                          html, count=1)
         # 預設機型（18 Pro）的未開封比較表先寫進 HTML，JavaScript 載入後再接手。
         groups, offered = comparison(latest, MODELS[0], "未開封")
         if groups:
