@@ -145,3 +145,7 @@
 - 所有公開頁的分享標籤統一使用 `site/seo.py:social_meta`（靜態模板保留 `{{SITE_URL}}` 佔位符），共用 `site/og.png`（1200×630、100KB 以內）；中文 `zh_TW`、日文 `ja_JP`，Twitter 使用 `summary_large_image`。`og:url` 與 canonical 一致；舊 `model.html?m=` 由 `model.js` 同步設定兩者。GA 官方碼保留。
 - `sitemap_lastmods` 只採來源日期並轉台灣時間：首頁／market 為每日統計與最近回訪的最新日期；機型頁為該機型公開文章的發文、回訪與公開事件時間最大值（多品項也含公開品項的發文日）；prices 為 `official-prices.json:updated_at`；專欄為 `generated_at` 出刊日；週報為 `published`／`updated` 較晚者，列表取各篇最新值；日本頁為 `latest.csv:last_checked` 最新日期。無可靠日期就省略 lastmod，不用建置日或檔案 mtime。
 - sitemap 只列與該頁 canonical 相同的網址；`column/` 保留頁面但不列入，僅收各期。Blogger 轉貼各篇仍指向原文且不列入本站 sitemap；少量樣本的機型頁收錄規則不變。
+
+### 2026-10-23 日本買取頁來源時間
+- 日本買取主頁的最近確認時間由 `jp_pages.checked_at` 在建置時寫入 HTML，JSON 讀取失敗仍保留快照與其時間。來源必須帶時區，顯示時轉日本時間；不以建置時鐘補未知值。
+- 各機型頁標題年月、摘要的確認時間與 sitemap `lastmod` 只採該機型資料，不借用其他機型的更新時間。可見時間使用日本時間；sitemap 沿用全站台灣日期規則。
