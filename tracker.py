@@ -628,7 +628,10 @@ _OTHER_PRODUCT_RE = re.compile(r"apple\s*watch|airpods?|ipad|macbook|imac|mac\s*
 
 def sells_other_product(title, body):
     """型號欄第一行寫的是 Apple Watch、iPad 等其他產品（沿用 iPhone 舊文改賣別的）。"""
-    for block in split_blocks(strip_signature(body)):
+    blocks = split_blocks(strip_signature(body))
+    if any(_looks_like_iphone(b) for b in blocks):
+        return False  # 後面還有 iPhone 那段（先賣手錶再賣手機）不算
+    for block in blocks:
         model_text = _field(block, "型號", "品名", "物品")
         line = next((l for l in model_text.splitlines() if l.strip()), "")
         if line:

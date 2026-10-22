@@ -197,6 +197,9 @@ class RealPostRegressionTest(unittest.TestCase):
         f = self.fields("[販售] 台中 全新iPhone 18 Pro 256GB藍",
                         "[型號]\n\nApple Watch S11 GPS 46mm 曜石黑色\n\n[規格]  46mm\n\n[售價]\n\n $8500")
         self.assertIsNone(f)
+        # 先貼 Apple Watch 一段、後面才是 iPhone：不算改賣其他產品
+        body = "[型號] Apple Watch S11 46mm\n[售價] 8500\n[型號] iPhone 16 Pro 256G\n[規格] 256G\n[售價] 洽詢"
+        self.assertFalse(T.sells_other_product("[販售] 台北 iPhone 16 Pro 256G", body))
 
     def test_numbered_multi_item_skipped(self):
         body = "[型號]\n1. iPhone 17 256g 白 (全新)\n2. Airpods 5 一般版(全新)\n[售價]\n1.29800\n2.4000"
