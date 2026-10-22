@@ -119,3 +119,6 @@ run_at,shop,status,rows,error
 2026-10-22T21:04:45+09:00,mobile-mix,parse_error,0,頁面解析 0 筆：https://mobile-mix.jp/?category=7
 2026-10-22T21:04:45+09:00,イオシス,fetch_error,0,https://k-tai-iosys.com/pricelist/smartphone/iphone/iphone18-pro/: HTTPError: HTTP Error 503: 
 2026-10-22T21:04:45+09:00,アメモバ,ok,198,
+2026-10-23T02:19:24+09:00,mobile-mix,ok,73,
+2026-10-23T02:19:24+09:00,イオシス,fetch_error,0,https://k-tai-iosys.com/pricelist/smartphone/iphone/iphone18-pro/: HTTPError: HTTP Error 503: 
+2026-10-23T02:19:24+09:00,アメモバ,ok,198,
