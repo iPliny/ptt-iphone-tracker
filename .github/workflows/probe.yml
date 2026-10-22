@@ -16,13 +16,13 @@ jobs:
       - run: pip install -r requirements.txt
       - run: |
           python - <<'P'
-          import tracker as T, re
-          ids = "1792370032.A.EF5 1792368050.A.114 1792355673.A.DA8 1792328508.A.CFF 1792292780.A.F02 1792259068.A.F7C 1792244875.A.685 1792230895.A.9E8 1792229423.A.568 1792227801.A.A22 1792204812.A.78F 1792169062.A.0D1 1792166919.A.292".split()
-          for p in ids:
-              code, html = T.fetch(T.BASE_URL + "/bbs/MacShop/M." + p + ".html")
-              print("=====", p, code, len(html or ""))
-              T.polite_sleep()
-          code, html = T.fetch(T.BASE_URL + "/bbs/MacShop/index.html")
-          for t in re.findall(r'<div class="title">\s*(.*?)\s*</div>', html or "", re.S)[:20]:
-              print("BOARD", re.sub(r"<[^>]+>", "", t).strip())
+          import tracker as T
+          for p in ["M.1792475735.A.942"]:
+              code, html = T.fetch(T.BASE_URL + "/bbs/MacShop/" + p + ".html")
+              print("=====", p, code)
+              art = T.parse_article(html) if code == 200 else None
+              if not art: continue
+              print("TITLE:", art["title"])
+              print(art["body"][:2500])
+              print("--- rule:", T.rule_extract(art["title"], art["body"]))
           P
