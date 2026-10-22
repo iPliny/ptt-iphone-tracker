@@ -623,6 +623,22 @@ _CANONICAL_MODEL_RE = re.compile(
     r"iPhone (?:(?:\d{1,2}e?|SE\d?|Air)(?: Pro Max| Pro| Plus| mini)?|X|XR|XS(?: Max)?)")
 
 
+_OTHER_PRODUCT_RE = re.compile(r"apple\s*watch|airpods?|ipad|macbook|imac|mac\s*(?:mini|studio|pro)|apple\s*pencil|apple\s*tv|homepod", re.I)
+
+
+def sells_other_product(title, body):
+    """型號欄第一行寫的是 Apple Watch、iPad 等其他產品（沿用 iPhone 舊文改賣別的）。"""
+    blocks = split_blocks(strip_signature(body))
+    if any(_looks_like_iphone(b) for b in blocks):
+        return False  # 後面還有 iPhone 那段（先賣手錶再賣手機）不算
+    for block in blocks:
+        model_text = _field(block, "型號", "品名", "物品")
+        line = next((l for l in model_text.splitlines() if l.strip()), "")
+        if line:
+            return bool(_OTHER_PRODUCT_RE.search(line)) and not re.search(r"i\s*phone|愛鳳", line, re.I)
+    return False
+
+
 def is_accessory_post(title, storage):
     """標題提到殼、保護貼等配件，又找不到容量 → 賣的是配件（標題的型號只是適用機型）。"""
     bare = re.sub(r"^\[[^\]]*\]\s*", "", title or "")
@@ -666,7 +682,7 @@ def not_single_iphone(art):
     """新規則明確判定不是單支 iPhone：配件文，或一篇賣多支。只是抓不到售價之類的不算。"""
     raw = rule_extract(art["title"], art["body"])
     return (is_accessory_post(art["title"], raw["storage"]) or multi_phone_title(art["title"])
-            or bool(extract_items(art["title"], art["body"])))
+            or sells_other_product(art["title"], art["body"]) or bool(extract_items(art["title"], art["body"])))
 
 
 def expire_stale(listings, now=None):
@@ -782,7 +798,8 @@ def rule_extract(title, body):
         if _CANONICAL_MODEL_RE.fullmatch(refined) and refined.startswith(model + " "):
             model = refined
     storage = parse_storage(spec, model_text, bare_title)
-    if multi or len(iphone_blocks) > 1 or is_accessory_post(title, storage):
+    if multi or len(iphone_blocks) > 1 or is_accessory_post(title, storage) or (
+            not iphone_blocks and sells_other_product(title, body)):
         # 分段賣兩支以上 iPhone 或賣的是配件，同樣略過
         model = None
 
@@ -1260,9 +1277,11 @@ def process_article(url, listings, use_llm, stats, multi=None, list_title="", re
         print("    [UPDATE] 本文被編輯，重新解析。" if edited else "    [REPARSE] 依新規則重新解析。")
         fields = safe_extract(art, stats)
         price_confirmed = fields is not None
-        if fields is None and REPARSE and row.get("body_hash") == h and not_single_iphone(art):
+        if fields is None and ((REPARSE and row.get("body_hash") == h and not_single_iphone(art))
+                               or (edited and sells_other_product(art["title"], art["body"]))):
             # 本文沒變、新規則判定是配件或一篇賣多支 → 不再當單支刊登計入
-            log_event(url, "排除誤判", f"{row.get('status')} → 略過（重新解析）")
+            # 本文被改成賣 Apple Watch 等其他產品（標題還是 iPhone）→ 同樣排除
+            log_event(url, "排除誤判", f"{row.get('status')} → 略過（{'改賣其他產品' if edited else '重新解析'}）")
             row["status"] = "略過"
             if multi is not None:
                 record_multi(url, art, multi, row.get("first_seen"))
