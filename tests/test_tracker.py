@@ -193,6 +193,11 @@ class RealPostRegressionTest(unittest.TestCase):
                         "型號]\niPhone 15 pro\n[規格]\n128g 原色\n[保固]\n過保\n[售價]\n14500")
         self.assertEqual((f["model"], f["storage"], f["price"]), ("iPhone 15 Pro", "128GB", 14500))  # M.1792133347
 
+    def test_other_product_in_iphone_title(self):
+        f = self.fields("[販售] 台中 全新iPhone 18 Pro 256GB藍",
+                        "[型號]\n\nApple Watch S11 GPS 46mm 曜石黑色\n\n[規格]  46mm\n\n[售價]\n\n $8500")
+        self.assertIsNone(f)
+
     def test_numbered_multi_item_skipped(self):
         body = "[型號]\n1. iPhone 17 256g 白 (全新)\n2. Airpods 5 一般版(全新)\n[售價]\n1.29800\n2.4000"
         self.assertIsNone(self.fields("[販售] 台北 iPhone 17", body))
@@ -633,8 +638,6 @@ class PipelineTest(unittest.TestCase):
         self.assertIn("恢復誤排除", events)
         self.assertEqual(events.count("新刊登,iPhone 14"), 1)
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 
@@ -656,6 +659,20 @@ if __name__ == "__main__":
         self.assertEqual((row["model"], row["price"], row["first_price"]), ("iPhone 18 Pro Max", "47000", "47000"))
         mine = [e for e in self.events() if e[0] in ("型號變更", "價格變動")]
         self.assertEqual(mine, [("型號變更", "iPhone 17 Pro 256GB $34700 → iPhone 18 Pro Max 256GB $47000")])
+
+    def test_edited_to_other_product_is_excluded(self):
+        # M.1792475735：全新 18 Pro $41,000 的文章改賣 Apple Watch $8,500，標題沒改
+        pa = self.paths[0]
+        url = T.BASE_URL + pa
+        title = "[販售] 台中 全新iPhone 18 Pro 256GB藍"
+        self.arts[pa] = (title, "[型號]\n\niPhone 18 Pro 256GB 藍 全新未拆\n\n[規格] 256GB\n\n[售價]\n\n $41000", "")
+        self.run_main()
+        self.arts[pa] = (title, "[型號]\n\nApple Watch S11 GPS 46mm 曜石黑色 保固中 電池100%\n\n[規格]  46mm\n\n"
+                                "[保固] 至2026.11.13\n\n[售價]\n\n $8500", "")
+        row = self.run_main()[url]
+        self.assertEqual((row["status"], row["price"]), ("略過", "41000"))
+        self.assertNotIn(("價格變動", "41000 → 8500"), self.events())
+        self.assertIn("排除誤判", [e[0] for e in self.events()])
 
     def test_headerless_page_keeps_title(self):
         pa = self.paths[0]
@@ -1016,3 +1033,6 @@ class ReviewFixesTest(unittest.TestCase):
         log.assert_called_once_with("u", "狀態變更", "已售出 → 在售")
         self.assertEqual((row["sold_detected_at"], row["days_to_sell"], row["days_to_sell_basis"]), ("", "", ""))
 
+
+if __name__ == "__main__":
+    unittest.main()
