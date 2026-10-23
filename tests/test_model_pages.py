@@ -150,8 +150,24 @@ class ModelHtmlTest(unittest.TestCase):
             self.assertNotIn("only-iphone-15", first)
             self.assertIn("only-iphone-15", second)
             self.assertIn("全部容量的文章（1）", second)
-            self.assertNotIn("iPhone 18 Pro", second)
+            # 其他機型只可出現在比較導覽，不可混入本頁標題或行情內容。
+            body, navigation = second.split('<nav class="card model-navigation"', 1)
+            self.assertNotIn("iPhone 18 Pro", body)
+            self.assertIn('href="../models/iphone-18-pro.html"', navigation)
             self.assertNotEqual(first, second)
+
+    def test_navigation_prioritizes_same_generation_without_mutating_data(self):
+        data = {"model_totals": [
+            {"model": "iPhone 17 Pro", "listed": 100},
+            {"model": "iPhone 16 Pro", "listed": 200},
+            {"model": "iPhone 17", "listed": 1},
+        ]}
+        original = copy.deepcopy(data)
+        page = Page(M.model_navigation(data, "../", "iPhone 17 Pro"))
+        links = [a['href'] for t, a in page.elements if t == 'a']
+        self.assertEqual(links, ['../models/iphone-17.html', '../models/iphone-16-pro.html', '../market/'])
+        self.assertEqual(data, original)
+        self.assertEqual(M.model_navigation({"model_totals": []}), "")
 
 
 if __name__ == "__main__":
