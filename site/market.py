@@ -19,13 +19,15 @@ GA_ID = "G-G3GH12TQSZ"
 TOP = 10            # 每個排行列幾名
 FAST_MIN = 3        # 售出天數至少幾筆才列入「賣得最快」
 NUM = ' class="num"'
-SUFFIX_ORDER = ["Pro Max", "Pro", "Air", "Plus", "", "e", "mini"]
+SUFFIX_ORDER = ["Duo", "Pro Max", "Pro", "Air", "Plus", "", "e", "mini"]
 
 
 def model_rank(model):
-    """新機型排前面；同一代依 Pro Max、Pro、Air、Plus、標準版、e、mini。"""
+    """新機型排前面；同一代依 Duo、Pro Max、Pro、Air、Plus、標準版、e、mini。"""
     m = re.fullmatch(r"iPhone (\d+)\s*(.*)", model or "")
-    if model == "iPhone Air":
+    if model == "iPhone Duo":
+        gen, suffix = 18, "Duo"
+    elif model == "iPhone Air":
         gen, suffix = 17, "Air"
     elif m:
         gen, suffix = int(m[1]), m[2].strip()

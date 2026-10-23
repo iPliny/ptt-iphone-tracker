@@ -28,6 +28,7 @@ import hashlib
 import json
 import os
 import random
+import unicodedata
 import re
 import statistics
 import tempfile
@@ -194,10 +195,30 @@ def to_int(value):
 _ROMAN = {"x": "X", "xr": "XR", "xs": "XS"}
 
 
+# Apple 的 MagSafe Duo 是雙合一充電器，不是 iPhone Duo
+_MAGSAFE_DUO_RE = re.compile(r"mag\s*safe\s*duo", re.I)
+_OTHER_IPHONE_RE = re.compile(
+    r"(?:iphone|愛鳳|(?<![a-z])i)\s*(?:[4-9]|1\d|20|x[rs]?|se|air)(?![\d.a-z])"
+    r"|(?<![\d.])(?:[4-9]|1\d|20)\s*(?:pro|plus|mini|e|pm)(?![a-z])", re.I)
+
+
+def is_duo_name(raw):
+    """只辨識明確機型用語；排除其他品牌的 Duo / Fold 與 MagSafe Duo 充電器。"""
+    s = _MAGSAFE_DUO_RE.sub(" ", unicodedata.normalize("NFKC", str(raw or ""))).lower()
+    if re.search(r"samsung|galaxy|pixel|surface|三星|微軟", s):
+        return False
+    if re.search(r"(?:iphone|愛鳳)\s*(?:duo|fold)(?![a-z])|[摺折]疊\s*iphone", s):
+        return True
+    # 只寫 Duo 時，若同一段已有別的 iPhone 型號（「iPhone 15 Pro 送 Belkin Duo 充電器」），Duo 是配件名稱
+    return bool(re.search(r"(?<![a-z])duo(?![a-z])", s)) and not _OTHER_IPHONE_RE.search(s)
+
+
 def normalize_model(raw):
     """把 'iphone 11 pro'、'IPHONE15PM'、'i14 pro max' 等統一成 'iPhone 11 Pro' 格式。"""
     if not raw:
         return ""
+    if is_duo_name(raw):
+        return "iPhone Duo"
     s = str(raw).lower().replace("iphone", " ").replace("愛鳳", " ")
     s = re.sub(r"[^\da-z\s]", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
@@ -365,11 +386,13 @@ def detect_status(title, body):
 
 
 def is_iphone_sale_title(title):
+    if is_duo_name(title):
+        title = unicodedata.normalize("NFKC", title)
     if not title or title.startswith("Re:") or title.startswith("Fw:"):
         return False
     if "[販售]" not in title:
         return False
-    return bool(re.search(r"i\s*phone|愛鳳", title, re.I))
+    return bool(re.search(r"i\s*phone|愛鳳", title, re.I) or is_duo_name(title))
 
 
 # ==========================================
@@ -433,7 +456,7 @@ def split_blocks(body):
 
 def _looks_like_iphone(fields):
     text = _field(fields, "型號", "品名", "物品") + "\n" + _field(fields, "規格", "容量", "顏色")
-    return bool(re.search(r"i\s*phone|愛鳳", text, re.I) or re.match(r"\s*i?\s*1\d", text, re.I))
+    return bool(re.search(r"i\s*phone|愛鳳", text, re.I) or re.match(r"\s*i?\s*1\d", text, re.I) or is_duo_name(_field(fields, "型號", "品名", "物品")))
 
 
 def _field(fields, *names):
@@ -513,6 +536,7 @@ COLOR_TABLE = {
                   **_palette(霧藍色="霧藍|藍|藍色|Mist Blue|Blue", 鼠尾草綠色="鼠尾草綠|綠|綠色|Sage|Green", 薰衣草紫色="薰衣草|薰衣草紫|紫|紫色|Lavender|Purple")},
     "iPhone 17 Pro": _palette(銀色=_SILVER, 宇宙橙色="宇宙橙|宇宙橘色|宇宙橘|橙|橙色|橘|橘色|Cosmic Orange|Orange",
                               藏藍色="藏藍|深藍色|深藍|藍|藍色|Deep Blue|Blue"),
+    "iPhone Duo": _palette(星光白色="星光白|白|白色|Star White|White", 夜空色="夜空|黑|黑色|Night Sky|Black"),
     "iPhone Air": _palette(太空黑色="太空黑|黑|黑色|Space Black|Black", 雲白色="雲白|白|白色|Cloud White|White",
                            天藍色="天藍|藍|藍色|Sky Blue|Blue", 淺金色="淺金|金|金色|Light Gold|Gold"),
     "iPhone 17e": {**{k: v for k, v in _BASIC_COLORS.items() if k in ("黑色", "白色")},
@@ -620,7 +644,7 @@ def parse_warranty(text):
 
 
 _CANONICAL_MODEL_RE = re.compile(
-    r"iPhone (?:(?:\d{1,2}e?|SE\d?|Air)(?: Pro Max| Pro| Plus| mini)?|X|XR|XS(?: Max)?)")
+    r"iPhone (?:(?:\d{1,2}e?|SE\d?|Air)(?: Pro Max| Pro| Plus| mini)?|Duo|X|XR|XS(?: Max)?)")
 
 
 _OTHER_PRODUCT_RE = re.compile(r"apple\s*watch|airpods?|ipad|macbook|imac|mac\s*(?:mini|studio|pro)|apple\s*pencil|apple\s*tv|homepod", re.I)
@@ -648,14 +672,17 @@ def is_accessory_post(title, storage):
 _TITLE_CAPACITY_RE = re.compile(r"(?<![\d.])(32|64|128|256|512|1|2)\s*(?:gb|tb|g|t)(?![a-z])", re.I)
 # 「17 Pro/17 Pro Max」「18 Pro/Pro Max」「16 Pro Max/15 Pro Max/15」：斜線兩邊都是型號
 _TITLE_MODEL_SLASH_RE = re.compile(
-    r"(?:(?<![\d.])\d{1,2}|pro|max|plus|mini|air|se\d?|xr|xs|e)\s*[/／]\s*(?:i\s*phone\s*)?"
-    r"(?:(?<![\d.])\d{1,2}(?![\d.])|(?:pro|air|se\d?|xr|xs)(?![a-z]))", re.I)
+    r"(?:(?<![\d.])\d{1,2}|pro|max|plus|mini|air|duo|se\d?|xr|xs|e)\s*[/／]\s*(?:i\s*phone\s*)?"
+    r"(?:(?<![\d.])\d{1,2}(?![\d.])|(?:pro|air|duo|se\d?|xr|xs)(?![a-z]))", re.I)
 _TITLE_COUNT_RE = re.compile(r"(?<!\d)[2二兩]\s*[隻支]|各[一1]")
 
 
 def multi_phone_title(title):
     """標題提到兩支以上 iPhone：兩個 iPhone／Air、兩個容量、斜線分隔的型號，或「兩支」「各一」。"""
     bare = re.sub(r"^\[[^\]]*\]\s*", "", title or "")
+    bare = unicodedata.normalize("NFKC", bare) if is_duo_name(bare) else bare
+    bare = _MAGSAFE_DUO_RE.sub(" ", bare)
+    # 裸寫的 Duo 不另算一支（常是配件名稱）；Duo 和其他型號並列由斜線、兩個容量等規則判斷
     phones = len(re.findall(r"i\s*phone|(?<![a-z])air(?![a-z])", bare, re.I))
     phones -= len(re.findall(r"(?:i\s*phone|i\s*pad|macbook)\s*air", bare, re.I))  # iPhone Air、iPad Air 不重複算
     return (phones > 1 or len(_TITLE_CAPACITY_RE.findall(bare)) > 1
@@ -754,15 +781,17 @@ def drop_misparsed(listings):
     return n
 
 
-def _pick_model(sources, context=""):
+def _pick_model(sources, context="", duo_evidence=""):
     """依序看各段文字，回傳第一個能確定的單一型號；都不行回傳 None。"""
     for source in sources:
-        if not source or not re.search(r"i\s*phone|愛鳳", context + source, re.I):
+        if not source or not (re.search(r"i\s*phone|愛鳳", context + source, re.I) or is_duo_name(duo_evidence)):
             continue
         # 「保固至2026/10/4」的 10 不是代數
         undated = _DATE_RE.sub(" ", source)
         numbers = set(re.findall(r"(?<![\d.])(1[0-9]|[4-9])(?:\s*(?:pro|plus|mini|max|e)\b|\b)", undated, re.I))
         cand = normalize_model(source)
+        if cand == "iPhone Duo" and not is_duo_name(duo_evidence):
+            continue
         # 沒寫代數（iPhone Pro Max）或不存在的組合（iPhone X Pro）→ 改看下一個來源
         if _CANONICAL_MODEL_RE.fullmatch(cand) and len(numbers) <= 1 and not _ACCESSORY_RE.search(source):
             return cand
@@ -772,6 +801,9 @@ def _pick_model(sources, context=""):
 def rule_extract(title, body):
     """回傳與 LLM 相同格式的 dict；無法確定是單一 iPhone 時 model 為 None。"""
     body = strip_signature(body)
+    if is_duo_name(title) or is_duo_name(_field(split_blocks(body)[0], "型號", "品名", "物品")):
+        title = unicodedata.normalize("NFKC", title)
+        body = unicodedata.normalize("NFKC", body)
     blocks = split_blocks(body)
     iphone_blocks = [b for b in blocks if _looks_like_iphone(b)]
     # 有 iPhone 那段就只用那段的欄位，避免被後面其他商品的售價、電池覆蓋
@@ -791,7 +823,7 @@ def rule_extract(title, body):
     # 型號欄常只寫 A2633、MG6K4ZP/A 這類料號，依序改用規格欄、標題
     # 型號欄只看第一行：下一行常是「可憑商品序號至 Apple官網查詢」之類的附註
     model_line = next((l for l in model_text.splitlines() if l.strip()), "")
-    model = _pick_model((model_line, spec, bare_title), title)
+    model = _pick_model((model_line, spec, bare_title), title, model_line + "\n" + bare_title)
     if model:
         # 型號欄只寫「iPhone18」、標題寫「18 Pro」：同一代時以標題較完整的型號為準
         refined = normalize_model(bare_title)
@@ -861,7 +893,7 @@ def _split_field(text, n, numbered_keys):
 
 
 def _item(model_text, spec, price_text, warranty, extra=""):
-    model = _pick_model((model_text, spec), "")
+    model = _pick_model((model_text, spec), "", model_text)
     # 只看第一行：下一行常是「兩個一起帶走 1600」這類合購價或發文範本的提示
     first = next((l for l in (price_text or "").splitlines() if l.strip()), "")
     price = parse_price(first) if first else None
@@ -880,6 +912,9 @@ def extract_items(title, body):
 
     非 iPhone 的品項、找不到對應售價的品項略過；不是多品項的文章回傳 []。"""
     body = strip_signature(body)
+    if is_duo_name(title) or is_duo_name(_field(split_blocks(body)[0], "型號", "品名", "物品")):
+        title = unicodedata.normalize("NFKC", title)
+        body = unicodedata.normalize("NFKC", body)
     blocks = split_blocks(body)
     iphone_blocks = [b for b in blocks if _looks_like_iphone(b)]
     if len(iphone_blocks) > 1:  # 每支 iPhone 各貼一段範本

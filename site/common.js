@@ -84,6 +84,22 @@
     return storage == null || storage === "" ? path : path + "?" + new URLSearchParams({ s: storage });
   }
 
+  // 與 market.model_rank 一致：新世代優先，Duo 為第 18 代最高階。
+  function compareModels(a, b) {
+    const rank = model => {
+      if (model === 'iPhone Duo') return [0, -18, 0];
+      if (model === 'iPhone Air') return [0, -17, 3];
+      const m = /^iPhone (\d+)(.*)$/.exec(model || '');
+      if (!m) return [1, 0, 0];
+      const suffixes = ['Duo', 'Pro Max', 'Pro', 'Air', 'Plus', '', 'e', 'mini'];
+      const i = suffixes.indexOf(m[2].trim());
+      return [0, -Number(m[1]), i < 0 ? suffixes.length : i];
+    };
+    const x = rank(a), y = rank(b);
+    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i];
+    return String(a || '').localeCompare(String(b || ''));
+  }
+
   // 容量依實際大小排序（64GB < 128GB < … < 1TB < 2TB），無法辨識的放最後。
   function storageSize(s) {
     const m = /^(\d+(?:\.\d+)?)\s*(GB|TB)$/i.exec(String(s || "").trim());
@@ -138,5 +154,5 @@
   }
 
   return { esc, money, dayOf, periodRange, sumPeriod, previousPeriod, periodNavigation, periodTitle, inPeriod, periodItems,
-    modelUrl, modelPageUrl, storageSize, compareStorage, itemHtml, soldNote, daysCell, priceEventText, setMore };
+    modelUrl, modelPageUrl, compareModels, storageSize, compareStorage, itemHtml, soldNote, daysCell, priceEventText, setMore };
 });

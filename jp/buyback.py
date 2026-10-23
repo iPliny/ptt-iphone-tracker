@@ -30,6 +30,7 @@ IOSYS_PAGES = {
     "https://k-tai-iosys.com/pricelist/smartphone/iphone/iphone17pro_max/": "iPhone 17 Pro Max",
     "https://k-tai-iosys.com/pricelist/smartphone/iphone/iphone17/": "iPhone 17",
     "https://k-tai-iosys.com/pricelist/smartphone/iphone/iphone_air/": "iPhone Air",
+    "https://k-tai-iosys.com/pricelist/smartphone/iphone/iphone-duo/": "iPhone Duo",
 }
 AMEMOBA_PAGES = {
     "https://amemoba.com/smartphone/iphone/iphone-18-pro/": "iPhone 18 Pro",
@@ -38,6 +39,7 @@ AMEMOBA_PAGES = {
     "https://amemoba.com/smartphone/iphone/iphone-17pro-max/": "iPhone 17 Pro Max",
     "https://amemoba.com/smartphone/iphone/iphone-17/": "iPhone 17",
     "https://amemoba.com/smartphone/iphone/iphoneair/": "iPhone Air",
+    "https://amemoba.com/smartphone/iphone/iphone-duo/": "iPhone Duo",
 }
 IOSYS_URLS, AMEMOBA_URLS = tuple(IOSYS_PAGES), tuple(AMEMOBA_PAGES)
 
@@ -50,12 +52,15 @@ def normalized(text):
 
 
 # 追蹤的機型；17e、16 以前、iPad 等都不收。容量以店家頁面實際有的為準。
-MODELS = ("iPhone 17", "iPhone Air", "iPhone 17 Pro", "iPhone 17 Pro Max", "iPhone 18 Pro", "iPhone 18 Pro Max")
+MODELS = ("iPhone Duo", "iPhone 17", "iPhone Air", "iPhone 17 Pro", "iPhone 17 Pro Max", "iPhone 18 Pro", "iPhone 18 Pro Max")
 STORAGES = ("256GB", "512GB", "1TB", "2TB")
 
 
 def model_storage(text):
     text = normalized(text)
+    duo = re.search(r"iPhone\s*Duo\s*(256\s*GB|512\s*GB|1\s*TB|2\s*TB)\b", text, re.I)
+    if duo:
+        return "iPhone Duo", re.sub(r"\s", "", duo[1]).upper()
     m = re.search(r"iPhone\s*(?:(1[78])\s*Pro(\s*Max)?|(17)|(?:17\s*)?(Air))\s*"
                   r"(256\s*GB|512\s*GB|1\s*TB|2\s*TB)\b", text, re.I)
     if not m:

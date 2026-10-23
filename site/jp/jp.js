@@ -1,6 +1,7 @@
 /* 日本資料使用獨立命名空間；不載入 PTT 的 app.js，也不修改其資料。 */
 (function () {
   'use strict';
+  const MODELS = ['iPhone Duo', 'iPhone 18 Pro', 'iPhone 18 Pro Max', 'iPhone 17 Pro', 'iPhone 17 Pro Max', 'iPhone 17', 'iPhone Air'];
   const SHOPS = ['mobile-mix', 'イオシス', 'アメモバ'];
   const STORAGES = ['256GB', '512GB', '1TB', '2TB'];
   const DAY = 86400000;
@@ -241,13 +242,18 @@
     return svg+'</svg>';
   }
 
-  const api={SHOPS, setLang, setCondition, visiblePrices, comparison, timeline, stepPath, recentChanges, flash, renderFlash, renderChanges, shopStatuses, renderComparison, renderChart, dateTime, money};
+  const api={MODELS, SHOPS, setLang, setCondition, visiblePrices, comparison, timeline, stepPath, recentChanges, flash, renderFlash, renderChanges, shopStatuses, renderComparison, renderChart, dateTime, money};
   if(typeof module!=='undefined' && module.exports) module.exports=api;
   if(typeof document==='undefined') return;
 
   async function boot() {
     const get=id=>document.getElementById(id);
     setLang(document.documentElement.lang);
+    for (const id of ['compare-model', 'trend-model']) {
+      const select = get(id), selected = select.value;
+      select.innerHTML = MODELS.map(m => '<option value="'+esc(m)+'">'+esc(m)+'</option>').join('');
+      select.value = selected || 'iPhone 18 Pro';
+    }
     const base=document.body.dataset.base || '';
     let data;
     try {
