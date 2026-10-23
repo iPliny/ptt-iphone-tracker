@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 
 SHOPS = ["mobile-mix", "イオシス", "アメモバ"]
 STORAGES = ["256GB", "512GB", "1TB", "2TB"]
-MODELS = ["iPhone 18 Pro", "iPhone 18 Pro Max", "iPhone 17 Pro", "iPhone 17 Pro Max", "iPhone 17", "iPhone Air"]
+MODELS = ["iPhone Duo", "iPhone 18 Pro", "iPhone 18 Pro Max", "iPhone 17 Pro", "iPhone 17 Pro Max", "iPhone 17", "iPhone Air"]
 CONDITIONS = ["未開封", "中古上限"]
 SOURCE_HOSTS = {"mobile-mix.jp", "k-tai-iosys.com", "amemoba.com"}
 GA_ID = "G-G3GH12TQSZ"
@@ -264,7 +264,7 @@ def render_jp_pages(out_dir, payload, site_url):
                           lambda _: f'<p class="sub" id="updated" data-snapshot="true">{label}{E(when)}（日本時間）</p>',
                           html, count=1)
         # 預設機型（18 Pro）的未開封比較表先寫進 HTML，JavaScript 載入後再接手。
-        groups, offered = comparison(latest, MODELS[0], "未開封")
+        groups, offered = comparison(latest, "iPhone 18 Pro", "未開封")
         if groups:
             html = re.sub(r'(<div id="comparison" aria-live="polite">).*?(</div>)',
                           lambda m: m[1] + table(groups, offered, TEXT[lang]) + m[2], html, count=1, flags=re.S)

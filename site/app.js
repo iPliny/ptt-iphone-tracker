@@ -247,7 +247,7 @@
       if (x == null && y == null) return 0;
       if (x == null) return 1;
       if (y == null) return -1;
-      const c = typeof x === "number" ? x - y : String(x).localeCompare(String(y), "zh-Hant", { numeric: true });
+      const c = key === "model" ? PttCommon.compareModels(x, y) : typeof x === "number" ? x - y : String(x).localeCompare(String(y), "zh-Hant", { numeric: true });
       return asc ? c : -c;
     });
     const fmt = (k, v, m) => {

@@ -14,10 +14,10 @@ def model_path(model):
 def model_navigation(data, root="", current=None):
     """固定顯示的機型入口；同代優先，其餘依公開刊登數排序。"""
     rows = [r for r in data.get("model_totals", []) if r["model"] != current]
-    generation = re.match(r"iPhone (\d+)(?:\D|$)", current or "")
+    generation = re.match(r"iPhone (\d+)(?:\D|$)", "iPhone 18" if current == "iPhone Duo" else current or "")
 
     def same_generation(name):
-        match = re.match(r"iPhone (\d+)(?:\D|$)", name)
+        match = re.match(r"iPhone (\d+)(?:\D|$)", "iPhone 18" if name == "iPhone Duo" else name)
         return bool(generation and match and generation[1] == match[1])
 
     rows.sort(key=lambda r: (not same_generation(r["model"]), -r.get("listed", 0), r["model"]))

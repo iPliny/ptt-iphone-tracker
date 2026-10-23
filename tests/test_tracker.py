@@ -1039,3 +1039,46 @@ class ReviewFixesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DuoRegressionTest(unittest.TestCase):
+    # 合成標準發文範本，非宣稱已觀測的 PTT 文章。
+    def test_aliases_complete_template(self):
+        for name in ['iPhone Duo', 'iphoneduo', 'Duo', '愛鳳 duo', '摺疊 iPhone',
+                     '折疊iPhone', 'iPhone Fold', 'ｉＰｈｏｎｅ Ｄｕｏ']:
+            for capacity in ['256G', '512GB', '1TB', '2TB']:
+                with self.subTest(name=name, capacity=capacity):
+                    title = f'[販售] 台北 {name} {capacity} 星光白 全新'
+                    body = f'[型號] {name}\n[規格] {capacity} 星光白 全新未拆封\n[售價] 73000\n[保固] 一年'
+                    self.assertTrue(T.is_iphone_sale_title(title))
+                    self.assertFalse(T.multi_phone_title(title))
+                    fields = T.build_fields(T.rule_extract(title, body))
+                    self.assertEqual(fields['model'], 'iPhone Duo')
+                    self.assertEqual(fields['storage'], capacity.replace('256G', '256GB'))
+                    self.assertEqual((fields['color'], fields['price'], fields['全新未拆封機']), ('星光白色', 73000, '是'))
+                    self.assertIsNone(T.misparsed_reason(dict(fields, title=title)))
+
+    def test_duo_multi_and_canonical(self):
+        self.assertFalse(T._CANONICAL_MODEL_RE.fullmatch('iPhone Duo Pro'))
+        self.assertTrue(T.multi_phone_title('[販售] Duo/18 Pro'))
+        self.assertTrue(T.multi_phone_title('[販售] Duo/Duo'))
+
+    def test_colors(self):
+        for canonical, aliases in [('星光白色', ['星光白色', '星光白', '白', '白色', 'Star White', 'WHITE']),
+                                   ('夜空色', ['夜空色', '夜空', '黑', '黑色', 'Night Sky', 'BLACK'])]:
+            for color in aliases:
+                self.assertEqual(T.parse_color('iPhone Duo', color), canonical)
+
+    def test_fullwidth_template(self):
+        title = '［販售］ｉＰｈｏｎｅ Ｄｕｏ ２５６Ｇ 夜空'
+        fields = T.build_fields(T.rule_extract(title, '［型號］ｉＰｈｏｎｅ Ｄｕｏ\n［規格］２５６Ｇ 夜空\n［售價］７００００'))
+        self.assertTrue(T.is_iphone_sale_title(title))
+        self.assertEqual((fields['model'], fields['storage'], fields['color']), ('iPhone Duo', '256GB', '夜空色'))
+        self.assertEqual(fields['全新未拆封機'], '否')
+
+    def test_other_brands_and_spec_only(self):
+        for name in ['Samsung Galaxy Z Fold', 'Pixel Fold', 'Surface Duo', 'Microsoft Surface Duo 2', 'Duolingo']:
+            self.assertNotEqual(T.normalize_model(name + ' 256G'), 'iPhone Duo')
+            self.assertNotEqual(T.rule_extract('[販售] ' + name, f'[型號] {name}\n[規格] 256G\n[售價] 20000')['model'], 'iPhone Duo')
+        self.assertNotEqual(T.rule_extract('[販售] iPhone', '[型號] A1234\n[規格] Duo 256G\n[售價] 70000')['model'], 'iPhone Duo')
+        self.assertIsNone(T.rule_extract('[販售] iPhone Duo 256G + iPhone 18 Pro 512G', '[型號] iPhone Duo\n[售價] 70000')['model'])
