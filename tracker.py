@@ -197,6 +197,9 @@ _ROMAN = {"x": "X", "xr": "XR", "xs": "XS"}
 
 # Apple 的 MagSafe Duo 是雙合一充電器，不是 iPhone Duo
 _MAGSAFE_DUO_RE = re.compile(r"mag\s*safe\s*duo", re.I)
+_OTHER_IPHONE_RE = re.compile(
+    r"(?:iphone|愛鳳|(?<![a-z])i)\s*(?:[4-9]|1\d|20|x[rs]?|se|air)(?![\d.a-z])"
+    r"|(?<![\d.])(?:[4-9]|1\d|20)\s*(?:pro|plus|mini|e|pm)(?![a-z])", re.I)
 
 
 def is_duo_name(raw):
@@ -204,7 +207,10 @@ def is_duo_name(raw):
     s = _MAGSAFE_DUO_RE.sub(" ", unicodedata.normalize("NFKC", str(raw or ""))).lower()
     if re.search(r"samsung|galaxy|pixel|surface|三星|微軟", s):
         return False
-    return bool(re.search(r"(?:iphone|愛鳳)\s*(?:duo|fold)(?![a-z])|[摺折]疊\s*iphone|(?<![a-z])duo(?![a-z])", s))
+    if re.search(r"(?:iphone|愛鳳)\s*(?:duo|fold)(?![a-z])|[摺折]疊\s*iphone", s):
+        return True
+    # 只寫 Duo 時，若同一段已有別的 iPhone 型號（「iPhone 15 Pro 送 Belkin Duo 充電器」），Duo 是配件名稱
+    return bool(re.search(r"(?<![a-z])duo(?![a-z])", s)) and not _OTHER_IPHONE_RE.search(s)
 
 
 def normalize_model(raw):
@@ -676,8 +682,8 @@ def multi_phone_title(title):
     bare = re.sub(r"^\[[^\]]*\]\s*", "", title or "")
     bare = unicodedata.normalize("NFKC", bare) if is_duo_name(bare) else bare
     bare = _MAGSAFE_DUO_RE.sub(" ", bare)
-    phones = len(re.findall(r"i\s*phone|(?<![a-z])(?:air|duo)(?![a-z])", bare, re.I))
-    phones -= len(re.findall(r"i\s*phone\s*duo", bare, re.I))
+    # 裸寫的 Duo 不另算一支（常是配件名稱）；Duo 和其他型號並列由斜線、兩個容量等規則判斷
+    phones = len(re.findall(r"i\s*phone|(?<![a-z])air(?![a-z])", bare, re.I))
     phones -= len(re.findall(r"(?:i\s*phone|i\s*pad|macbook)\s*air", bare, re.I))  # iPhone Air、iPad Air 不重複算
     return (phones > 1 or len(_TITLE_CAPACITY_RE.findall(bare)) > 1
             or bool(_TITLE_MODEL_SLASH_RE.search(bare)) or bool(_TITLE_COUNT_RE.search(bare)))

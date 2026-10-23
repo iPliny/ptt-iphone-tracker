@@ -1092,3 +1092,13 @@ class DuoRegressionTest(unittest.TestCase):
         self.assertEqual((fields['model'], fields['storage']), ('iPhone 15 Pro', '256GB'))
         self.assertFalse(T.is_iphone_sale_title('[販售] MagSafe Duo 雙合一充電器'))
         self.assertTrue(T.is_duo_name('iPhone Duo 512G 送 MagSafe Duo'))
+
+    def test_other_duo_accessory_with_iphone(self):
+        # Codex 審查：其他品牌帶 Duo 的配件，不能讓既有 iPhone 文變成一篇多支或 Duo
+        title = '[販售] iPhone 15 Pro 256G 送 Belkin Duo 充電器'
+        self.assertFalse(T.multi_phone_title(title))
+        self.assertFalse(T.is_duo_name(title))
+        fields = T.rule_extract(title, '[型號]: iPhone 15 Pro\n[規格]: 256G\n[售價]: 25000')
+        self.assertEqual(fields['model'], 'iPhone 15 Pro')
+        self.assertTrue(T.is_duo_name('[販售] Duo 256G 夜空'))
+        self.assertTrue(T.multi_phone_title('[販售] iPhone Duo 256G + iPhone 18 Pro 512G'))
