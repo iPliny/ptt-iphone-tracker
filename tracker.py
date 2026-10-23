@@ -195,9 +195,13 @@ def to_int(value):
 _ROMAN = {"x": "X", "xr": "XR", "xs": "XS"}
 
 
+# Apple 的 MagSafe Duo 是雙合一充電器，不是 iPhone Duo
+_MAGSAFE_DUO_RE = re.compile(r"mag\s*safe\s*duo", re.I)
+
+
 def is_duo_name(raw):
-    """只辨識明確機型用語；排除其他品牌的 Duo / Fold。"""
-    s = unicodedata.normalize("NFKC", str(raw or "")).lower()
+    """只辨識明確機型用語；排除其他品牌的 Duo / Fold 與 MagSafe Duo 充電器。"""
+    s = _MAGSAFE_DUO_RE.sub(" ", unicodedata.normalize("NFKC", str(raw or ""))).lower()
     if re.search(r"samsung|galaxy|pixel|surface|三星|微軟", s):
         return False
     return bool(re.search(r"(?:iphone|愛鳳)\s*(?:duo|fold)(?![a-z])|[摺折]疊\s*iphone|(?<![a-z])duo(?![a-z])", s))
@@ -671,6 +675,7 @@ def multi_phone_title(title):
     """標題提到兩支以上 iPhone：兩個 iPhone／Air、兩個容量、斜線分隔的型號，或「兩支」「各一」。"""
     bare = re.sub(r"^\[[^\]]*\]\s*", "", title or "")
     bare = unicodedata.normalize("NFKC", bare) if is_duo_name(bare) else bare
+    bare = _MAGSAFE_DUO_RE.sub(" ", bare)
     phones = len(re.findall(r"i\s*phone|(?<![a-z])(?:air|duo)(?![a-z])", bare, re.I))
     phones -= len(re.findall(r"i\s*phone\s*duo", bare, re.I))
     phones -= len(re.findall(r"(?:i\s*phone|i\s*pad|macbook)\s*air", bare, re.I))  # iPhone Air、iPad Air 不重複算
