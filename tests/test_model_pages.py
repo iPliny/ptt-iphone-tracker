@@ -169,6 +169,12 @@ class ModelHtmlTest(unittest.TestCase):
             self.assertIn('href="../models/iphone-18-pro.html"', navigation)
             self.assertNotEqual(first, second)
 
+    def test_duo_navigation_rank(self):
+        data = {"model_totals": [{"model": "iPhone 18 Pro Max", "listed": 100},
+                                 {"model": "iPhone Duo", "listed": 1}]}
+        html = M.model_navigation(data, current="iPhone 18 Pro")
+        self.assertLess(html.index("iphone-duo.html"), html.index("iphone-18-pro-max.html"))
+
     def test_navigation_prioritizes_same_generation_without_mutating_data(self):
         data = {"model_totals": [
             {"model": "iPhone 17 Pro", "listed": 100},
