@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "site"))
 import jp_pages as P  # noqa: E402
+import build_site as S  # noqa: E402
 
 SITE = "https://macshop.crawlsnek.com/"
 
@@ -60,6 +61,29 @@ class JpPagesTest(unittest.TestCase):
             data = json.loads(html.split('<script type="application/ld+json">')[1].split("</script>")[0])
             self.assertEqual(data["itemListElement"][-1]["item"], SITE + path)
 
+    def test_model_date_does_not_borrow_from_other_models(self):
+        latest = [row("アメモバ", 173000), row("イオシス", 200000, model="iPhone 18 Pro",
+                  last_checked="2026-11-01T12:00:00+09:00")]
+        html = P.page_html({"latest": latest}, "iPhone 17 Pro", "zh", SITE)
+        self.assertIn("2026年10月", html)
+        self.assertIn("2026-10-18 00:47", html)
+        self.assertNotIn("2026-11-01", html)
+        dates = S.sitemap_lastmods({}, jp_latest=latest)
+        for lang in ("zh", "ja"):
+            # sitemap 沿用全站台灣日期；頁面可見時間顯示日本時間。
+            self.assertEqual(dates[P.model_url(SITE, lang, "iPhone 17 Pro")], "2026-10-17")
+            self.assertEqual(dates[P.model_url(SITE, lang, "iPhone 18 Pro")], "2026-11-01")
+        invalid = P.page_html({"latest": [row("アメモバ", 173000, last_checked="invalid")]},
+                              "iPhone 17 Pro", "zh", SITE)
+        self.assertNotIn("【年月】", invalid)
+
+    def test_checked_at_sorts_instants_and_requires_timezone(self):
+        self.assertEqual(P.checked_at([
+            {"last_checked": "2026-10-18T00:00:00+09:00"},
+            {"last_checked": "2026-10-17T23:00:00Z"},
+            {"last_checked": "invalid"}, {"last_checked": "2026-11-01"}]), "2026-10-18 08:00")
+        self.assertEqual(P.checked_at([{}]), "")
+
     def test_build_writes_pages_sitemap_and_prefills_index(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -83,6 +107,8 @@ class JpPagesTest(unittest.TestCase):
                 self.assertNotIn("<!--JP_MODEL_LINKS-->", html)
                 self.assertIn('<a href="iphone-18-pro/">', html)
                 self.assertIn("¥200,000", html)
+                self.assertIn('id="updated" data-snapshot="true"', html)
+                self.assertIn("2026-10-18 00:47（日本時間）", html)
 
 
 if __name__ == "__main__":

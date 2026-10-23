@@ -255,7 +255,8 @@
       if(!response.ok) throw new Error('load failed');
       data=await response.json();
     } catch (_) {
-      get('updated').textContent=T.loadFailed;
+      const updated=get('updated');
+      updated.textContent=(updated.dataset.snapshot ? updated.textContent+' · ' : '')+T.loadFailed;
       return;
     }
     const end=Date.parse(data.generated_at);
