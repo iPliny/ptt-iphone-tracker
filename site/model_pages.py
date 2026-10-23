@@ -11,6 +11,26 @@ def model_path(model):
     return "models/" + slug + ".html"
 
 
+def model_navigation(data, root="", current=None):
+    """固定顯示的機型入口；同代優先，其餘依公開刊登數排序。"""
+    rows = [r for r in data.get("model_totals", []) if r["model"] != current]
+    generation = re.match(r"iPhone (\d+)(?:\D|$)", current or "")
+
+    def same_generation(name):
+        match = re.match(r"iPhone (\d+)(?:\D|$)", name)
+        return bool(generation and match and generation[1] == match[1])
+
+    rows.sort(key=lambda r: (not same_generation(r["model"]), -r.get("listed", 0), r["model"]))
+    if not rows:
+        return ""
+    title = "比較其他機型" if current else "機型行情快速查詢"
+    links = "".join(f'<li><a href="{escape(root + model_path(r["model"]), quote=True)}">'
+                    f'{escape(r["model"])} 二手行情</a></li>' for r in rows[:6])
+    return (f'<nav class="card model-navigation" aria-label="{title}"><h2>{title}</h2>'
+            f'<ul>{links}</ul><p class="hint"><a href="{escape(root + "market/", quote=True)}">'
+            '查看全部機型與容量行情</a></p></nav>')
+
+
 def money(value):
     if value is None or value == "":
         return "—"
@@ -189,6 +209,7 @@ def render_model_html(template, data, model, canonical_url, asset_prefix=""):
         for value in ["favicon.svg", "style.css", "./", "column/", "market/", "market/#faq", "prices.html", "common.js", "watchlist.js", "model.js"]:
             for attr in ["src", "href"]:
                 html = html.replace(f'{attr}="{value}"', f'{attr}="{asset_prefix}{value}"')
+    html = html.replace('</main>', model_navigation(data, asset_prefix, model) + '\n</main>', 1)
     return html
 
 

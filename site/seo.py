@@ -2,7 +2,7 @@
 import json
 import re
 from html import escape
-from model_pages import model_path, money
+from model_pages import model_path, money, model_navigation
 
 
 def social_meta(title, description, url, site_url, og_type="website", locale="zh_TW"):
@@ -45,6 +45,7 @@ def render_home(template, data, site_url):
     checked = data.get("last_checked") or "尚無回訪紀錄"
     updated = f'最後回訪 {checked} · 共追蹤 {data.get("counts", {}).get("total", 0)} 篇'
     html = html.replace('<span id="updated">載入中…</span>', f'<span id="updated">{escape(updated)}</span>')
+    html = html.replace('<!--MODEL_NAVIGATION-->', model_navigation(data), 1)
     day = next(iter(data.get("days", [])[-1:]), None)
     if day:
         cards = [("新刊登", "new"), ("售出", "sold"), ("刪文", "deleted"),
