@@ -17,7 +17,7 @@ jobs:
       - run: |
           python - <<'P'
           import tracker as T
-          for p in ["M.1792643869.A.C63"]:
+          for p in ["M.1792737594.A.B29"]:
               code, html = T.fetch(T.BASE_URL + "/bbs/MacShop/" + p + ".html")
               print("=====", p, code)
               art = T.parse_article(html) if code == 200 else None
