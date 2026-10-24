@@ -41,6 +41,19 @@ class ModelHtmlTest(unittest.TestCase):
     def render(self, **kwargs):
         return M.render_model_html(self.template, self.data, self.model, self.canonical, **kwargs)
 
+    def test_duo_only_builds_with_public_data(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            (out / 'model.html').write_text(self.template)
+            paths = M.build_model_pages(out, self.data, 'https://example.test/')
+            self.assertNotIn('models/iphone-duo.html', paths)
+            self.assertNotIn('iphone-duo.html', M.model_navigation(self.data))
+            for row in self.data['model_totals'] + self.data['models'] + self.data['listings']:
+                row['model'] = 'iPhone Duo'
+            paths = M.build_model_pages(out, self.data, 'https://example.test/')
+            self.assertEqual(paths, ['models/iphone-duo.html'])
+            self.assertIn('iPhone Duo 二手行情', (out / paths[0]).read_text())
+
     def test_trend_summary_prerendered(self):
         self.data["trends"] = {"start": "2026-10-01", "series": [
             dict(model=self.model, storage="256GB", brand_new=False, values=[None] + [31000] * 7 + [30000]),
@@ -150,8 +163,30 @@ class ModelHtmlTest(unittest.TestCase):
             self.assertNotIn("only-iphone-15", first)
             self.assertIn("only-iphone-15", second)
             self.assertIn("全部容量的文章（1）", second)
-            self.assertNotIn("iPhone 18 Pro", second)
+            # 其他機型只可出現在比較導覽，不可混入本頁標題或行情內容。
+            body, navigation = second.split('<nav class="card model-navigation"', 1)
+            self.assertNotIn("iPhone 18 Pro", body)
+            self.assertIn('href="../models/iphone-18-pro.html"', navigation)
             self.assertNotEqual(first, second)
+
+    def test_duo_navigation_rank(self):
+        data = {"model_totals": [{"model": "iPhone 18 Pro Max", "listed": 100},
+                                 {"model": "iPhone Duo", "listed": 1}]}
+        html = M.model_navigation(data, current="iPhone 18 Pro")
+        self.assertLess(html.index("iphone-duo.html"), html.index("iphone-18-pro-max.html"))
+
+    def test_navigation_prioritizes_same_generation_without_mutating_data(self):
+        data = {"model_totals": [
+            {"model": "iPhone 17 Pro", "listed": 100},
+            {"model": "iPhone 16 Pro", "listed": 200},
+            {"model": "iPhone 17", "listed": 1},
+        ]}
+        original = copy.deepcopy(data)
+        page = Page(M.model_navigation(data, "../", "iPhone 17 Pro"))
+        links = [a['href'] for t, a in page.elements if t == 'a']
+        self.assertEqual(links, ['../models/iphone-17.html', '../models/iphone-16-pro.html', '../market/'])
+        self.assertEqual(data, original)
+        self.assertEqual(M.model_navigation({"model_totals": []}), "")
 
 
 if __name__ == "__main__":

@@ -70,3 +70,11 @@ class MarketTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DuoMarketTest(unittest.TestCase):
+    def test_duo_rank_and_slug(self):
+        from model_pages import model_path
+        self.assertEqual(model_path('iPhone Duo'), 'models/iphone-duo.html')
+        self.assertEqual(sorted(['iPhone 18 Pro Max', 'iPhone Duo', 'iPhone 19 Pro'], key=MK.model_rank),
+                         ['iPhone 19 Pro', 'iPhone Duo', 'iPhone 18 Pro Max'])

@@ -122,3 +122,15 @@ run_at,shop,status,rows,error
 2026-10-23T02:19:24+09:00,mobile-mix,ok,73,
 2026-10-23T02:19:24+09:00,イオシス,fetch_error,0,https://k-tai-iosys.com/pricelist/smartphone/iphone/iphone18-pro/: HTTPError: HTTP Error 503: 
 2026-10-23T02:19:24+09:00,アメモバ,ok,198,
+2026-10-23T14:02:48+09:00,mobile-mix,ok,73,
+2026-10-23T14:02:48+09:00,イオシス,fetch_error,0,https://k-tai-iosys.com/pricelist/smartphone/iphone/iphone18-pro/: HTTPError: HTTP Error 503: 
+2026-10-23T14:02:48+09:00,アメモバ,ok,198,
+2026-10-23T20:53:59+09:00,mobile-mix,ok,73,
+2026-10-23T20:53:59+09:00,イオシス,ok,200,
+2026-10-23T20:53:59+09:00,アメモバ,ok,198,
+2026-10-24T02:22:13+09:00,mobile-mix,ok,85,
+2026-10-24T02:22:13+09:00,イオシス,ok,240,
+2026-10-24T02:22:13+09:00,アメモバ,ok,218,
+2026-10-24T02:29:14+09:00,mobile-mix,ok,85,
+2026-10-24T02:29:14+09:00,イオシス,ok,240,
+2026-10-24T02:29:14+09:00,アメモバ,ok,218,

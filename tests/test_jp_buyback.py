@@ -31,6 +31,8 @@ def shop_page(url):
     if url == jp.MOBILEMIX_URL:
         return fixture("mobilemix")
     shop, model = ("iosys", jp.IOSYS_PAGES[url]) if url in jp.IOSYS_PAGES else ("amemoba", jp.AMEMOBA_PAGES[url])
+    if model == "iPhone Duo":
+        return fixture(f"{shop}-duo")
     html = fixture(f"{shop}-max" if model.endswith("Max") else f"{shop}-pro")
     target = {"iPhone 17 Pro": "iPhone17 Pro", "iPhone 17 Pro Max": "iPhone17 Pro", "iPhone 17": "iPhone17", "iPhone Air": "iPhone Air"}
     return re.sub(r"iPhone\s*18\s*Pro", target[model], html) if model in target else html
@@ -271,3 +273,29 @@ class FetchAndBuildTests(unittest.TestCase):
             self.assertIsInstance(payload["latest"][0]["price_jpy"],int)
             for name in ("latest", "prices", "runs"):
                 self.assertEqual((data/"jp"/f"{name}.csv").read_bytes(),(root/"out/data/jp"/f"{name}.csv").read_bytes())
+
+
+class DuoParserTests(unittest.TestCase):
+    def test_real_duo_pages(self):
+        mobile, _ = jp.parse_mobilemix(fixture('mobilemix-duo'))
+        self.assertEqual(len(mobile), 12)
+        self.assertEqual({r['storage'] for r in mobile}, set(jp.STORAGES))
+        self.assertEqual({r['color'] for r in mobile}, {'', 'スターホワイト', 'ナイトスカイ'})
+        self.assertEqual(find(mobile, model='iPhone Duo', color='スターホワイト')['price_jpy'], 407000)
+        for shop, parser, count in [('iosys', jp.parse_iosys, 40), ('amemoba', jp.parse_amemoba, 20)]:
+            rows, _ = parser(fixture(shop+'-duo'), 'https://example.com/')
+            self.assertEqual(len(rows), count)
+            self.assertEqual({r['model'] for r in rows}, {'iPhone Duo'})
+            self.assertEqual({r['storage'] for r in rows}, set(jp.STORAGES))
+        overseas = fixture('iosys-duo').replace('docomo版SIMフリー', '海外版SIMフリー')
+        rows, _ = jp.parse_iosys(overseas, 'https://example.com/')
+        self.assertEqual(len(rows), 32)
+        self.assertNotIn('docomo', {r['carrier'] for r in rows})
+
+    def test_duo_page_excludes_other_model(self):
+        duo_url = next(u for u,m in jp.AMEMOBA_PAGES.items() if m == 'iPhone Duo')
+        html = fixture('amemoba-duo') + fixture('amemoba-pro')
+        results = jp.collect(lambda u: html if u == duo_url else shop_page(u))
+        shop = next(r for r in results if r['shop'] == 'アメモバ')
+        self.assertEqual(shop['status'], 'ok')
+        self.assertEqual({r['model'] for r in shop['rows'] if r['source_url'] == duo_url}, {'iPhone Duo'})

@@ -103,3 +103,12 @@
 |iPhone 18 Pro|銀色|銀、白、白色、Silver、White|
 |iPhone 18 Pro|冰川藍色|冰川藍、藍、藍色、Glacier Blue、Blue|
 |iPhone 18 Pro|勃根地紅色|勃根地紅、紅、紅色、Burgundy、Burgundy Red、Red|
+
+## 2026-10-24 iPhone Duo
+
+來源：[Apple 台灣購買頁](https://www.apple.com/tw/shop/buy-iphone/iphone-duo)，2026-10-24 核對。
+
+|系列|標準名稱|額外別名|
+|---|---|---|
+|iPhone Duo|星光白色|星光白、白、白色、Star White、White|
+|iPhone Duo|夜空色|夜空、黑、黑色、Night Sky、Black|

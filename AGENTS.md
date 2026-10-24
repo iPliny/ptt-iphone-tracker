@@ -149,3 +149,9 @@
 ### 2026-10-23 日本買取頁來源時間
 - 日本買取主頁的最近確認時間由 `jp_pages.checked_at` 在建置時寫入 HTML，JSON 讀取失敗仍保留快照與其時間。來源必須帶時區，顯示時轉日本時間；不以建置時鐘補未知值。
 - 各機型頁標題年月、摘要的確認時間與 sitemap `lastmod` 只採該機型資料，不借用其他機型的更新時間。可見時間使用日本時間；sitemap 沿用全站台灣日期規則。
+
+### 2026-10-24 新增 iPhone Duo
+- 正式名稱 `iPhone Duo`，容量 256GB／512GB／1TB／2TB；台灣色名星光白色、夜空色。別名接受 Duo、愛鳳 duo、摺疊／折疊 iPhone、iPhone Fold，含大小寫與全形；僅標題或型號欄明確指出才採用，排除 Galaxy／Pixel／Surface。
+- 機型排序視為第 18 代，排在同代 Pro Max 前；slug 為 `models/iphone-duo.html`，沿用有資料才建頁的規則。
+- 日本收 mobile-mix、イオシス、アメモバ；後兩家只收 Duo 專頁的 Duo 列，海外版 SIMフリー 不收。mobile-mix 顏色保存店家原文スターホワイト／ナイトスカイ（星光白／夜空）。`I18N`／`TEXT` 的通用機型文字直接使用 iPhone Duo，中日名稱相同。
+- 官方購買頁、色名來源見 `docs/colors.md`；未修改其他機型價格與資料 CSV。

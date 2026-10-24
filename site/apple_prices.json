@@ -1,7 +1,11 @@
 {
- "checked_at": "2026-10-05",
+ "checked_at": "2026-10-24",
  "note": "Apple 台灣官網（apple.com/tw）iPhone 售價，人工查詢後更新。on_sale：目前在官網販售的機型與現行售價；discontinued：停售機型在官網下架前最後的建議售價。",
  "on_sale": {
+  "iPhone Duo": {
+   "url": "https://www.apple.com/tw/shop/buy-iphone/iphone-duo",
+   "prices": {"256GB": 74900, "512GB": 81900, "1TB": 96900, "2TB": 118900}
+  },
   "iPhone 18 Pro": {
    "url": "https://www.apple.com/tw/shop/buy-iphone/iphone-18-pro",
    "prices": {
