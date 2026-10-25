@@ -98,7 +98,7 @@ class OfficialPriceTests(unittest.TestCase):
                 self.assertEqual((out / asset).read_bytes(), expected)
             self.assertEqual(result['counts']['total'], 0)
             self.assertNotIn('official_prices', result)
-            self.assertEqual(json.loads((out / 'data.json').read_text(encoding='utf-8')), result)
+            self.assertEqual(json.loads((out / 'data.json').read_text(encoding='utf-8')), module.home_payload(result))
 
 
 if __name__ == '__main__':

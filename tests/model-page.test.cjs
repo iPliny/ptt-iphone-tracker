@@ -53,9 +53,9 @@ async function page({ staticPage = true, search = '', data = dataset(), fail = f
     choose(storage) { element('#storage-tabs').listeners.click({ target: { closest: () => ({ dataset: { storage } }) } }); } };
 }
 
-test('靜態頁重用 canonical、保留預產標題，讀取根目錄資料，查詢 m 不覆蓋機型身分', async () => {
+test('靜態頁重用 canonical、保留預產標題，只讀該機型資料，查詢 m 不覆蓋機型身分', async () => {
   const view = await page({ search: '?m=other&s=256GB&utm_source=test' });
-  assert.deepEqual(view.requests, ['../data.json']);
+  assert.deepEqual(view.requests, ['../models/iphone-18-pro.json']);
   assert.equal(view.links.length, 1);
   assert.equal(view.links[0].href, base + 'models/iphone-18-pro.html');
   assert.equal(view.element('meta[property="og:url"]').content, view.links[0].href);
@@ -71,7 +71,7 @@ test('靜態頁重用 canonical、保留預產標題，讀取根目錄資料，�
 
 test('原 model.html 查詢入口保留容量網址與篩選行為，canonical 指向預產標準頁', async () => {
   const view = await page({ staticPage: false, search: '?m=iPhone+18+Pro&s=256GB' });
-  assert.deepEqual(view.requests, ['data.json']);
+  assert.deepEqual(view.requests, ['models/iphone-18-pro.json']);
   assert.equal(view.links.length, 1);
   assert.equal(view.links[0].href, base + 'models/iphone-18-pro.html');
   assert.equal(view.element('meta[property="og:url"]').content, view.links[0].href);

@@ -127,6 +127,7 @@
 
 ### 2026-10-16 機型頁預先產生 HTML
 - `site/model_pages.py` 在建置時輸出 `models/<機型 slug>.html`，包含各機型的 title、description、canonical、主標題、公開統計、容量表與前 10 筆單支文章；只用 `build_data` 已排除異常值的資料，不改 CSV 或資料語意。
+- 2026-10-25（專案審視 M8）前端 JSON 拆檔：`build_data` 仍是建置端完整資料（機型頁、行情總覽、sitemap 都讀它），寫檔時才瘦身。首頁讀 `data.json`（`home_payload`：無 trends、colors、apple、summary、model_totals，事件只留改價與刪文），機型頁讀 `models/<slug>.json`（`model_payload`：只含該機型）。文章只輸出 `PUBLIC_LISTING_FIELDS`，`OMIT_EMPTY_FIELDS` 的欄位值為 null／空字串／false 時省略（0 保留）；前端新增用到的欄位時要一起加進清單。
 - 首頁機型連結與 sitemap 改指向靜態頁。原有 `model.html?m=...&s=...` 仍可使用，容量切換維持舊格式，canonical 改指向對應靜態頁；沒有伺服器或 JavaScript 轉址。
 - 靜態頁使用 `data-model` 固定機型身分，容量以 `?s=` 切換；所有容量共用不含參數的 canonical。`model.js` 共用既有互動，重用靜態 canonical，資料請求失敗時保留預產內容。
 - slug 由 Python `model_path` 與 JavaScript `modelPageUrl` 同規則產生；若不同機型產生相同路徑，建置應失敗，不可默默覆蓋。重建時清除輸出目錄內自有的 `models/`，避免過期頁殘留。
