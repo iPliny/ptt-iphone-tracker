@@ -777,6 +777,11 @@ class AccessoryPostTest(unittest.TestCase):
                 "[補充說明]：很少使用，略有使用痕跡 (如照片)\n")
         self.assertIsNone(T.rule_extract("[販售] 全國 iphone 17 pro max 原廠織紋殼", body)["model"])
 
+    def test_camera_rig_kit(self):
+        # M.1792312417：TILTA 手機攝影套裝（兔籠＋濾鏡）$1,500，型號欄照抄適用機型
+        body = "[型號] iPhone 17 Pro\n[規格] TILTA 手機攝影套裝\n[售價] 1, 500\n[補充說明] 專用手機殼、配件有正常拆裝使用痕跡，濾鏡無刮\n"
+        self.assertIsNone(T.rule_extract("[販售] 全國 iPhone 17 Pro TILTA 手機攝影套裝", body)["model"])
+
     def test_two_cases(self):
         # M.1791217114.A.90E：兩個原廠殼一起賣 $1,000
         body = "[型號]：iPhone16Plus\n[規格]：原廠殼\n[售價]：1000\n[補充說明]：約8-9成新 無明顯傷 兩個一起賣\n"
