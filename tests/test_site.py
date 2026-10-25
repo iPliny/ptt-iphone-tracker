@@ -183,6 +183,29 @@ class BuildSiteTest(unittest.TestCase):
         self.assertEqual(data["events"], [])
         self.assertEqual(sum(d["deleted"] for d in data["days"]), 0)  # 沒有事件就不知道刪文日
 
+    def test_split_json_home_and_model(self):
+        out = os.path.join(self.dir, "split")
+        data = S.build(out, self.dir)
+        with open(os.path.join(out, "data.json"), encoding="utf-8") as f:
+            home = json.load(f)
+        self.assertNotIn("trends", home)
+        self.assertNotIn("first_price", home["listings"][0])
+        self.assertEqual(len(home["listings"]), len(data["listings"]))
+        with open(os.path.join(out, "models", "iphone-15.json"), encoding="utf-8") as f:
+            page = json.load(f)
+        self.assertEqual({r["model"] for r in page["listings"]}, {"iPhone 15"})
+        self.assertEqual([m["model"] for m in page["model_totals"]], ["iPhone 15"])
+
+    def test_public_listing_omits_only_empty_values(self):
+        r = S.public_listing({"url": "u", "model": "", "storage": "", "price": None, "brand_new": False,
+                              "days_to_sell": 0, "pm_count": 0, "notes": "", "first_price": 1})
+        self.assertEqual(r["days_to_sell"], 0)
+        self.assertEqual(r["pm_count"], 0)
+        self.assertEqual(r["storage"], "")
+        self.assertIs(r["brand_new"], False)
+        for k in ("price", "notes", "first_price"):
+            self.assertNotIn(k, r)
+
     def test_build_writes_site(self):
         out = os.path.join(self.dir, "out")
         S.build(out, self.dir)
