@@ -86,8 +86,13 @@ def runs_since(repo, workflow, since):
     return data.get("workflow_runs", [])
 
 
+def counted(runs):
+    """被取消的執行（concurrency 排隊時被較新的一次取代）不算這一輪跑過。"""
+    return [r for r in runs if r.get("conclusion") != "cancelled"]
+
+
 def needs_dispatch(slot, runs, now, grace=GRACE):
-    return slot is not None and now - slot >= grace and not runs
+    return slot is not None and now - slot >= grace and not counted(runs)
 
 
 def watch(repo, now):
@@ -99,7 +104,7 @@ def watch(repo, now):
             print(f"::warning::{wf} 查詢執行紀錄失敗：{e}")
             continue
         if not needs_dispatch(slot, runs, now):
-            print(f"{wf}：{slot:%m-%d %H:%M} UTC 這一輪已有 {len(runs)} 次執行，或還沒到時間。")
+            print(f"{wf}：{slot:%m-%d %H:%M} UTC 這一輪已有 {len(counted(runs))} 次執行，或還沒到時間。")
             continue
         late = int((now - slot).total_seconds() // 60)
         try:
@@ -109,9 +114,14 @@ def watch(repo, now):
             print(f"::warning::{wf} 補跑失敗：{e}")
 
 
-def should_run(slot, runs, own_id):
-    """schedule 觸發時：同一時間點已有別次執行（看門狗補跑或手動）就不再跑。"""
-    return slot is None or not [r for r in runs if str(r.get("id")) != str(own_id)]
+def should_run(slot, runs, own_number):
+    """schedule 觸發時：同一時間點已有「更早建立」的執行（看門狗補跑或手動）就不再跑。
+
+    只看 run_number 比自己小的：較晚建立、還在 concurrency 排隊（pending）的不算，
+    否則兩次同時排隊會互相看到對方而都略過。較早那次若也被 gate 略過，代表再更早還有一次真的跑了。
+    """
+    own = int(own_number or 0)
+    return slot is None or not [r for r in counted(runs) if int(r.get("run_number") or 0) < own]
 
 
 def gate(repo, workflow, now):
@@ -119,7 +129,7 @@ def gate(repo, workflow, now):
     if os.environ.get("GITHUB_EVENT_NAME") == "schedule":
         slot = last_slot(crons_of(workflow), now)
         try:
-            run = should_run(slot, runs_since(repo, workflow, slot), os.environ.get("GITHUB_RUN_ID"))
+            run = should_run(slot, runs_since(repo, workflow, slot), os.environ.get("GITHUB_RUN_NUMBER"))
         except (subprocess.CalledProcessError, ValueError) as e:
             print(f"::warning::查詢執行紀錄失敗，照常執行：{e}")
         if not run:

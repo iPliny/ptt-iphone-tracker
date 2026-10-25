@@ -48,8 +48,18 @@ class ScheduleWatchTest(unittest.TestCase):
         self.assertFalse(sw.needs_dispatch(slot, [{"id": 1}], t("2026-10-25T15:00")))
 
     def test_gate_skips_late_schedule_only_when_slot_already_ran(self):
-        self.assertTrue(sw.should_run(t("2026-10-25T06:00"), [{"id": 5}], "5"))  # 只有自己
-        self.assertFalse(sw.should_run(t("2026-10-25T06:00"), [{"id": 4}, {"id": 5}], "5"))
+        slot = t("2026-10-25T06:00")
+        self.assertTrue(sw.should_run(slot, [{"run_number": 5}], "5"))  # 只有自己
+        self.assertFalse(sw.should_run(slot, [{"run_number": 4}, {"run_number": 5}], "5"))
+
+    def test_gate_ignores_later_pending_and_cancelled_runs(self):
+        slot = t("2026-10-25T06:00")
+        # 4 正在跑、5 在 concurrency 排隊：4 不因 5 略過，5 輪到時因 4 略過
+        runs = [{"run_number": 4, "conclusion": None}, {"run_number": 5, "conclusion": None}]
+        self.assertTrue(sw.should_run(slot, runs, "4"))
+        self.assertFalse(sw.should_run(slot, runs, "5"))
+        self.assertTrue(sw.should_run(slot, [{"run_number": 4, "conclusion": "cancelled"}], "5"))
+        self.assertTrue(sw.needs_dispatch(slot, [{"run_number": 4, "conclusion": "cancelled"}], t("2026-10-25T07:00")))
 
 
 if __name__ == "__main__":
