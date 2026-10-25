@@ -468,6 +468,8 @@ def _field(fields, *names):
 
 def parse_price(text):
     """'41,500元'、'NT$ 20000'、'2.5萬' → int；取第一個合理的金額。"""
+    # 「48, 000」千分位逗號後多打空白
+    text = re.sub(r"(?<=\d)[,，]\s+(?=\d{3}(?!\d))", "", text)
     text = text.replace(",", "").replace("，", "")
     # 先拿掉日期，例如「Apple care+ 到 2028/1/22」的 2028 不是價格
     text = re.sub(r"(?<!\d)(?:19|20)\d{2}\s*(?:年|[/／\-.]\s*\d{1,2}(?!\d))(?:\s*[/／\-.月]\s*\d{1,2}\s*日?)?", " ", text)
