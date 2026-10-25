@@ -3,7 +3,7 @@ name: 日本買取價
 on:
   schedule:
     # 日本時間 09:17／15:17／21:17；避開整點尖峰，降低延遲與漏跑風險，但不保證準時。
-    # GitHub schedule 仍可能延遲或漏跑；晚到的抓取照常執行，實際時間以 runs.csv 為準。
+    # GitHub schedule 仍可能延遲或漏跑；排程看門狗（watchdog.yml）過 5 分鐘沒跑就補跑，晚到的 schedule 由 gate 略過。實際時間以 runs.csv 為準。
     # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
     - cron: "17 0,6,12 * * *"
   workflow_dispatch:
@@ -20,9 +20,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  gate:
+    # 這一輪若已被排程看門狗補跑過，晚到的 schedule 就略過（.github/schedule_watch.py）
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+      - id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/schedule_watch.py gate jp.yml
+
   buyback:
     # 分支上的手動驗收不可寫 main，也不可觸發正式部署。
-    if: github.ref == 'refs/heads/main'
+    needs: gate
+    if: github.ref == 'refs/heads/main' && needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
