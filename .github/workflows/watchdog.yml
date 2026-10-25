@@ -1,0 +1,30 @@
+# 排程看門狗：GitHub schedule 常延遲數小時、偶爾漏跑（審視 M5）。
+# 每 15 分鐘檢查 track／jp／column／pages／blog 最近一個排程時間點是否已經跑過，過了 5 分鐘還沒跑就用 workflow_dispatch 補跑。
+# 這個 cron 本身也會延遲，但次數多，整體間隔仍約 15 分鐘；原本各 workflow 的 cron 保留當備援，晚到時由 gate 略過重複的一輪。
+name: 排程看門狗
+
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: watchdog
+  cancel-in-progress: true
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+      - name: 補跑沒準時執行的排程
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/schedule_watch.py watch
