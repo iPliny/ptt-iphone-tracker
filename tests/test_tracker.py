@@ -201,6 +201,12 @@ class RealPostRegressionTest(unittest.TestCase):
         body = "[型號] Apple Watch S11 46mm\n[售價] 8500\n[型號] iPhone 16 Pro 256G\n[規格] 256G\n[售價] 洽詢"
         self.assertFalse(T.sells_other_product("[販售] 台北 iPhone 16 Pro 256G", body))
 
+    def test_thousands_comma_with_space(self):
+        # M.1792848823：售價寫「48, 000」
+        f = self.fields("[販售] 竹北 iPhone 18 pro 512 銀色",
+                        "[型號]\n全新 iPhone 18 pro 512 GB\n\n[規格]\n銀色\n\n[保固]\n全新未拆封\n\n[售價]\n48, 000\n")
+        self.assertEqual((f["model"], f["storage"], f["price"]), ("iPhone 18 Pro", "512GB", 48000))
+
     def test_numbered_multi_item_skipped(self):
         body = "[型號]\n1. iPhone 17 256g 白 (全新)\n2. Airpods 5 一般版(全新)\n[售價]\n1.29800\n2.4000"
         self.assertIsNone(self.fields("[販售] 台北 iPhone 17", body))
