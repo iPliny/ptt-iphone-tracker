@@ -1113,3 +1113,18 @@ class DuoRegressionTest(unittest.TestCase):
         self.assertEqual(fields['model'], 'iPhone 15 Pro')
         self.assertTrue(T.is_duo_name('[販售] Duo 256G 夜空'))
         self.assertTrue(T.multi_phone_title('[販售] iPhone Duo 256G + iPhone 18 Pro 512G'))
+
+
+class BuildSummaryNoneFieldsTest(unittest.TestCase):
+    def test_fresh_multi_item_with_none_storage(self):
+        # 2026-10-26 run 40311812395：剛拆出的多品項 storage 是 None，排序時 TypeError，整輪資料沒 commit
+        listings = {"a": {"source_url": "a", "status": T.STATUS_SOLD,
+                          "model": "iPhone 17 Pro", "storage": "256GB", "全新未拆封機": "否", "price": "30000"}}
+        multi = {"b": [{"source_url": "b", "item_no": 1, "model": "iPhone 17 Pro", "storage": None,
+                        "全新未拆封機": None, "price": "28000"}]}
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "summary.csv")
+            T.build_summary(listings, path=path, multi=multi)
+            with open(path, encoding="utf-8-sig") as f:
+                rows = list(csv.DictReader(f))
+        self.assertEqual([(r["model"], r["storage"]) for r in rows], [("iPhone 17 Pro", ""), ("iPhone 17 Pro", "256GB")])
