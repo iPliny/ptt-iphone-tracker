@@ -348,9 +348,9 @@ class BuildSiteTest(unittest.TestCase):
                     self.assertIs(type(price), int)
                     self.assertGreater(price, 5000)
 
-    def test_real_data_builds(self):
-        """repo 內現有的 data/ 也要能建置成功。"""
-        data = S.build_data()
+    def test_fixture_data_builds(self):
+        """不依賴私人資料，使用 setUp 建立的合成資料。"""
+        data = S.build_data(self.dir)
         self.assertGreater(data["counts"]["total"], 0)
 
 

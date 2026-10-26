@@ -357,13 +357,14 @@ def collect(fetcher=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, default=DEFAULT_DATA, help="日本 CSV 目錄（不讀寫台灣 CSV）")
-    parser.add_argument("--dry-run", action="store_true", help="只印解析結果，完全不寫 CSV")
+    parser.add_argument("--dry-run", action="store_true", help="只印店家狀態與筆數，完全不寫 CSV")
     args = parser.parse_args()
     results = collect()
-    if args.dry_run:
-        print(json.dumps(results, ensure_ascii=False, indent=2))
-    else:
-        print(json.dumps(apply_results(args.data, results), ensure_ascii=False, indent=2))
+    report = results if args.dry_run else apply_results(args.data, results)
+    # 公開 Actions log 不輸出整列價格資料或內部錯誤；完整紀錄只存私人 CSV。
+    print(json.dumps([{"shop": r["shop"], "status": r["status"],
+                       "rows": len(r["rows"]) if isinstance(r["rows"], list) else r["rows"]}
+                      for r in report], ensure_ascii=False, indent=2))
     return 0 if all(r["status"] == "ok" for r in results) else 1 if args.dry_run else 0
 
 

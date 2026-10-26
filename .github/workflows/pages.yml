@@ -5,8 +5,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "data/**"
       - "site/**"
+      - ".github/actions/checkout-data/**"
       - ".github/workflows/pages.yml"
   schedule:
     - cron: "30 0 * * *"
@@ -28,6 +28,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: 取得私人資料庫
+        uses: ./.github/actions/checkout-data
+        with:
+          token: ${{ secrets.DATA_REPO_TOKEN }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -39,21 +43,12 @@ jobs:
           assert not list(Path('_site').rglob('*.csv')), '公開產物不得包含原始 CSV'
           assert not Path('_site/data').exists(), '公開產物不得包含原始資料目錄'
           PY
-      - name: 觸發 Cloudflare 正式站建置
-        env:
-          DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_PAGES_DEPLOY_HOOK }}
-        run: |
-          python - <<'PY'
-          import json, os, urllib.request
-          hook = os.environ['DEPLOY_HOOK']
-          if not hook:
-              raise SystemExit('尚未設定 CLOUDFLARE_PAGES_DEPLOY_HOOK')
-          try:
-              with urllib.request.urlopen(urllib.request.Request(hook, data=b'', method='POST'), timeout=60) as r:
-                  result = json.load(r)
-          except Exception:
-              raise SystemExit('Cloudflare 部署觸發失敗；請檢查部署 Hook') from None
-          if not result.get('success'):
-              raise SystemExit('Cloudflare 未接受部署要求')
-          print('Cloudflare 已接受正式站建置要求；部署結果請查看 Cloudflare Pages。')
-          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: 直接上傳公開網站產物
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy _site --project-name ptt-iphone-tracker --branch main

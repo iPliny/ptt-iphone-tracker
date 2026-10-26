@@ -12,7 +12,7 @@
   3. 同一個 `process_article` 也負責回訪：`detect_status` 只用關鍵字判斷 在售／交易中／已售出，404 記為已刪除
   4. `build_summary`：輸出 `data/market_summary.csv`
 - `data/listings.csv`：以 `source_url` 為主鍵，一篇一列；`events.csv` 只附加不改寫
-- `.github/workflows/track.yml`：每 6 小時在 GitHub Actions 執行，把 `data/` commit 回 main 後觸發 `pages.yml` 重新部署網站；`ci.yml` 跑測試
+- `.github/workflows/track.yml`：每 6 小時在 GitHub Actions 執行，把 `data/` checkout 的變動 commit 回私人資料庫 main 後觸發 `pages.yml` 重新部署網站；`ci.yml` 跑測試
 - `data/` 的 CSV 欄位是網站的介面，改欄位名稱或意義時要在這裡註明並同步改網站
   - 2026-09-27 新增 `listings.csv` 的 `days_to_sell_basis`（觀測／推估／無法推估）與 `market_summary.csv` 的 `售出天數樣本(觀測/推估)`，都加在最後一欄。推估＝第一次看到就已售出時，用文末最後一筆「※ 編輯」時間減發文時間
   - 2026-09-29：`listings.csv` 新增 `private_msg_count`，加在最後一欄（`days_to_sell_basis` 之後）。正常回訪時只更新在售／交易中文章；排除原 PO、移除私密／私人／隱私／自私／私下／私心／公私／勿私／不私／別私／不要私後，含「私」「站內」「密你」「已密」的推文按 ID 去重計人數，推／噓／→ 都算。空白＝未計算、0＝已計算但無人私訊；售出或刪除後保留最後值，網站不顯示。
@@ -86,7 +86,7 @@
 - `data/jp/latest.csv` 整檔覆寫：`shop,model,storage,condition,carrier,color,price_jpy,since,last_checked,shop_updated,source_url`。只保留目前有價格的鍵；`since` 是目前價格第一次被觀測的時間、同價保留，`last_checked` 每次成功更新。價格是整數日圓；`color` 空白表示主價，mobile-mix 可收的精確色價另列。`condition` 為 `未開封`／`中古上限`；`carrier` 為 `SIMフリー`／`docomo`／`au`／`SoftBank`／`Rakuten`。
 - `data/jp/runs.csv` 只附加：`run_at,shop,status,rows,error`，每次每家一列；`status` 為 `ok`／`fetch_error`／`parse_error`，`rows` 是本次解析筆數（失敗時可能是已解析的部分），`error` 說明原因。任一頁抓取／解析失敗、0 筆、或筆數比上次減少至少一半，都保留該店舊價格；其他店照常。
 - 依序經 `fetch` 用 curl_cffi 抓取，所有請求含重試至少間隔 5 秒；イオシス同站至少 60 秒。每次失敗最多重試一次。pastec／駿河屋因擋雲端 IP 暫不做，不用代理或繞過驗證。
-- `site/jp_build.py` 只讀日本 CSV，供 `build_site.py` 增加獨立建置步驟；缺檔仍輸出資料準備中的頁面。`site/jp/` 第一階段只顯示未開封・SIMフリー，價格異常保守隱藏，原始 CSV 仍保留供下載。台灣頁除頁首入口連結外不改行為。
+- `site/jp_build.py` 只讀日本 CSV，供 `build_site.py` 增加獨立建置步驟；缺檔仍輸出資料準備中的頁面。`site/jp/` 第一階段只顯示未開封・SIMフリー，價格異常保守隱藏，原始 CSV 只保留在私人資料庫，不提供下載。台灣頁除頁首入口連結外不改行為。
 - 驗收／回復方式見 `docs/jp-buyback-validation.md`；fixture 來源見 `tests/fixtures/jp/README.md`。離線測試使用暫存目錄，不連網、不寫專案資料。
 
 ### 2026-10-08 日本買取頁日文版
@@ -108,7 +108,7 @@
 - POYU 的「iPhone二手週報」由 ChatGPT 排程寫好、Email 投稿到 Blogger（https://tcssh.blogspot.com/）。`site/blog.py` 讀公開 feed（標籤「週報」＋「iPhone」、標題以「iPhone二手週報」開頭），每篇存成 `data/blog/<台灣時間發布日>.json`；Blogger 上改過就覆寫，feed 範圍內消失（轉草稿／刪除）就移除。`.github/workflows/blog.yml` 每天 UTC 12:30 執行並觸發部署；`--feed <檔案>` 可改讀 Blogger 匯出檔，不刪舊檔。
 - 網站 `weekly/`（列表）與 `weekly/<發布日>/`（全文轉貼）。各篇 canonical 指向 Blogger 原文，sitemap 只列 `weekly/`。內文只留 p、h2、strong、a 等排版標籤，指向本站（含舊 github.io）的連結改成站內相對路徑。
 - 和 `column/`（每週日自動產生的統計週報）是兩個系列，互相連結。
-- 2026-10-12 POYU 決定週報改在本站原創發布（SEO 為主），由 Claude 每週日排程撰寫，規格見 `docs/weekly-writing.md`。`python site/blog.py --publish 草稿.json` 檢查後寫入 `data/weekly/<出刊日>.json`；這些文章 canonical 指向本站並列入 sitemap。同一天兩邊都有時以 `data/weekly/` 為準。發稿 PR 只帶 `data/weekly/` 的那一個檔，POYU 看過稿並同意後才合併。
+- 2026-10-12 POYU 決定週報改在本站原創發布（SEO 為主），由 Claude 每週日排程撰寫，規格見 `docs/weekly-writing.md`。`python site/blog.py --publish 草稿.json` 檢查後寫入 `data/weekly/<出刊日>.json`；這些文章 canonical 指向本站並列入 sitemap。同一天兩邊都有時以 `data/weekly/` 為準。拆分後發稿 PR 開在私人資料庫，只帶 `weekly/` 的那一個檔，POYU 看過稿並同意後才合併。
 
 ## 開發規則
 - 修改後必須跑 `python -m unittest`，測試不需網路也不需 Ollama（`fetch`、`llm_extract` 皆被替換成假的）。
@@ -121,7 +121,7 @@
 - 改動走 branch + PR，不直接推 main。
 
 ### 2026-10-11 網址搬到 macshop.crawlsnek.com
-- GitHub Pages 接上自訂網域 `macshop.crawlsnek.com`（Cloudflare CNAME → ipliny.github.io，DNS only），舊的 github.io 網址由 GitHub 自動轉址。`SITE_URL` 與 `jp/` 頁的 canonical／hreflang 都用新網域。
+- 此為歷史紀錄：現已改由 Cloudflare Pages 提供 `macshop.crawlsnek.com`，GitHub Pages 不可恢復；舊網址由獨立轉址儲存庫接手。`SITE_URL` 與 `jp/` 頁的 canonical／hreflang 都用新網域。
 - 所有頁面頁尾有「由 CrawlSnek 提供」連到 https://crawlsnek.com/ 。
 - `build_site.py` 由 `SITE_URL` 產生 robots.txt、sitemap 並代換 HTML 的 `{{SITE_URL}}`；首頁／prices 有靜態 canonical，機型頁由 `model.js` 以 `URLSearchParams` 產生只含 `m` 的 canonical，站內連結保持相對路徑。
 - Search Console 新增 `https://macshop.crawlsnek.com/` 網址前置字元資源，優先用原有內嵌 GA 官方碼驗證，必要時才加 HTML 標記；提交新 sitemap、保留舊資源，不對 github.io 子路徑使用網址變更工具。
@@ -132,7 +132,7 @@
 - 首頁機型連結與 sitemap 改指向靜態頁。原有 `model.html?m=...&s=...` 仍可使用，容量切換維持舊格式，canonical 改指向對應靜態頁；沒有伺服器或 JavaScript 轉址。
 - 靜態頁使用 `data-model` 固定機型身分，容量以 `?s=` 切換；所有容量共用不含參數的 canonical。`model.js` 共用既有互動，重用靜態 canonical，資料請求失敗時保留預產內容。
 - slug 由 Python `model_path` 與 JavaScript `modelPageUrl` 同規則產生；若不同機型產生相同路徑，建置應失敗，不可默默覆蓋。重建時清除輸出目錄內自有的 `models/`，避免過期頁殘留。
-- 建置維持 Python 標準函式庫，GitHub Pages workflow 不增加 Node 或瀏覽器依賴。驗證見 `docs/model-prerender-validation.md`。
+- 建置維持 Python 標準函式庫，Python 建置本身不需要 Node 或瀏覽器；部署 job 的 Node 僅供 Wrangler 上傳。驗證見 `docs/model-prerender-validation.md`。
 
 ### 2026-10-18 機型頁每日行情走勢
 - POYU 參考 used-lab.jp 的相場推移，要機型頁顯示每日行情。`build_site.price_trends` 產生 `data.json` 的 `trends`（`start` 加每組型號×容量×全新與否的 `values`，與日期逐日對齊）：每天結束時仍在架文章的當天標價中位數。在架的認定與 `daily_series` 相同，當天標價用 `價格變動` 事件倒推；異常價格與不合理改價沿用既有排除；不知道刪文日的已刪除文章不列入。
@@ -157,3 +157,12 @@
 - 機型排序視為第 18 代，排在同代 Pro Max 前；slug 為 `models/iphone-duo.html`，沿用有資料才建頁的規則。
 - 日本收 mobile-mix、イオシス、アメモバ；後兩家只收 Duo 專頁的 Duo 列，海外版 SIMフリー 不收。mobile-mix 顏色保存店家原文スターホワイト／ナイトスカイ（星光白／夜空）。`I18N`／`TEXT` 的通用機型文字直接使用 iPhone Duo，中日名稱相同。
 - 官方購買頁、色名來源見 `docs/colors.md`；未修改其他機型價格與資料 CSV。
+
+### 2026-10-26 程式／資料拆分（待覆核與切換，尚未生效）
+- 第一階段 PR 不刪 `data/`、不合併、不改 repo 可見性；先完成 docs/data-repo-split.md 的驗收與 POYU 確認。
+- 目標：程式庫公開；`iPliny/ptt-iphone-data` 永遠私人，其根目錄直接放 listings.csv、events.csv、jp/、column/、blog/、weekly/ 等原 data/ 內容。本機及 Actions 將它 checkout 到程式庫的 data/。
+- track／jp／column／blog 只在私人 checkout 內提交；程式庫 GITHUB_TOKEN 只讀 contents，actions:write 僅用於 dispatch。不得在程式庫 force-add data/。
+- pages.yml 取得私人資料後建置，只用 Wrangler 上傳 _site/；保留原始資料輸出檢查。現有 Cloudflare Pages 專案停用所有 Git 自動建置後即可直接上傳，不需重建專案或更換網址。
+- DATA_REPO_TOKEN 僅授權資料庫 Contents read/write、Metadata read；CLOUDFLARE_API_TOKEN 僅指定帳戶 Pages Edit；CLOUDFLARE_ACCOUNT_ID 指定部署帳戶。不要將 token 印出、寫入檔案或 PR。
+- CI 不取得 data/ 或資料 token；測試僅使用合成 fixture 與暫存目錄。公開 log、summary、artifact 不得包含原始資料整列或內部錯誤。
+- 保留 jp 分支僅 dry-run 的規則；此 PR 的正式 job 均維持 main 限制。跨庫線上驗收需下一階段另設只寫測試分支、只部署 Access 保護預覽的驗收流程，不能直接取消 main 限制。
