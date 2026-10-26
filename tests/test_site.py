@@ -209,7 +209,7 @@ class BuildSiteTest(unittest.TestCase):
     def test_build_writes_site(self):
         out = os.path.join(self.dir, "out")
         S.build(out, self.dir)
-        for name in S.STATIC_FILES + ["data.json", "data/listings.csv", "sitemap.xml", "robots.txt"]:
+        for name in S.STATIC_FILES + ["data.json", "sitemap.xml", "robots.txt", "404.html"]:
             self.assertTrue(os.path.exists(os.path.join(out, name)), name)
         with open(os.path.join(out, "data.json"), encoding="utf-8") as f:
             self.assertIn("days", json.load(f))

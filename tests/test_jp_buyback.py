@@ -257,7 +257,7 @@ class FetchAndBuildTests(unittest.TestCase):
                 self.assertIn("G-G3GH12TQSZ", ja)
                 self.assertIn("https://macshop.crawlsnek.com/jp/ja/",(out/"sitemap.xml").read_text())
 
-    def test_build_jp_downloads_and_keeps_taiwan_json_unchanged(self):
+    def test_build_jp_keeps_raw_files_private_and_taiwan_json_unchanged(self):
         sys.path.insert(0,str(ROOT/"site"))
         import build_site
         with tempfile.TemporaryDirectory() as temporary:
@@ -272,7 +272,10 @@ class FetchAndBuildTests(unittest.TestCase):
             self.assertEqual(len(payload["latest"]),30)
             self.assertIsInstance(payload["latest"][0]["price_jpy"],int)
             for name in ("latest", "prices", "runs"):
-                self.assertEqual((data/"jp"/f"{name}.csv").read_bytes(),(root/"out/data/jp"/f"{name}.csv").read_bytes())
+                self.assertTrue((data/"jp"/f"{name}.csv").exists())
+                self.assertFalse((root/"out/data/jp"/f"{name}.csv").exists())
+            self.assertNotIn("downloads", payload)
+            self.assertTrue(all(set(r) <= {"shop", "run_at", "status"} for r in payload["runs"]))
 
 
 class DuoParserTests(unittest.TestCase):
