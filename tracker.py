@@ -1503,6 +1503,12 @@ def median(xs):
     return int(statistics.median(xs)) if xs else ""
 
 
+def summary_key(r):
+    """剛萃取、還沒存回 CSV 的列，容量／全新欄位可能是 None；排序前要統一成字串。"""
+    storage, new = r.get("storage"), r.get("全新未拆封機")
+    return (r["model"], "" if storage is None else storage, "否" if new is None else new)
+
+
 def build_summary(listings, path=None, multi=None):
     path = path or SUMMARY_FILE
     groups = {}
@@ -1511,7 +1517,7 @@ def build_summary(listings, path=None, multi=None):
         for r in items:
             price = to_int(r.get("price"))
             if price and r.get("model"):
-                key = (r["model"], r.get("storage", ""), r.get("全新未拆封機", "否"))
+                key = summary_key(r)
                 groups.setdefault(key, []).append(({**r, "status": MULTI_STATUS}, price))
     for r in listings.values():
         if r.get("status") not in LISTED_STATUSES:
@@ -1519,7 +1525,7 @@ def build_summary(listings, path=None, multi=None):
         price = to_int(r.get("price"))
         if not price or not r.get("model"):
             continue
-        key = (r["model"], r.get("storage", ""), r.get("全新未拆封機", "否"))
+        key = summary_key(r)
         groups.setdefault(key, []).append((r, price))
 
     rows = []
