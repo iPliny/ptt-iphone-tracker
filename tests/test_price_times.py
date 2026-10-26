@@ -159,7 +159,7 @@ class PriceTimeTest(unittest.TestCase):
         days = {d["date"]: d["price_changes"] for d in data["days"]}
         self.assertEqual((days["2026-09-28"], days["2026-09-29"]), (1, 1))
         self.assertEqual(data["listings"][0]["last_edit_at"], "2026-09-30T08:00:00+08:00")
-        self.assertTrue((Path(self.tmp.name) / "site/data/price_event_times.csv").exists())
+        self.assertFalse((Path(self.tmp.name) / "site/data/price_event_times.csv").exists())
 
     def test_legacy_events_keep_detection_time_and_are_not_modified(self):
         self.visit("2026-09-29T07:00:00")

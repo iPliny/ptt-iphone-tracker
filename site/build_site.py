@@ -24,7 +24,6 @@ SITE_DIR = os.path.join(ROOT, "site")
 DATA_DIR = os.path.join(ROOT, "data")
 STATIC_FILES = ["favicon.svg", "og.png", "index.html", "model.html", "common.js", "app.js", "model.js", "watchlist.js", "style.css",
                 "prices.html", "prices.js", "prices.css", "official-prices.json"]
-CSV_FILES = ["listings.csv", "events.csv", "market_summary.csv", "price_event_times.csv", "multi_items.csv"]
 TAIPEI = timezone(timedelta(hours=8))
 SITE_URL = "https://macshop.crawlsnek.com/"  # sitemap、robots 與 HTML 中繼資料共用的正式網址
 
@@ -630,15 +629,16 @@ def sitemap_xml(data, today=None, column_urls=(), extra_urls=(), lastmods=None):
 
 
 def build(out_dir, data_dir=DATA_DIR):
+    # 清掉舊版建置留下的原始 CSV；data_dir 原檔不變。
+    private_output = Path(out_dir) / "data"
+    source = Path(data_dir).resolve()
+    if Path(out_dir).resolve() == source or private_output.resolve() == source or private_output.resolve() in source.parents:
+        raise ValueError("網站輸出不得覆蓋原始資料目錄")
     os.makedirs(out_dir, exist_ok=True)
     for name in STATIC_FILES:
         shutil.copy(os.path.join(SITE_DIR, name), os.path.join(out_dir, name))
-    # 原始 CSV 也一起放上去，網頁提供下載
-    os.makedirs(os.path.join(out_dir, "data"), exist_ok=True)
-    for name in CSV_FILES:
-        src = os.path.join(data_dir, name)
-        if os.path.exists(src):
-            shutil.copy(src, os.path.join(out_dir, "data", name))
+    if private_output.exists():
+        shutil.rmtree(private_output)
     data = build_data(data_dir)
     from seo import render_home
     home_path = Path(out_dir) / "index.html"
@@ -668,6 +668,14 @@ def build(out_dir, data_dir=DATA_DIR):
         f.write(f"User-agent: *\nAllow: /\nSitemap: {SITE_URL}sitemap.xml\n")
     with open(os.path.join(out_dir, "sitemap.xml"), "w", encoding="utf-8") as f:
         f.write(sitemap_xml(data, column_urls=column_urls, extra_urls=jp_urls + blog_urls, lastmods=lastmods))
+    # Cloudflare Pages 有 404.html 才不會把不存在的 CSV 路徑當成 SPA 首頁。
+    Path(out_dir, "404.html").write_text(
+        '<!doctype html><html lang="zh-Hant"><meta charset="utf-8">'
+        '<meta name="robots" content="noindex"><title>找不到頁面</title>'
+        '<h1>找不到頁面</h1><p><a href="/">回到行情首頁</a></p></html>', encoding="utf-8")
+    Path(out_dir, "_headers").write_text(
+        '/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n'
+        '/data/*\n  Cache-Control: no-store\n', encoding="utf-8")
     return data
 
 
