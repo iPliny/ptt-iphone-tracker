@@ -19,10 +19,11 @@
 
 ## 正式切換（停止點二，等 Claude 覆核）
 
-- 先停用並等待既有資料寫入 workflows 全部結束，避免複製後又有新資料寫回程式庫；記錄原本啟用狀態，切換後恢復。
+- 先記錄各 workflow 的啟用狀態，停用 `watchdog.yml`，再停用 `track.yml`、`jp.yml`、`column.yml`、`blog.yml` 與 `pages.yml`。看門狗會主動 dispatch 這些流程，只停原排程不足以凍結資料。等待所有執行中及排隊中的 watchdog／writer／部署流程結束，並確認沒有新補跑，再開始同步。
 - 從凍結的最新 main 再同步一次完整 data/ 至私人資料庫，核對雜湊。不要用準備階段的舊快照覆蓋新資料。
 - Claude 覆核通過才合併；依核准步驟另做移除程式庫已追蹤 data/ 的 commit，不改寫歷史。此 PR 不包含資料刪除。
-- 停用 Cloudflare 正式及預覽 Git 自動建置，避免空資料建置覆蓋網站。驗證直接上傳後停止舊 Hook，恢復抓取、週報、部署與 watchdog。
+- 停用 Cloudflare 正式及預覽 Git 自動建置，避免空資料建置覆蓋網站。同步完成且直接上傳驗證成功後才停止舊 Hook，依原本狀態恢復抓取、週報與部署，最後再啟用 `watchdog.yml`，避免設定尚未完成就被補跑。
+- 第一次正式 main 的私人資料 checkout，確認 log 出現針對工作目錄 `/data` 的 `Deleting the contents of`，接著確認資料庫 checkout 與 `check_data_checkout.py` 成功；不是外層程式庫目錄的清除訊息。若 main 仍追蹤舊 data/，必須先清除再放入私人資料，不能混用。若切換前已移除舊目錄，則核對獨立 Git 根目錄、origin 與檔案雜湊，記錄不存在舊目錄的事實。
 - 手動執行一次並觀察第一輪排程：新 commit 只出現在私人資料庫；程式庫沒有 data/ 追蹤檔；網站資料正常，CSV 404。
 
 ## 改公開（停止點三，POYU 再確認）
