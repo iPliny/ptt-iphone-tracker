@@ -17,13 +17,13 @@ jobs:
       - run: |
           python - <<'P'
           import tracker as T
-          for p in ["M.1792848823.A.482", "M.1792825141.A.11C"]:
+          for p in ["M.1793034542.A.F51", "M.1793020334.A.1B1"]:
               code, html = T.fetch(T.BASE_URL + "/bbs/MacShop/" + p + ".html")
               print("=====", p, code)
               art = T.parse_article(html) if code == 200 else None
               if not art: continue
               print("TITLE:", art["title"])
-              print(art["body"][:1500])
+              print(art["body"][:2500])
               print("--- rule:", T.rule_extract(art["title"], art["body"]))
               print("--- not_single:", T.not_single_iphone(art), T.extract_items(art["title"], art["body"]))
           P
