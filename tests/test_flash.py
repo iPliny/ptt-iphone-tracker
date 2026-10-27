@@ -22,6 +22,8 @@ class FlashTests(unittest.TestCase):
         r=dict(source_url='https://www.ptt.cc/bbs/MacShop/M.1.html',model='iPhone 17 Pro',storage='256GB',status='已售出',price='30000',days_to_sell='2.1',全新未拆封機='是')
         e=dict(time='2026-10-27 10:00:00',source_url=r['source_url'],event='狀態變更',detail='在售 → 已售出')
         self.assertIn('全新 標價 NT$30,000，刊登 2.1 天賣掉',public_flash([e],[r])['items'][0]['text'])
+        r['days_to_sell']='2.55'
+        self.assertIn('刊登 2.5 天賣掉',public_flash([e],[r])['items'][0]['text'])
         r['status']='在售'
         self.assertEqual(public_flash([e],[r])['items'],[])
         e['event']='價格變動'
