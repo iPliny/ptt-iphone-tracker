@@ -207,6 +207,16 @@ class RealPostRegressionTest(unittest.TestCase):
                         "[型號]\n全新 iPhone 18 pro 512 GB\n\n[規格]\n銀色\n\n[保固]\n全新未拆封\n\n[售價]\n48, 000\n")
         self.assertEqual((f["model"], f["storage"], f["price"]), ("iPhone 18 Pro", "512GB", 48000))
 
+    def test_corner_quote_field_headers(self):
+        # M.1793034542：範本括號用「」，售價抓不到而整篇略過
+        f = self.fields("[販售] 高雄 iPhone Duo 256G 夜空色",
+                        "「型號」iphone duo 夜空色\n「規格」256G\n「保固」啟用後保固一年\n「盒裝配件」如原廠\n"
+                        "「售價」74900\n「其他資訊」全新未拆封\n「商品照/補充說明」\nhttps://i.verb.tw/x.jpg\n")
+        self.assertEqual((f["model"], f["storage"], f["price"]), ("iPhone Duo", "256GB", 74900))
+        # 內文引號開頭的句子不是欄位
+        f = self.fields("[販售] 台北 iPhone 16 128G 黑", "[型號] iPhone 16 128G 黑\n[售價] 18000\n[商品照/補充說明]\n「全新」電池100%\n")
+        self.assertEqual(f["price"], 18000)
+
     def test_numbered_multi_item_skipped(self):
         body = "[型號]\n1. iPhone 17 256g 白 (全新)\n2. Airpods 5 一般版(全新)\n[售價]\n1.29800\n2.4000"
         self.assertIsNone(self.fields("[販售] 台北 iPhone 17", body))
