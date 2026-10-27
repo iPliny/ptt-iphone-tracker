@@ -644,6 +644,9 @@ def build(out_dir, data_dir=DATA_DIR):
     home_path = Path(out_dir) / "index.html"
     home_path.write_text(render_home(home_path.read_text(encoding="utf-8"), data, SITE_URL), encoding="utf-8")
     write_json(os.path.join(out_dir, "data.json"), home_payload(data))
+    from flash import public_flash
+    write_json(os.path.join(out_dir, "flash.json"), public_flash(
+        read_csv(os.path.join(data_dir, "events.csv")), read_csv(os.path.join(data_dir, "listings.csv"))))
     from model_pages import build_model_pages
     paths = build_model_pages(out_dir, data, SITE_URL)
     for row, path in zip(data["model_totals"], paths):
