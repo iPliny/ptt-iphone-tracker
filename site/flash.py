@@ -45,7 +45,7 @@ def public_flash(events, listings, generated_at=None):
             days = r.get("days_to_sell", "").strip()
             try:
                 if days and math.isfinite(float(days)) and float(days) >= 0:
-                    rounded = Decimal(days).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+                    rounded = Decimal.from_float(float(days)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
                     text += f"，刊登 {rounded:.1f} 天賣掉"
             except (ValueError, TypeError):
                 pass
