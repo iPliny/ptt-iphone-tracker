@@ -111,6 +111,9 @@ class SocialSitemapTest(unittest.TestCase):
                 S.build(str(self.out), str(self.data))
                 pages = list(self.out.rglob('*.html'))
                 for path in pages:
+                    if path.name == '404.html':
+                        self.assertIn('noindex', path.read_text(encoding='utf-8'))
+                        continue
                     with self.subTest(page=path.relative_to(self.out)):
                         head = Head(path.read_text(encoding='utf-8'))
                         for key in ('og:type', 'og:title', 'og:description', 'og:url', 'og:site_name',

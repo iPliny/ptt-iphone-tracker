@@ -319,7 +319,6 @@
       get('changes').querySelector('.jp-changes-toggle').focus();
     });
     get('statuses').innerHTML=shopStatuses(data.runs).map(s=>'<article><strong>'+s.shop+'</strong><p'+(s.latest&&s.latest.status!=='ok'?' class="failed"':'')+'>'+(s.latest?(s.latest.status==='ok'?T.ok:T.failed):T.notStarted)+'</p><p>'+T.lastOk+(s.success?esc(dateTime(s.success.run_at))+T.jst:T.none)+'</p></article>').join('');
-    get('downloads').innerHTML=(data.downloads||[]).map(name=>['latest','prices','runs'].includes(name)?'<a href="'+base+'../data/jp/'+name+'.csv" download>'+T.csv[name]+' CSV</a>':'').join('');
   }
   boot();
 })();

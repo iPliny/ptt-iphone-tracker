@@ -16,6 +16,7 @@
 - `data/` 的 CSV 欄位是網站的介面，改欄位名稱或意義時要在這裡註明並同步改網站
   - 2026-09-27 新增 `listings.csv` 的 `days_to_sell_basis`（觀測／推估／無法推估）與 `market_summary.csv` 的 `售出天數樣本(觀測/推估)`，都加在最後一欄。推估＝第一次看到就已售出時，用文末最後一筆「※ 編輯」時間減發文時間
   - 2026-09-29：`listings.csv` 新增 `private_msg_count`，加在最後一欄（`days_to_sell_basis` 之後）。正常回訪時只更新在售／交易中文章；排除原 PO、移除私密／私人／隱私／自私／私下／私心／公私／勿私／不私／別私／不要私後，含「私」「站內」「密你」「已密」的推文按 ID 去重計人數，推／噓／→ 都算。空白＝未計算、0＝已計算但無人私訊；售出或刪除後保留最後值，網站不顯示。
+- 2026-10-25 排程看門狗（審視 M5）：GitHub schedule 實測常晚 3～6 小時（9/27～10/25 track 中位數晚 3.3 小時、jp 晚 4.6 小時，週日專欄兩次都靠手動）。`.github/workflows/watchdog.yml` 每 15 分鐘跑 `.github/schedule_watch.py watch`：track／jp／column／pages／blog 最近一個 cron 時間點過 5 分鐘、main 上還沒有任何執行就 workflow_dispatch 補跑（只補最近一輪）。cron 直接讀各 workflow 的 yml，改排程時間只改原檔。原 cron 保留當備援；track.yml、jp.yml 開頭的 `gate` job 在 schedule 晚到且該輪已跑過時略過，避免重複抓取。
 - `legacy/`：v1 程式，只供參考，不要修改
 - 2026-10-18：新增 `data/extract_retry.csv`（`source_url,first_failed,last_failed,attempts,last_error`，以 source_url 為鍵，整檔覆寫）。萃取暫時失敗的新文章每輪獨立加入佇列，不受 `--days` 限制；成功萃取（單支、多品項或略過）、404 後移除，首次失敗滿 `RETRY_DAYS`（14）天改記 `listings.csv` 的「略過」後移除。不改 `listings.csv` 欄位；此檔由排程產生，程式 PR 不帶資料檔。
 - 2026-10-18：tracker 在 Actions 完成存檔與彙整後，把健康結果寫到 `$RUNNER_TEMP/track-health.txt` 與 `$GITHUB_STEP_SUMMARY`；workflow 完成異常價報表、資料 commit／部署觸發後才檢查。看板首頁失敗、有佇列卻沒有 200／404、Claude 帳號／權限／金鑰／額度錯誤，或一般錯誤超過 `HEALTH_ERROR_LIMIT`（10）時讓 job 失敗。`--report-only`、`--migrate` 不產生結果，本機不因此回傳非 0。
@@ -127,6 +128,7 @@
 
 ### 2026-10-16 機型頁預先產生 HTML
 - `site/model_pages.py` 在建置時輸出 `models/<機型 slug>.html`，包含各機型的 title、description、canonical、主標題、公開統計、容量表與前 10 筆單支文章；只用 `build_data` 已排除異常值的資料，不改 CSV 或資料語意。
+- 2026-10-25（專案審視 M8）前端 JSON 拆檔：`build_data` 仍是建置端完整資料（機型頁、行情總覽、sitemap 都讀它），寫檔時才瘦身。首頁讀 `data.json`（`home_payload`：無 trends、colors、apple、summary、model_totals，事件只留改價與刪文），機型頁讀 `models/<slug>.json`（`model_payload`：只含該機型）。文章只輸出 `PUBLIC_LISTING_FIELDS`，`OMIT_EMPTY_FIELDS` 的欄位值為 null／空字串／false 時省略（0 保留）；前端新增用到的欄位時要一起加進清單。
 - 首頁機型連結與 sitemap 改指向靜態頁。原有 `model.html?m=...&s=...` 仍可使用，容量切換維持舊格式，canonical 改指向對應靜態頁；沒有伺服器或 JavaScript 轉址。
 - 靜態頁使用 `data-model` 固定機型身分，容量以 `?s=` 切換；所有容量共用不含參數的 canonical。`model.js` 共用既有互動，重用靜態 canonical，資料請求失敗時保留預產內容。
 - slug 由 Python `model_path` 與 JavaScript `modelPageUrl` 同規則產生；若不同機型產生相同路徑，建置應失敗，不可默默覆蓋。重建時清除輸出目錄內自有的 `models/`，避免過期頁殘留。

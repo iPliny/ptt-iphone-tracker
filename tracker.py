@@ -400,7 +400,7 @@ def is_iphone_sale_title(title):
 # 範本欄位：[型號] [規格] [保固] [盒裝配件] [售價] [交易方式/地點] [連絡方式] [商品照/補充說明]
 # ==========================================
 _FIELD_RE = re.compile(r"^\s*[\[【［]\s*([^\]】］\n]{1,12}?)\s*[\]】］]\s*[:：]?\s*(.*)$")
-_ACCESSORY_RE = re.compile(r"殼|保護貼|玻璃貼|鏡頭貼|充電器|充電線|傳輸線|豆腐頭|耳機|錶帶|卡夾|支架|包膜")
+_ACCESSORY_RE = re.compile(r"殼|保護貼|玻璃貼|鏡頭貼|充電器|充電線|傳輸線|豆腐頭|耳機|錶帶|卡夾|支架|包膜|攝影套裝|兔籠|濾鏡|穩定器")
 _BRAND_NEW_RE = re.compile(r"全新未拆|未拆封|未開通|未啟用|全新未使用|膜未撕")
 # 「配件全新未使用」「傳輸線全新」這類描述的是配件，不是機身
 _ACCESSORY_NEW_RE = re.compile(r"(配件|傳輸線|充電線|線材|耳機|殼|保護貼|玻璃貼|保貼|卡針|豆腐頭)[^，,。\n]{0,15}?(全新|未使用|未拆)[^，,。\n]*")
@@ -468,6 +468,8 @@ def _field(fields, *names):
 
 def parse_price(text):
     """'41,500元'、'NT$ 20000'、'2.5萬' → int；取第一個合理的金額。"""
+    # 「48, 000」千分位逗號後多打空白
+    text = re.sub(r"(?<=\d)[,，]\s+(?=\d{3}(?!\d))", "", text)
     text = text.replace(",", "").replace("，", "")
     # 先拿掉日期，例如「Apple care+ 到 2028/1/22」的 2028 不是價格
     text = re.sub(r"(?<!\d)(?:19|20)\d{2}\s*(?:年|[/／\-.]\s*\d{1,2}(?!\d))(?:\s*[/／\-.月]\s*\d{1,2}\s*日?)?", " ", text)
@@ -1501,6 +1503,12 @@ def median(xs):
     return int(statistics.median(xs)) if xs else ""
 
 
+def summary_key(r):
+    """剛萃取、還沒存回 CSV 的列，容量／全新欄位可能是 None；排序前要統一成字串。"""
+    storage, new = r.get("storage"), r.get("全新未拆封機")
+    return (r["model"], "" if storage is None else storage, "否" if new is None else new)
+
+
 def build_summary(listings, path=None, multi=None):
     path = path or SUMMARY_FILE
     groups = {}
@@ -1509,7 +1517,7 @@ def build_summary(listings, path=None, multi=None):
         for r in items:
             price = to_int(r.get("price"))
             if price and r.get("model"):
-                key = (r["model"], r.get("storage", ""), r.get("全新未拆封機", "否"))
+                key = summary_key(r)
                 groups.setdefault(key, []).append(({**r, "status": MULTI_STATUS}, price))
     for r in listings.values():
         if r.get("status") not in LISTED_STATUSES:
@@ -1517,7 +1525,7 @@ def build_summary(listings, path=None, multi=None):
         price = to_int(r.get("price"))
         if not price or not r.get("model"):
             continue
-        key = (r["model"], r.get("storage", ""), r.get("全新未拆封機", "否"))
+        key = summary_key(r)
         groups.setdefault(key, []).append((r, price))
 
     rows = []

@@ -1,4 +1,6 @@
-"""PTT MacShop交易觀測：把 data/ 的 CSV 整理成網站用的 data.json，並複製靜態檔到輸出目錄。
+"""PTT MacShop交易觀測：把 data/ 的 CSV 整理成網站用的 JSON，並複製靜態檔到輸出目錄。
+
+首頁讀 data.json（只帶首頁用得到的欄位），每個機型頁讀 models/<slug>.json（只帶該機型）。
 
 只用標準函式庫，不需網路。執行：
     python site/build_site.py            # 輸出到 _site/
@@ -22,7 +24,6 @@ SITE_DIR = os.path.join(ROOT, "site")
 DATA_DIR = os.path.join(ROOT, "data")
 STATIC_FILES = ["favicon.svg", "og.png", "index.html", "model.html", "common.js", "app.js", "model.js", "watchlist.js", "style.css",
                 "prices.html", "prices.js", "prices.css", "official-prices.json"]
-CSV_FILES = ["listings.csv", "events.csv", "market_summary.csv", "price_event_times.csv", "multi_items.csv"]
 TAIPEI = timezone(timedelta(hours=8))
 SITE_URL = "https://macshop.crawlsnek.com/"  # sitemap、robots 與 HTML 中繼資料共用的正式網址
 
@@ -471,6 +472,56 @@ def build_data(data_dir=DATA_DIR, now=None):
     }
 
 
+# 前端用到的文章欄位；OMIT_EMPTY_FIELDS 的值為 null／空字串時省略，前端都把缺值當成空值（0 不省略；brand_new 有嚴格比較，不省略）。
+PUBLIC_LISTING_FIELDS = ["url", "post_time", "title", "status", "model", "storage", "color", "brand_new", "battery",
+                         "price", "pm_count", "warranty", "notes", "sold_at", "sold_detected_at", "days_to_sell",
+                         "days_basis"]
+OMIT_EMPTY_FIELDS = {"color", "battery", "price", "pm_count", "warranty", "notes", "sold_at",
+                     "sold_detected_at", "days_to_sell", "days_basis"}
+
+
+def public_listing(r):
+    return {k: r.get(k) for k in PUBLIC_LISTING_FIELDS
+            if not (k in OMIT_EMPTY_FIELDS and r.get(k) in (None, ""))}
+
+
+def home_payload(data):
+    """首頁 data.json：期間清單只用改價與刪文事件；趨勢、顏色、原廠價只在機型頁用。"""
+    return {
+        "generated_at": data["generated_at"],
+        "last_checked": data["last_checked"],
+        "counts": data["counts"],
+        "days": data["days"],
+        "models": data["models"],
+        "listings": [public_listing(r) for r in data["listings"]],
+        "events": [e for e in data["events"]
+                   if e["event"] == "價格變動" or e["detail"].endswith("已刪除")],
+    }
+
+
+def model_payload(data, model):
+    """機型頁 models/<slug>.json：只帶這個機型的文章、改價、統計、顏色、原廠價與走勢。"""
+    listings = [r for r in data["listings"] if r["model"] == model]
+    urls = {r["url"] for r in listings}
+    trends = data.get("trends") or {}
+    return {
+        "generated_at": data["generated_at"],
+        "last_checked": data["last_checked"],
+        "listings": [public_listing(r) for r in listings],
+        "events": [e for e in data["events"] if e["event"] == "價格變動" and e["url"] in urls],
+        "models": [m for m in data["models"] if m["model"] == model],
+        "model_totals": [m for m in data["model_totals"] if m["model"] == model],
+        "colors": [c for c in data["colors"] if c["model"] == model],
+        "apple": {model: data["apple"][model]} if model in data["apple"] else {},
+        "trends": {**trends, "series": [x for x in trends.get("series", []) if x["model"] == model]},
+    }
+
+
+def write_json(path, payload):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, separators=(",", ":"))
+
+
 OUTLIER_REPORT = "price_outliers.csv"
 OUTLIER_FIELDS = ["kind", "source_url", "title", "model", "storage", "brand_new", "price", "reference", "detail", "time"]
 
@@ -578,23 +629,25 @@ def sitemap_xml(data, today=None, column_urls=(), extra_urls=(), lastmods=None):
 
 
 def build(out_dir, data_dir=DATA_DIR):
+    # 清掉舊版建置留下的原始 CSV；data_dir 原檔不變。
+    private_output = Path(out_dir) / "data"
+    source = Path(data_dir).resolve()
+    if Path(out_dir).resolve() == source or private_output.resolve() == source or private_output.resolve() in source.parents:
+        raise ValueError("網站輸出不得覆蓋原始資料目錄")
     os.makedirs(out_dir, exist_ok=True)
     for name in STATIC_FILES:
         shutil.copy(os.path.join(SITE_DIR, name), os.path.join(out_dir, name))
-    # 原始 CSV 也一起放上去，網頁提供下載
-    os.makedirs(os.path.join(out_dir, "data"), exist_ok=True)
-    for name in CSV_FILES:
-        src = os.path.join(data_dir, name)
-        if os.path.exists(src):
-            shutil.copy(src, os.path.join(out_dir, "data", name))
+    if private_output.exists():
+        shutil.rmtree(private_output)
     data = build_data(data_dir)
     from seo import render_home
     home_path = Path(out_dir) / "index.html"
     home_path.write_text(render_home(home_path.read_text(encoding="utf-8"), data, SITE_URL), encoding="utf-8")
-    with open(os.path.join(out_dir, "data.json"), "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
+    write_json(os.path.join(out_dir, "data.json"), home_payload(data))
     from model_pages import build_model_pages
-    build_model_pages(out_dir, data, SITE_URL)
+    paths = build_model_pages(out_dir, data, SITE_URL)
+    for row, path in zip(data["model_totals"], paths):
+        write_json(os.path.join(out_dir, path[:-len(".html")] + ".json"), model_payload(data, row["model"]))
     from column import render_column  # column.py 也會 import 這個檔，放在這裡避免循環
     column_urls = render_column(out_dir, data_dir)
     from blog import render_blog
@@ -615,6 +668,14 @@ def build(out_dir, data_dir=DATA_DIR):
         f.write(f"User-agent: *\nAllow: /\nSitemap: {SITE_URL}sitemap.xml\n")
     with open(os.path.join(out_dir, "sitemap.xml"), "w", encoding="utf-8") as f:
         f.write(sitemap_xml(data, column_urls=column_urls, extra_urls=jp_urls + blog_urls, lastmods=lastmods))
+    # Cloudflare Pages 有 404.html 才不會把不存在的 CSV 路徑當成 SPA 首頁。
+    Path(out_dir, "404.html").write_text(
+        '<!doctype html><html lang="zh-Hant"><meta charset="utf-8">'
+        '<meta name="robots" content="noindex"><title>找不到頁面</title>'
+        '<h1>找不到頁面</h1><p><a href="/">回到行情首頁</a></p></html>', encoding="utf-8")
+    Path(out_dir, "_headers").write_text(
+        '/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n'
+        '/data/*\n  Cache-Control: no-store\n', encoding="utf-8")
     return data
 
 

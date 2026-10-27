@@ -201,6 +201,12 @@ class RealPostRegressionTest(unittest.TestCase):
         body = "[型號] Apple Watch S11 46mm\n[售價] 8500\n[型號] iPhone 16 Pro 256G\n[規格] 256G\n[售價] 洽詢"
         self.assertFalse(T.sells_other_product("[販售] 台北 iPhone 16 Pro 256G", body))
 
+    def test_thousands_comma_with_space(self):
+        # M.1792848823：售價寫「48, 000」
+        f = self.fields("[販售] 竹北 iPhone 18 pro 512 銀色",
+                        "[型號]\n全新 iPhone 18 pro 512 GB\n\n[規格]\n銀色\n\n[保固]\n全新未拆封\n\n[售價]\n48, 000\n")
+        self.assertEqual((f["model"], f["storage"], f["price"]), ("iPhone 18 Pro", "512GB", 48000))
+
     def test_numbered_multi_item_skipped(self):
         body = "[型號]\n1. iPhone 17 256g 白 (全新)\n2. Airpods 5 一般版(全新)\n[售價]\n1.29800\n2.4000"
         self.assertIsNone(self.fields("[販售] 台北 iPhone 17", body))
@@ -771,6 +777,11 @@ class AccessoryPostTest(unittest.TestCase):
                 "[補充說明]：很少使用，略有使用痕跡 (如照片)\n")
         self.assertIsNone(T.rule_extract("[販售] 全國 iphone 17 pro max 原廠織紋殼", body)["model"])
 
+    def test_camera_rig_kit(self):
+        # M.1792312417：TILTA 手機攝影套裝（兔籠＋濾鏡）$1,500，型號欄照抄適用機型
+        body = "[型號] iPhone 17 Pro\n[規格] TILTA 手機攝影套裝\n[售價] 1, 500\n[補充說明] 專用手機殼、配件有正常拆裝使用痕跡，濾鏡無刮\n"
+        self.assertIsNone(T.rule_extract("[販售] 全國 iPhone 17 Pro TILTA 手機攝影套裝", body)["model"])
+
     def test_two_cases(self):
         # M.1791217114.A.90E：兩個原廠殼一起賣 $1,000
         body = "[型號]：iPhone16Plus\n[規格]：原廠殼\n[售價]：1000\n[補充說明]：約8-9成新 無明顯傷 兩個一起賣\n"
@@ -1102,3 +1113,18 @@ class DuoRegressionTest(unittest.TestCase):
         self.assertEqual(fields['model'], 'iPhone 15 Pro')
         self.assertTrue(T.is_duo_name('[販售] Duo 256G 夜空'))
         self.assertTrue(T.multi_phone_title('[販售] iPhone Duo 256G + iPhone 18 Pro 512G'))
+
+
+class BuildSummaryNoneFieldsTest(unittest.TestCase):
+    def test_fresh_multi_item_with_none_storage(self):
+        # 2026-10-26 run 40311812395：剛拆出的多品項 storage 是 None，排序時 TypeError，整輪資料沒 commit
+        listings = {"a": {"source_url": "a", "status": T.STATUS_SOLD,
+                          "model": "iPhone 17 Pro", "storage": "256GB", "全新未拆封機": "否", "price": "30000"}}
+        multi = {"b": [{"source_url": "b", "item_no": 1, "model": "iPhone 17 Pro", "storage": None,
+                        "全新未拆封機": None, "price": "28000"}]}
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "summary.csv")
+            T.build_summary(listings, path=path, multi=multi)
+            with open(path, encoding="utf-8-sig") as f:
+                rows = list(csv.DictReader(f))
+        self.assertEqual([(r["model"], r["storage"]) for r in rows], [("iPhone 17 Pro", ""), ("iPhone 17 Pro", "256GB")])

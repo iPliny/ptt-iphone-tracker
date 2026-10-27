@@ -29,7 +29,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  gate:
+    # 這一輪若已被排程看門狗補跑過，晚到的 schedule 就略過（.github/schedule_watch.py）
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
+      - id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/schedule_watch.py gate track.yml
+
   track:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
