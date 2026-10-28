@@ -132,7 +132,7 @@
 - 2026-10-25（專案審視 M8）前端 JSON 拆檔：`build_data` 仍是建置端完整資料（機型頁、行情總覽、sitemap 都讀它），寫檔時才瘦身。首頁讀 `data.json`（`home_payload`：無 trends、colors、apple、summary、model_totals，事件只留改價與刪文），機型頁讀 `models/<slug>.json`（`model_payload`：只含該機型）。文章只輸出 `PUBLIC_LISTING_FIELDS`，`OMIT_EMPTY_FIELDS` 的欄位值為 null／空字串／false 時省略（0 保留）；前端新增用到的欄位時要一起加進清單。
 - 首頁機型連結與 sitemap 改指向靜態頁。原有 `model.html?m=...&s=...` 仍可使用，容量切換維持舊格式，canonical 改指向對應靜態頁；沒有伺服器或 JavaScript 轉址。
 - 靜態頁使用 `data-model` 固定機型身分，容量以 `?s=` 切換；所有容量共用不含參數的 canonical。`model.js` 共用既有互動，重用靜態 canonical，資料請求失敗時保留預產內容。
-- slug 由 Python `model_path` 與 JavaScript `modelPageUrl` 同規則產生；若不同機型產生相同路徑，建置應失敗，不可默默覆蓋。重建時清除輸出目錄內自有的 `models/`，避免過期頁殘留。
+- slug 由 Python `model_path` 與 JavaScript `modelPageUrl` 同規則產生；`model_path` 保留 `.html` 建置檔名，`model_url_path` 與 `modelPageUrl` 回傳 Cloudflare Pages 的無副檔名公開網址。若不同機型產生相同路徑，建置應失敗，不可默默覆蓋。重建時清除輸出目錄內自有的 `models/`，避免過期頁殘留。
 - 建置維持 Python 標準函式庫，GitHub Pages workflow 不增加 Node 或瀏覽器依賴。驗證見 `docs/model-prerender-validation.md`。
 
 ### 2026-10-18 機型頁每日行情走勢
@@ -158,3 +158,7 @@
 - 機型排序視為第 18 代，排在同代 Pro Max 前；slug 為 `models/iphone-duo.html`，沿用有資料才建頁的規則。
 - 日本收 mobile-mix、イオシス、アメモバ；後兩家只收 Duo 專頁的 Duo 列，海外版 SIMフリー 不收。mobile-mix 顏色保存店家原文スターホワイト／ナイトスカイ（星光白／夜空）。`I18N`／`TEXT` 的通用機型文字直接使用 iPhone Duo，中日名稱相同。
 - 官方購買頁、色名來源見 `docs/colors.md`；未修改其他機型價格與資料 CSV。
+
+### 2026-10-28 Cloudflare Pages 標準網址
+- Cloudflare Pages 將 `.html` 永久轉至無副檔名網址。機型頁與歷代價格頁的 canonical、og:url、JSON-LD、Sitemap 及新站內連結統一使用無副檔名網址，避免 canonical 指回轉址來源。
+- `models/*.html`、`models/*.json`、`prices.html` 的實體檔案不變。既有 `.html` 書籤由 Pages 的既有轉址承接，容量參數與收藏仍依機型／容量運作；不新增轉址規則。
