@@ -155,9 +155,9 @@ class ColumnTest(unittest.TestCase):
         self.assertEqual((i["new"], i["groups"]), (0, []))
         self.assertIn("<h1>", C.page_html(i, [i], "../"))
 
-    def test_real_data_renders(self):
-        """repo 內現有的 data/ 也要能產生一期並輸出頁面。"""
-        i = C.compute_issue(S.DATA_DIR, date(2026, 9, 27), date(2026, 10, 3))
+    def test_fixture_data_renders(self):
+        """合成資料也能產生一期並輸出頁面，不需私人 checkout。"""
+        i = C.compute_issue(self.dir, date(2026, 9, 27), date(2026, 10, 3))
         self.assertIn("二手 iPhone", C.page_html(i, [i], "../"))
 
 

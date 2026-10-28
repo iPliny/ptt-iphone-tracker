@@ -49,3 +49,20 @@ python -m unittest                     # 離線測試
 - 規則萃取依發文範本，賣家亂寫格式時可能抓不到而被略過（沒有設定 Claude 金鑰時）；遇到時把文章網址丟進 issue，補一條測試再修規則。
 
 `legacy/master_pipeline_v1.py` 是原本的 v1 程式，留作參考。
+
+## 程式與私人資料拆分（準備中）
+
+目前仍使用私人程式庫與 Cloudflare Git 建置。此分支提出改為公開程式庫＋私人資料庫，尚未切換；請先讀 [切換步驟與停止點](docs/data-repo-split.md)，不要直接合併。
+
+切換後資料庫根目錄保存原 `data/` 的全部內容。本機在沒有 `data/` 的乾淨程式 checkout 中執行：
+
+```bash
+gh repo clone iPliny/ptt-iphone-data data
+python site/build_site.py --out _site
+```
+
+已有舊 `data/` 時先備份並核對，不要覆蓋。日後資料變更在 `data/` 內 commit/push，程式變更在外層走 PR。原創週報改向私人資料庫的 `weekly/` 提交 PR。
+
+Actions 所需 secrets：`DATA_REPO_TOKEN`（只授權私人資料庫 Contents read/write、Metadata read）、`CLOUDFLARE_API_TOKEN`（指定帳戶 Cloudflare Pages Edit）、`CLOUDFLARE_ACCOUNT_ID`。切換驗收完成後才移除舊 `CLOUDFLARE_PAGES_DEPLOY_HOOK`。
+
+網站仍使用公開行情 JSON；原始 CSV、內部抓取紀錄不得上傳網站或公開 Actions artifact。CI 不讀私人資料、不使用上述 secrets。

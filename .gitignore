@@ -5,3 +5,7 @@ run.log
 .venv/
 .DS_Store
 _site/
+
+# 私人資料庫另行 checkout；已追蹤的舊檔於核准切換後移除。
+/data/
+.wrangler/
