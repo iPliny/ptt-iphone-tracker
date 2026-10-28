@@ -11,7 +11,7 @@ from html import escape as E
 from urllib.parse import quote
 
 import build_site as S
-from model_pages import model_path, money, pct_text, storage_key, trend_pct
+from model_pages import model_url_path, money, pct_text, storage_key, trend_pct
 
 TITLE = "二手 iPhone 行情總覽"
 BRAND = "PTT MacShop交易觀測"
@@ -75,7 +75,7 @@ def label(r):
 
 
 def link(r, root):
-    href = root + model_path(r["model"]) + ("?s=" + quote(r["storage"]) if r.get("storage") else "")
+    href = root + model_url_path(r["model"]) + ("?s=" + quote(r["storage"]) if r.get("storage") else "")
     return f'<a href="{E(href, quote=True)}">{E(label(r))}</a>'
 
 
@@ -199,7 +199,7 @@ def page_html(data, root="../"):
         <h2>常見問題</h2>
         <dl class="faq">{faq_html}</dl>
       </section>
-      <p class="hint">點機型可看每日行情走勢、各容量比較與 PTT 原文。另有 <a href="{root}column/">二手 iPhone 行情週報</a>、<a href="{root}weekly/">iPhone 二手週報</a> 與 <a href="{root}prices.html">歷代官方價格</a>。</p>
+      <p class="hint">點機型可看每日行情走勢、各容量比較與 PTT 原文。另有 <a href="{root}column/">二手 iPhone 行情週報</a>、<a href="{root}weekly/">iPhone 二手週報</a> 與 <a href="{root}prices">歷代官方價格</a>。</p>
     </article>
   </main>
   <footer class="wrap foot">

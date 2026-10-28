@@ -70,7 +70,7 @@ class OfficialPriceTests(unittest.TestCase):
         self.assertTrue(all(r['amount'] is None for r in self.rows if r['section'] == 'tw-launch' and r['model'] == 'iPhone（初代）'))
 
     def test_homepage_links_to_prices_and_page_returns_home(self):
-        self.assertIn('href="prices.html"', (ROOT / 'site/index.html').read_text(encoding='utf-8'))
+        self.assertIn('href="prices"', (ROOT / 'site/index.html').read_text(encoding='utf-8'))
         html = (ROOT / 'site/prices.html').read_text(encoding='utf-8')
         for text in ('href="./"', 'src="prices.js"', 'href="prices.css"', 'role="alert"', 'noscript'):
             self.assertIn(text, html)
@@ -78,7 +78,7 @@ class OfficialPriceTests(unittest.TestCase):
         self.assertLess(html.index('gtag/js?id=G-G3GH12TQSZ'), html.index('<title>'))
         self.assertIn('PTT MacShop交易觀測', html)
         self.assertNotIn('PTT每日交易觀測', html)
-        self.assertIn('href="prices.html"', (ROOT / 'site/model.html').read_text(encoding='utf-8'))
+        self.assertIn('href="prices"', (ROOT / 'site/model.html').read_text(encoding='utf-8'))
 
     def test_build_copies_assets_without_changing_market_schema(self):
         spec = importlib.util.spec_from_file_location('price_test_build', ROOT / 'site/build_site.py')

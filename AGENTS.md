@@ -132,7 +132,7 @@
 - 2026-10-25（專案審視 M8）前端 JSON 拆檔：`build_data` 仍是建置端完整資料（機型頁、行情總覽、sitemap 都讀它），寫檔時才瘦身。首頁讀 `data.json`（`home_payload`：無 trends、colors、apple、summary、model_totals，事件只留改價與刪文），機型頁讀 `models/<slug>.json`（`model_payload`：只含該機型）。文章只輸出 `PUBLIC_LISTING_FIELDS`，`OMIT_EMPTY_FIELDS` 的欄位值為 null／空字串／false 時省略（0 保留）；前端新增用到的欄位時要一起加進清單。
 - 首頁機型連結與 sitemap 改指向靜態頁。原有 `model.html?m=...&s=...` 仍可使用，容量切換維持舊格式，canonical 改指向對應靜態頁；沒有伺服器或 JavaScript 轉址。
 - 靜態頁使用 `data-model` 固定機型身分，容量以 `?s=` 切換；所有容量共用不含參數的 canonical。`model.js` 共用既有互動，重用靜態 canonical，資料請求失敗時保留預產內容。
-- slug 由 Python `model_path` 與 JavaScript `modelPageUrl` 同規則產生；若不同機型產生相同路徑，建置應失敗，不可默默覆蓋。重建時清除輸出目錄內自有的 `models/`，避免過期頁殘留。
+- slug 由 Python `model_path` 與 JavaScript `modelPageUrl` 同規則產生；`model_path` 保留 `.html` 建置檔名，`model_url_path` 與 `modelPageUrl` 回傳 Cloudflare Pages 的無副檔名公開網址。若不同機型產生相同路徑，建置應失敗，不可默默覆蓋。重建時清除輸出目錄內自有的 `models/`，避免過期頁殘留。
 - 建置維持 Python 標準函式庫，Python 建置本身不需要 Node 或瀏覽器；部署 job 的 Node 僅供 Wrangler 上傳。驗證見 `docs/model-prerender-validation.md`。
 
 ### 2026-10-18 機型頁每日行情走勢
@@ -167,3 +167,6 @@
 - DATA_REPO_TOKEN 僅授權資料庫 Contents read/write、Metadata read；CLOUDFLARE_API_TOKEN 僅指定帳戶 Pages Edit；CLOUDFLARE_ACCOUNT_ID 指定部署帳戶。不要將 token 印出、寫入檔案或 PR。
 - CI 不取得 data/ 或資料 token；測試僅使用合成 fixture 與暫存目錄。公開 log、summary、artifact 不得包含原始資料整列或內部錯誤。
 - 保留 jp 分支僅 dry-run 的規則；此 PR 的正式 job 均維持 main 限制。跨庫線上驗收需下一階段另設只寫測試分支、只部署 Access 保護預覽的驗收流程，不能直接取消 main 限制。
+### 2026-10-28 Cloudflare Pages 標準網址
+- Cloudflare Pages 將 `.html` 永久轉至無副檔名網址。機型頁與歷代價格頁的 canonical、og:url、JSON-LD、Sitemap 及新站內連結統一使用無副檔名網址，避免 canonical 指回轉址來源。
+- `models/*.html`、`models/*.json`、`prices.html` 的實體檔案不變。既有 `.html` 書籤由 Pages 的既有轉址承接，容量參數與收藏仍依機型／容量運作；不新增轉址規則。

@@ -134,6 +134,8 @@ class ModelHtmlTest(unittest.TestCase):
             paths = M.build_model_pages(out, self.data, "https://example.test/")
             self.assertEqual(paths, ["models/iphone-18-pro.html"])
             self.assertIn(self.model, (out / paths[0]).read_text())
+            self.assertIn('rel="canonical" href="https://example.test/models/iphone-18-pro"',
+                          (out / paths[0]).read_text())
             self.assertEqual((out / "model.html").read_text(), self.template)
             (out / "models/stale.html").write_text("obsolete")
             M.build_model_pages(out, self.data, "https://example.test/")
@@ -141,6 +143,7 @@ class ModelHtmlTest(unittest.TestCase):
 
     def test_safe_paths_and_collisions_fail_without_overwriting(self):
         self.assertEqual(M.model_path("iPhone SE (第 3 代)"), "models/iphone-se-3.html")
+        self.assertEqual(M.model_url_path("iPhone SE (第 3 代)"), "models/iphone-se-3")
         self.assertRegex(M.model_path("../../x?y=#z"), r"^models/[a-z0-9-]+\.html$")
         with tempfile.TemporaryDirectory() as temp:
             out = Path(temp)
@@ -166,14 +169,14 @@ class ModelHtmlTest(unittest.TestCase):
             # 其他機型只可出現在比較導覽，不可混入本頁標題或行情內容。
             body, navigation = second.split('<nav class="card model-navigation"', 1)
             self.assertNotIn("iPhone 18 Pro", body)
-            self.assertIn('href="../models/iphone-18-pro.html"', navigation)
+            self.assertIn('href="../models/iphone-18-pro"', navigation)
             self.assertNotEqual(first, second)
 
     def test_duo_navigation_rank(self):
         data = {"model_totals": [{"model": "iPhone 18 Pro Max", "listed": 100},
                                  {"model": "iPhone Duo", "listed": 1}]}
         html = M.model_navigation(data, current="iPhone 18 Pro")
-        self.assertLess(html.index("iphone-duo.html"), html.index("iphone-18-pro-max.html"))
+        self.assertLess(html.index("iphone-duo"), html.index("iphone-18-pro-max"))
 
     def test_navigation_prioritizes_same_generation_without_mutating_data(self):
         data = {"model_totals": [
@@ -184,7 +187,7 @@ class ModelHtmlTest(unittest.TestCase):
         original = copy.deepcopy(data)
         page = Page(M.model_navigation(data, "../", "iPhone 17 Pro"))
         links = [a['href'] for t, a in page.elements if t == 'a']
-        self.assertEqual(links, ['../models/iphone-17.html', '../models/iphone-16-pro.html', '../market/'])
+        self.assertEqual(links, ['../models/iphone-17', '../models/iphone-16-pro', '../market/'])
         self.assertEqual(data, original)
         self.assertEqual(M.model_navigation({"model_totals": []}), "")
 

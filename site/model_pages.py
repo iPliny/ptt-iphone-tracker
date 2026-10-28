@@ -11,6 +11,11 @@ def model_path(model):
     return "models/" + slug + ".html"
 
 
+def model_url_path(model):
+    """Cloudflare Pages 的公開網址不含 .html；建置檔名仍由 model_path 決定。"""
+    return model_path(model)[:-len(".html")]
+
+
 def model_navigation(data, root="", current=None):
     """固定顯示的機型入口；同代優先，再依世代與機型等級排序。"""
     rows = [r for r in data.get("model_totals", []) if r["model"] != current]
@@ -25,7 +30,7 @@ def model_navigation(data, root="", current=None):
     if not rows:
         return ""
     title = "比較其他機型" if current else "機型行情快速查詢"
-    links = "".join(f'<li><a href="{escape(root + model_path(r["model"]), quote=True)}">'
+    links = "".join(f'<li><a href="{escape(root + model_url_path(r["model"]), quote=True)}">'
                     f'{escape(r["model"])} 二手行情</a></li>' for r in rows[:6])
     return (f'<nav class="card model-navigation" aria-label="{title}"><h2>{title}</h2>'
             f'<ul>{links}</ul><p class="hint"><a href="{escape(root + "market/", quote=True)}">'
@@ -207,7 +212,7 @@ def render_model_html(template, data, model, canonical_url, asset_prefix=""):
         html = html.replace('<section class="card apple" id="apple" hidden></section>',
                             '<section class="card apple" id="apple">' + apple + '</section>')
     if asset_prefix:
-        for value in ["favicon.svg", "style.css", "./", "column/", "market/", "market/#faq", "prices.html", "common.js", "watchlist.js", "model.js"]:
+        for value in ["favicon.svg", "style.css", "./", "column/", "market/", "market/#faq", "prices", "common.js", "watchlist.js", "model.js"]:
             for attr in ["src", "href"]:
                 html = html.replace(f'{attr}="{value}"', f'{attr}="{asset_prefix}{value}"')
     html = html.replace('</main>', model_navigation(data, asset_prefix, model) + '\n</main>', 1)
@@ -229,6 +234,6 @@ def build_model_pages(out_dir, data, site_url):
         return []
     template = (out / "model.html").read_text(encoding="utf-8")
     for row, path in zip(data["model_totals"], paths):
-        html = render_model_html(template, data, row["model"], site_url + path, asset_prefix="../")
+        html = render_model_html(template, data, row["model"], site_url + model_url_path(row["model"]), asset_prefix="../")
         (out / path).write_text(html, encoding="utf-8")
     return paths

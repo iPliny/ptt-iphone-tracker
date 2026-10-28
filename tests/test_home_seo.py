@@ -21,7 +21,7 @@ class HomeSeoTest(unittest.TestCase):
         html = render_home(self.template, data, 'https://macshop.crawlsnek.com/')
         self.assertIn('最後回訪 2026-10-18 08:00:00 · 共追蹤 14 篇', html)
         self.assertNotIn('2099-01-01', html)
-        self.assertIn('href="models/iphone-17-pro.html"', html)
+        self.assertIn('href="models/iphone-17-pro"', html)
         self.assertIn('$30,000', html)
         self.assertNotIn('$0', html)
         self.assertIn('<td>—</td>', html)
@@ -39,7 +39,7 @@ class HomeSeoTest(unittest.TestCase):
 
     def test_structured_data_handles_untrusted_text_and_has_no_offer(self):
         tags = metadata('</script><img src=x>', '測試', 'https://example.test/',
-                        [('首頁', 'https://example.test/'), ('機型', 'https://example.test/models/test.html')])
+                        [('首頁', 'https://example.test/'), ('機型', 'https://example.test/models/test')])
         value = re.search(r'ld\+json">(.*?)</script>', tags).group(1)
         nodes = json.loads(value)
         self.assertEqual(nodes[0]['name'], '</script><img src=x>')

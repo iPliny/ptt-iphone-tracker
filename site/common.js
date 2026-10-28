@@ -80,7 +80,7 @@
   // 新連結使用預先產生的標準頁；modelUrl 保留舊書籤與查詢網址的操作行為。
   function modelPageUrl(model, storage) {
     const slug = String(model).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "model";
-    const path = "models/" + slug + ".html";
+    const path = "models/" + slug;
     return storage == null || storage === "" ? path : path + "?" + new URLSearchParams({ s: storage });
   }
 
