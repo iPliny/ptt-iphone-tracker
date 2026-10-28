@@ -394,8 +394,8 @@ def page_html(issue, issues, root):
     url = issue_url(issue)
     published = issue["generated_at"][:10]
     label = week_label(issue)
-    from model_pages import model_path
-    model_link = lambda m: root + model_path(m)  # noqa: E731
+    from model_pages import model_url_path
+    model_link = lambda m: root + model_url_path(m)  # noqa: E731
 
     json_ld = [
         {"@context": "https://schema.org", "@type": "Article", "headline": a["title"],

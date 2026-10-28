@@ -560,7 +560,7 @@ def sitemap_day(value):
 
 def sitemap_lastmods(data, data_dir=None, jp_latest=()):
     """只採資料中的觀測、查核及發布時間；不採檔案 mtime 或建置時鐘。"""
-    from model_pages import model_path
+    from model_pages import model_url_path
     lastmods = {}
 
     def newest(url, values):
@@ -585,11 +585,11 @@ def sitemap_lastmods(data, data_dir=None, jp_latest=()):
             per_model.setdefault(model, []).append(event.get("time"))
     for model, values in per_model.items():
         if model:
-            newest(SITE_URL + model_path(model), values)
+            newest(SITE_URL + model_url_path(model), values)
     if data_dir is not None:
         prices = Path(SITE_DIR) / "official-prices.json"
         if prices.exists():
-            newest(SITE_URL + "prices.html", [json.loads(prices.read_text(encoding="utf-8")).get("updated_at")])
+            newest(SITE_URL + "prices", [json.loads(prices.read_text(encoding="utf-8")).get("updated_at")])
         from column import load_issues, issue_url
         for issue in load_issues(os.path.join(data_dir, "column")):
             newest(issue_url(issue), [issue.get("generated_at")])
@@ -612,9 +612,9 @@ def sitemap_lastmods(data, data_dir=None, jp_latest=()):
 
 def sitemap_xml(data, today=None, column_urls=(), extra_urls=(), lastmods=None):
     """只列標準網址；today 留作舊呼叫端相容參數，不作為 lastmod。"""
-    from model_pages import model_path
+    from model_pages import model_url_path
     lastmods = sitemap_lastmods(data) if lastmods is None else lastmods
-    urls = [SITE_URL, SITE_URL + "market/", SITE_URL + "prices.html", SITE_URL + "jp/", SITE_URL + "jp/ja/"] + [SITE_URL + model_path(m["model"]) for m in data["model_totals"]]
+    urls = [SITE_URL, SITE_URL + "market/", SITE_URL + "prices", SITE_URL + "jp/", SITE_URL + "jp/ja/"] + [SITE_URL + model_url_path(m["model"]) for m in data["model_totals"]]
     urls += list(column_urls)
     urls += list(extra_urls)
     items = ""
