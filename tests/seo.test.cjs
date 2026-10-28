@@ -55,6 +55,6 @@ test('機型 canonical 與 sitemap 編碼一致，排除容量、追蹤參數與
     assert.equal(links[0].rel, 'canonical');
     assert.equal(links[0].href, url);
   }
-  assert.equal(canonical('?m=iPhone+17+Pro')[0].href, base + 'models/iphone-17-pro.html');
+  assert.equal(canonical('?m=iPhone+17+Pro')[0].href, base + 'models/iphone-17-pro');
   for (const query of ['', '?s=256GB', '?m=']) assert.deepEqual(canonical(query), []);
 });

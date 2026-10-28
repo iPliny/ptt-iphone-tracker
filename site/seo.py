@@ -2,7 +2,7 @@
 import json
 import re
 from html import escape
-from model_pages import model_path, money, model_navigation
+from model_pages import model_url_path, money, model_navigation
 
 
 def social_meta(title, description, url, site_url, og_type="website", locale="zh_TW"):
@@ -59,7 +59,7 @@ def render_home(template, data, site_url):
                         '<section class="kpis" id="kpis">' + kpis + '</section>')
     rows = []
     for row in data.get("models", []):
-        rows.append(f'<tr><td><a href="{escape(model_path(row["model"]), quote=True)}">{escape(row["model"])}</a></td>'
+        rows.append(f'<tr><td><a href="{escape(model_url_path(row["model"]), quote=True)}">{escape(row["model"])}</a></td>'
                     f'<td>{escape(row.get("storage") or "容量未提供")}</td><td>{row.get("listed", 0)}</td>'
                     f'<td>{escape(money(row.get("median_price")))}</td>'
                     f'<td>{escape(money(row.get("median_sold_price")))}</td></tr>')
