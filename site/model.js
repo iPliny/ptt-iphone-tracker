@@ -38,7 +38,7 @@
   $("#model-name").textContent = model || "未指定機型";
 
   // 每個機型一個 models/<slug>.json；舊網址指定了不存在的機型時會 404，當成沒有資料。
-  fetch((staticModel ? "../" : "") + modelPageUrl(model).replace(/\.html$/, ".json"), { cache: "no-cache" })
+  fetch((staticModel ? "../" : "") + modelPageUrl(model) + ".json", { cache: "no-cache" })
     .then((r) => {
       if (r.status === 404 && !staticModel) return { last_checked: "", listings: [], events: [], models: [], model_totals: [] };
       if (!r.ok) throw new Error(r.status);

@@ -39,7 +39,7 @@ async function page({ staticPage = true, search = '', data = dataset(), fail = f
     querySelector: element, createElement: () => ({}), head: { appendChild: link => links.push(link) },
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../site/model.js'), 'utf8'), {
-    document, location: { search, pathname: staticPage ? '/models/iphone-18-pro.html' : '/model.html' },
+    document, location: { search, pathname: staticPage ? '/models/iphone-18-pro' : '/model.html' },
     history: { replaceState: (...args) => history.push(args[2]) }, URLSearchParams,
     PttCommon: common, PttWatchlist: watchlist,
     window: { addEventListener() {}, localStorage: {
@@ -57,15 +57,15 @@ test('靜態頁重用 canonical、保留預產標題，只讀該機型資料，�
   const view = await page({ search: '?m=other&s=256GB&utm_source=test' });
   assert.deepEqual(view.requests, ['../models/iphone-18-pro.json']);
   assert.equal(view.links.length, 1);
-  assert.equal(view.links[0].href, base + 'models/iphone-18-pro.html');
+  assert.equal(view.links[0].href, base + 'models/iphone-18-pro');
   assert.equal(view.element('meta[property="og:url"]').content, view.links[0].href);
   assert.equal(view.document.title, model + ' 預先產生的標題');
   assert.equal(view.element('#model-name').textContent, model);
   assert.match(view.element('#list-title').textContent, /256GB的文章（12）/);
   view.choose('512GB');
-  assert.equal(view.history.at(-1), '/models/iphone-18-pro.html?s=512GB');
+  assert.equal(view.history.at(-1), '/models/iphone-18-pro?s=512GB');
   view.choose('*');
-  assert.equal(view.history.at(-1), '/models/iphone-18-pro.html');
+  assert.equal(view.history.at(-1), '/models/iphone-18-pro');
   assert.equal(view.links.length, 1);
 });
 
@@ -73,7 +73,7 @@ test('原 model.html 查詢入口保留容量網址與篩選行為，canonical �
   const view = await page({ staticPage: false, search: '?m=iPhone+18+Pro&s=256GB' });
   assert.deepEqual(view.requests, ['models/iphone-18-pro.json']);
   assert.equal(view.links.length, 1);
-  assert.equal(view.links[0].href, base + 'models/iphone-18-pro.html');
+  assert.equal(view.links[0].href, base + 'models/iphone-18-pro');
   assert.equal(view.element('meta[property="og:url"]').content, view.links[0].href);
   assert.equal(view.element('meta[property="og:title"]').content, view.document.title);
   view.choose('512GB');

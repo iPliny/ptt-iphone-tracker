@@ -4,10 +4,10 @@ const { modelUrl, compareStorage, esc } = require('../site/common.js');
 
 test('新機型標準網址使用靜態路徑，容量仍是頁內參數且名稱不會逸出目錄', () => {
   const { modelPageUrl } = require('../site/common.js');
-  assert.equal(modelPageUrl('iPhone 18 Pro'), 'models/iphone-18-pro.html');
-  assert.equal(modelPageUrl('iPhone 18 Pro', '256GB'), 'models/iphone-18-pro.html?s=256GB');
-  assert.equal(modelPageUrl('iPhone SE (第 3 代)'), 'models/iphone-se-3.html');
-  assert.match(modelPageUrl('../../x?y=#z'), /^models\/[a-z0-9-]+\.html$/);
+  assert.equal(modelPageUrl('iPhone 18 Pro'), 'models/iphone-18-pro');
+  assert.equal(modelPageUrl('iPhone 18 Pro', '256GB'), 'models/iphone-18-pro?s=256GB');
+  assert.equal(modelPageUrl('iPhone SE (第 3 代)'), 'models/iphone-se-3');
+  assert.match(modelPageUrl('../../x?y=#z'), /^models\/[a-z0-9-]+$/);
 });
 
 test('同機型不同容量共用一個機型頁網址，容量只是參數', () => {

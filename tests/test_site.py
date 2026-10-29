@@ -222,7 +222,7 @@ class BuildSiteTest(unittest.TestCase):
                 S.build(out, self.dir)
                 self.assertEqual((out / "robots.txt").read_text(),
                                  f"User-agent: *\nAllow: /\nSitemap: {base}sitemap.xml\n")
-                for name, suffix in (("index.html", ""), ("prices.html", "prices.html"),
+                for name, suffix in (("index.html", ""), ("prices.html", "prices"),
                                      ("jp/index.html", "jp/"), ("jp/ja/index.html", "jp/ja/")):
                     html = (out / name).read_text()
                     links = HeadLinks(html).links
@@ -257,8 +257,8 @@ class BuildSiteTest(unittest.TestCase):
         root = ElementTree.fromstring(S.sitemap_xml(data, today=date(2026, 10, 4)))
         ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
         locs = [e.text for e in root.findall("s:url/s:loc", ns)]
-        self.assertEqual(locs, [S.SITE_URL, S.SITE_URL + "market/", S.SITE_URL + "prices.html", S.SITE_URL + "jp/", S.SITE_URL + "jp/ja/", S.SITE_URL + "models/iphone-15-pro.html",
-                                S.SITE_URL + "models/iphone-16e.html"])
+        self.assertEqual(locs, [S.SITE_URL, S.SITE_URL + "market/", S.SITE_URL + "prices", S.SITE_URL + "jp/", S.SITE_URL + "jp/ja/", S.SITE_URL + "models/iphone-15-pro",
+                                S.SITE_URL + "models/iphone-16e"])
         self.assertEqual(root.findall("s:url/s:lastmod", ns), [])  # 沒有內容日期，不回填建置日。
 
     def test_estimated_sold_date(self):
@@ -348,9 +348,9 @@ class BuildSiteTest(unittest.TestCase):
                     self.assertIs(type(price), int)
                     self.assertGreater(price, 5000)
 
-    def test_real_data_builds(self):
-        """repo 內現有的 data/ 也要能建置成功。"""
-        data = S.build_data()
+    def test_fixture_data_builds(self):
+        """不依賴私人資料，使用 setUp 建立的合成資料。"""
+        data = S.build_data(self.dir)
         self.assertGreater(data["counts"]["total"], 0)
 
 

@@ -1,0 +1,28 @@
+name: 取得私人資料庫
+description: 將私人資料庫根目錄放到 data/，檢查後才允許抓取或部署
+inputs:
+  token:
+    description: 僅授權私人資料庫的 Contents read/write token
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: 檢查資料庫金鑰
+      shell: bash
+      env:
+        DATA_TOKEN: ${{ inputs.token }}
+      run: |
+        if [ -z "$DATA_TOKEN" ]; then
+          echo "尚未設定 DATA_REPO_TOKEN；停止，不使用程式庫內的舊資料。" >&2
+          exit 1
+        fi
+    - uses: actions/checkout@v4
+      with:
+        repository: iPliny/ptt-iphone-data
+        ref: main
+        path: data
+        token: ${{ inputs.token }}
+        fetch-depth: 0
+    - name: 確認獨立資料庫與必要檔案
+      shell: bash
+      run: python .github/check_data_checkout.py

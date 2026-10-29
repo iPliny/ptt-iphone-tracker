@@ -10,6 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # CI 不取得真實資料，也不需要 DATA_REPO_TOKEN。
+          sparse-checkout: |
+            /*
+            !/data/
+          sparse-checkout-cone-mode: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

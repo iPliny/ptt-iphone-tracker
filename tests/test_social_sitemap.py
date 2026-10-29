@@ -87,10 +87,10 @@ class SocialSitemapTest(unittest.TestCase):
         urls = entries(xml)
         self.assertEqual(urls[S.SITE_URL], '2026-10-08')
         self.assertEqual(urls[S.SITE_URL + 'market/'], '2026-10-08')
-        self.assertEqual(urls[S.SITE_URL + 'models/iphone-15.html'], '2026-10-06')
-        self.assertIsNone(urls[S.SITE_URL + 'models/iphone-7.html'])
+        self.assertEqual(urls[S.SITE_URL + 'models/iphone-15'], '2026-10-06')
+        self.assertIsNone(urls[S.SITE_URL + 'models/iphone-7'])
         self.assertIsNone(urls[S.SITE_URL + 'jp/'])
-        self.assertIsNone(urls[S.SITE_URL + 'prices.html'])
+        self.assertIsNone(urls[S.SITE_URL + 'prices'])
         self.assertNotIn(S.SITE_URL + 'column/', urls)
         self.assertNotIn('2099', xml)
 
@@ -102,7 +102,7 @@ class SocialSitemapTest(unittest.TestCase):
             for raw, expected in (({'updated_at': '2025-01-03'}, '2025-01-03'), ({}, None)):
                 path.write_text(json.dumps(raw))
                 result = S.sitemap_lastmods({'model_totals': []}, str(self.data))
-                self.assertEqual(result.get(S.SITE_URL + 'prices.html'), expected)
+                self.assertEqual(result.get(S.SITE_URL + 'prices'), expected)
 
     def test_all_built_pages_have_one_social_set_and_canonical_url(self):
         self.all_sections()
@@ -143,9 +143,12 @@ class SocialSitemapTest(unittest.TestCase):
         S.build(str(self.out), str(self.data))
         urls = entries((self.out / 'sitemap.xml').read_text())
         for url in urls:
+            self.assertFalse(url.endswith('.html'), url)
             path = self.out / url.removeprefix(S.SITE_URL)
             if path.is_dir():
                 path /= 'index.html'
+            elif not path.suffix:
+                path = path.with_suffix('.html')
             self.assertEqual(Head(path.read_text()).canonicals, [url], url)
         self.assertNotIn(S.SITE_URL + 'column/', urls)
         for name in ('2026-10-04', '2026-10-11'):
@@ -160,7 +163,7 @@ class SocialSitemapTest(unittest.TestCase):
         self.assertEqual(urls[S.SITE_URL + 'column/2026-09-27/'], '2026-10-04')
         self.assertEqual(urls[S.SITE_URL + 'weekly/2026-10-18/'], '2026-10-19')
         self.assertEqual(urls[S.SITE_URL + 'weekly/'], '2026-10-19')
-        self.assertEqual(urls[S.SITE_URL + 'models/iphone-15.html'], '2026-10-10')
+        self.assertEqual(urls[S.SITE_URL + 'models/iphone-15'], '2026-10-10')
         for suffix in ('jp/', 'jp/ja/', 'jp/iphone-17-pro/', 'jp/ja/iphone-17-pro/'):
             self.assertEqual(urls[S.SITE_URL + suffix], '2026-10-17')
 

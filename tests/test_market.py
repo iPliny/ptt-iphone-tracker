@@ -56,7 +56,7 @@ class MarketTest(unittest.TestCase):
         html = MK.page_html(self.data)
         self.assertIn("<title>二手 iPhone 行情總覽【2026年10月】", html)
         self.assertIn('<link rel="canonical" href="https://macshop.crawlsnek.com/market/">', html)
-        self.assertIn('href="../models/iphone-13.html?s=128GB"', html)
+        self.assertIn('href="../models/iphone-13?s=128GB"', html)
         self.assertIn("近 7 天跌最多的是 iPhone 13 128GB（−7.1%）", html)
         self.assertIn("G-G3GH12TQSZ", html)
         ld = json.loads(re.search(r'<script type="application/ld\+json">(.*?)</script>', html, re.S)[1])

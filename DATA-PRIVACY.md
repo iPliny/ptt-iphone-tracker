@@ -9,3 +9,7 @@
 `.github/workflows/pages.yml` 保留原有排程與 workflow_dispatch 入口，建置並檢查公開產物後，使用 GitHub Actions secret `CLOUDFLARE_PAGES_DEPLOY_HOOK` 觸發 Cloudflare 正式站建置。其他抓取流程仍可呼叫此工作流程。正式分支的 Cloudflare 自動推送部署關閉，以免和部署 Hook 重複；預覽分支保留自動建置。
 
 已公開過的資料無法保證從他人下載、快取或備份中收回。此調整保護後續原始資料存取，不刪除原始檔，也不改寫 Git 歷史。
+
+## 待覆核的下一階段
+
+本分支改用私人資料 checkout 與 Wrangler 直接上傳，尚未合併或啟用。上述 Hook 流程是目前正式站狀態，切換順序與停止點以 [資料拆分交接](docs/data-repo-split.md) 為準。

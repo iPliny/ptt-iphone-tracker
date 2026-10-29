@@ -6,13 +6,13 @@
 
 | 入口 | 行為與 canonical |
 | --- | --- |
-| `models/iphone-18-pro.html` | 靜態標準頁；原始 HTML 已有此機型內容 |
-| `models/iphone-18-pro.html?s=256GB` | 同頁容量切換；canonical 不含容量 |
-| `model.html?m=iPhone+18+Pro&s=256GB` | 舊書籤照常使用，不轉址；canonical 指向靜態標準頁 |
+| `models/iphone-18-pro` | 靜態標準頁；原始 HTML 已有此機型內容 |
+| `models/iphone-18-pro?s=256GB` | 同頁容量切換；canonical 不含容量 |
+| `model.html?m=iPhone+18+Pro&s=256GB` | 舊書籤照常使用；Cloudflare Pages 將 `.html` 轉至 `/model` 並保留參數，canonical 指向靜態標準頁 |
 
 首頁新連結與 sitemap 指向靜態標準頁。靜態頁的機型由 HTML 的 `data-model` 決定，附加其他 `m` 參數不會改變頁面身分。既有收藏仍以機型與容量為鍵，沒有新增儲存格式。
 
-GitHub Pages 不會依查詢參數回傳不同原始 HTML，所以保留舊網址作相容入口；舊入口仍需 JavaScript。爬蟲從 sitemap 或新連結取得的新靜態頁，不必等 JavaScript 就能讀取摘要與容量表。
+靜態主機不會依查詢參數回傳不同原始 HTML，所以保留舊網址作相容入口；舊入口仍需 JavaScript。爬蟲從 sitemap 或新連結取得的新靜態頁，不必等 JavaScript 就能讀取摘要與容量表。
 
 ## 內容與建置
 
