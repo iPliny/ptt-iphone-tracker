@@ -217,6 +217,13 @@ class RealPostRegressionTest(unittest.TestCase):
         f = self.fields("[販售] 台北 iPhone 16 128G 黑", "[型號] iPhone 16 128G 黑\n[售價] 18000\n[商品照/補充說明]\n「全新」電池100%\n")
         self.assertEqual(f["price"], 18000)
 
+    def test_colon_only_field_headers(self):
+        # M.1793197424：「品名：」「售價：」沒有括號，先賣 AirPods 再賣 iPhone，原本抓到 AirPods 的 6500
+        f = self.fields("[販售] iPhone 15 pro 256g 和 AirPod pro 3",
+                        "品名：AirPod pro 3 全新未拆\n售價：6500\n遠傳續約贈品\n\n\n"
+                        "品名： iPhone 15 pro 256g黑 二手\n售價：15200\n手機沒有刮傷，電池健康度85\n")
+        self.assertEqual((f["model"], f["storage"], f["price"]), ("iPhone 15 Pro", "256GB", 15200))
+
     def test_numbered_multi_item_skipped(self):
         body = "[型號]\n1. iPhone 17 256g 白 (全新)\n2. Airpods 5 一般版(全新)\n[售價]\n1.29800\n2.4000"
         self.assertIsNone(self.fields("[販售] 台北 iPhone 17", body))
