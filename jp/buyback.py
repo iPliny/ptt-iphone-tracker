@@ -209,15 +209,16 @@ _last_request = None
 _host_requests = {}
 
 
-def fetch(url):
+def fetch(url, *, host_intervals=None):
     """所有請求（含重試）序列化；全域至少 5 秒、イオシス同站至少 60 秒。"""
     global _last_request
     host = urlparse(url).hostname
+    intervals = {"k-tai-iosys.com": 60, **(host_intervals or {})}
     for attempt in range(2):
         now = time.monotonic()
         wait = max(0, 5 - (now - _last_request)) if _last_request is not None else 0
-        if host == "k-tai-iosys.com" and host in _host_requests:
-            wait = max(wait, 60 - (now - _host_requests[host]))
+        if host in intervals and host in _host_requests:
+            wait = max(wait, intervals[host] - (now - _host_requests[host]))
         if wait > 0:
             time.sleep(wait)
         _last_request = _host_requests[host] = time.monotonic()
@@ -253,11 +254,11 @@ def append_csv(path, fields, rows):
         writer.writerows(rows)
 
 
-def validate_rows(shop, rows, previous):
+def validate_rows(shop, rows, previous, *, conditions=("未開封", "中古上限")):
     unique = {}
     for row in rows:
         if (row.get("shop") != shop or row.get("model") not in MODELS or row.get("storage") not in STORAGES
-                or row.get("condition") not in ("未開封", "中古上限")
+                or row.get("condition") not in conditions
                 or row.get("carrier") not in ("SIMフリー", "docomo", "au", "SoftBank", "Rakuten")
                 or not isinstance(row.get("price_jpy"), int) or row["price_jpy"] <= 0):
             raise ParseError("規格或價格欄位不合法")
@@ -270,7 +271,7 @@ def validate_rows(shop, rows, previous):
     return unique
 
 
-def apply_results(data_dir, results, run_at=None):
+def apply_results(data_dir, results, run_at=None, *, conditions=("未開封", "中古上限")):
     """每店獨立驗證與更新；失敗店保留 latest、prices，只有 runs 記失敗。"""
     data_dir = Path(data_dir)
     run_at = run_at or datetime.now(TOKYO).isoformat(timespec="seconds")
@@ -288,7 +289,7 @@ def apply_results(data_dir, results, run_at=None):
         previous = {k: r for k, r in latest.items() if r["shop"] == shop}
         if status == "ok":
             try:
-                current = validate_rows(shop, rows, previous)
+                current = validate_rows(shop, rows, previous, conditions=conditions)
             except ParseError as exc:
                 status, error = "parse_error", str(exc)
         if status == "ok":
