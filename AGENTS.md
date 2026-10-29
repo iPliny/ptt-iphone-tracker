@@ -171,3 +171,9 @@
 ### 2026-10-28 Cloudflare Pages 標準網址
 - Cloudflare Pages 將 `.html` 永久轉至無副檔名網址。機型頁與歷代價格頁的 canonical、og:url、JSON-LD、Sitemap 及新站內連結統一使用無副檔名網址，避免 canonical 指回轉址來源。
 - `models/*.html`、`models/*.json`、`prices.html` 的實體檔案不變。既有 `.html` 書籤由 Pages 的既有轉址承接，容量參數與收藏仍依機型／容量運作；不新增轉址規則。
+
+### 2026-10-30 本機爬蟲
+- `python -m jp.local --data <私人資料庫的 jp 目錄> [--dry-run] [--only pastec,iosys-sell]` 從家用 IP 收モバステ買取與イオシス販賣，沿用 `jp.buyback` 的 fetch、驗證及 CSV 更新。モバステ寫入私人 `jp/`，販賣價獨立寫入 `jp/sell/`，同一 KEY／CSV 欄位但機況不同，不混入買取價格。來源、機況對照與版本判斷見 `docs/local-crawler.md`。
+- 本機全域至少間隔 5 秒；pastec／iosys.co.jp 同站至少 10 秒，駿河屋預留 30 秒；既有イオシス買取仍為 60 秒。CLI 與 `local/run.sh` 共用檔案鎖，整段 pull／抓取／commit／push 不重疊。失敗店保留舊價，CLI 非 0；dry-run 不寫資料或鎖檔，stdout 只印店名、狀態、筆數。
+- `local/run.sh` 使用 `PTT_DATA_DIR` 的獨立私人 clone（預設 `$HOME/Documents/Codex/dispatch/ptt-iphone-data`），只提交 `jp/`，推送失敗最多重試 3 次，不觸發部署。`local/` 提供日本時間 09:40、21:40 的 launchd 範本與安裝說明，本次只產生檔案，未安裝或執行正式抓取。
+- 駿河屋範例僅有書籍／配件，沒有目標手機價格，本版不做解析器；Back Market 為 403 未做；手機王（sogi）條款禁轉載所以不抓。販賣價公開顯示另做，本次不改網站、workflow、實際資料或 secrets。
