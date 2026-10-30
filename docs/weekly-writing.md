@@ -9,7 +9,8 @@ POYU 2026-10-12 決定：週報只發在本站（https://macshop.crawlsnek.com/w
 - 期別：接續既有編號（#1～#3 在 Blogger，`data/blog/`；之後看 `data/weekly/` 最大號 +1）。
 
 ## 二、資料
-- 取最新 main，記下完整 commit SHA，整篇只用這個 commit 的資料。
+- 2026-10-28 起資料在私人庫 `iPliny/ptt-iphone-data`（根目錄即原 `data/` 內容）。取程式庫最新 main，再把資料庫最新 main clone 到程式庫的 `data/`（或建立連結），記下**資料庫**的完整 commit SHA，整篇只用這個 commit 的資料。
+- 若 POYU 給了 Google 搜尋趨勢素材（存放在 `/mnt/project-files/weekly/trends/`，檔名為擷取期間），寫稿前讀當期最新一份，用法見「四、SEO」。
 - 主數字以 `data/column/<本期週日>.json` 為準（和網站統計週報一致），需要更細的切法再回 `data/listings.csv`、`events.csv`、`price_event_times.csv`、`multi_items.csv` 依同樣期間與排除規則重算。欄位與時間口徑見 `AGENTS.md`。
 - 遵守網站的排除規則：異常價格、不合理改價、配件、一篇賣多支（只算刊登價）都照 `build_site.py` 的處理，不自己放寬。
 - 證據紀律：刊登價、已售出文章的最後標價都不是實際成交價；推文「私」不是私訊總數；刪文不是售出；推估售出時間不是成交時間；改價後售出不能寫成「因為降價所以成交」；少量樣本不寫成行情。新機上市、官方售價等背景只引用 Apple 等原始來源，或 `site/apple_prices.json`／`site/official-prices.json`。
@@ -25,14 +26,15 @@ POYU 2026-10-12 決定：週報只發在本站（https://macshop.crawlsnek.com/w
 - `labels` 恰好 5 個：「iPhone」「二手市場」「週報」＋2 個本文有實質討論的搜尋詞（優先核心型號＋意圖，如「iPhone 17 Pro」「iPhone二手價格」）。
 - 小標用 h2（必要時 h3），寫成讀者會問的問題或有張力的短句。
 - 內部連結至少三個，連結文字要說清楚能做什麼：首頁 `https://macshop.crawlsnek.com/`、機型頁 `https://macshop.crawlsnek.com/models/iphone-17-pro.html`（型號小寫、非英數字改成 -）、本期統計週報 `https://macshop.crawlsnek.com/column/<本期週日>/`。建置時會自動改成站內相對路徑。
-- 可用標籤：p、h2、h3、strong、em、a、small、ul、ol、li、table 系列、blockquote；其他會被清掉。文末用 `<small>` 寫資料說明：期間、樣本數、排除規則、固定 commit 的資料連結（`https://github.com/iPliny/ptt-iphone-tracker/tree/<SHA>/data`）。
+- Google 搜尋趨勢（POYU 2026-10-30 提供，Google Trends「搜尋字詞・人氣竄升」匯出，台灣、近 7 天）：只用來挑主題、決定標題／小標／labels 的用字，讓文章對上大家正在搜的說法（例如「iPhone Duo 價格」「iPhone Duo 缺點」「iPhone 16 Pro Max 二手回收價」）；本站資料能回答的詞才用，資料答不了的（災情、桌布、發音）不硬寫。竄升百分比是相對增幅、不是搜尋量，也不是銷量或成交，正文最多寫「這週搜尋明顯變多」，不引用百分比當市場證據。查詢詞裡的人名與無關店名不寫進文章。
+- 可用標籤：p、h2、h3、strong、em、a、small、ul、ol、li、table 系列、blockquote；其他會被清掉。文末用 `<small>` 寫資料說明：期間、樣本數、排除規則、資料版本（寫「資料版本 <SHA 前 7 碼>」即可；資料庫是私人的，不放 GitHub 連結）。
 
 ## 五、審稿與發布（POYU 2026-10-12：要先看過才上線）
 1. 草稿寫成 JSON：`{"id": "<出刊日>", "title", "description", "labels": [5 個], "html", "period": "YYYY/M/D–M/D", "commit": "<SHA>"}`。
 2. `python site/blog.py --publish 草稿.json`：檢查欄位、字數、至少一個站內連結，清理後寫入 `data/weekly/<出刊日>.json`。有錯就修稿再跑。
 3. `python site/build_site.py --out /tmp/site` 確認 `weekly/<出刊日>/index.html` 產生、canonical 指向本站，再跑 `python -m unittest`。
-4. 開分支、commit 只含 `data/weekly/<出刊日>.json`，開 PR，**不要合併**。
+4. 在私人資料庫 `iPliny/ptt-iphone-data` 開分支，commit 只含 `weekly/<出刊日>.json`，開 PR，**不要合併**。
 5. 把建好的文章頁存成 `/mnt/project-files/weekly/<出刊日>.html`，`style.css` 內嵌進 `<head>`，讓檔案可單獨開啟預覽，在專案 thread 回報：期別、標題、資料期間、5 個 labels、搜尋說明、PR 連結，附上預覽檔，請 POYU 看稿。
 6. POYU 給回饋就改稿，重跑步驟 2–3，推到同一個 PR 並更新預覽檔；改寫時保留 POYU 指定的說法。
-7. POYU 明確說可以上線後，CI 綠燈才合併，確認 `pages.yml` 部署成功，回報文章網址。
+7. POYU 明確說可以上線後合併資料庫 PR，再到程式庫手動執行 `pages.yml`（資料庫的合併不會自動觸發部署），確認部署成功，回報文章網址。
 8. 卡住時說明卡在資料、文風或部署哪一層，不要發半成品。
