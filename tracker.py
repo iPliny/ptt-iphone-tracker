@@ -412,6 +412,7 @@ _DATE_RE = re.compile(r"(20\d{2})\s*[/.\-年]\s*(\d{1,2})(?:\s*[/.\-月]\s*(\d{1
 
 _FIELD_NAME_RE = re.compile(r"^\s*((?:型號|品名|物品|規格|容量|顏色|保固|盒裝配件|售價|價格|價錢|交易方式|交易地點|連絡方式|聯絡方式|商品照|補充說明)[^\[\]【】［］\n]{0,10}[\]】］])")
 _QUOTE_FIELD_RE = re.compile(r"^\s*「((?:型號|品名|物品|規格|容量|顏色|保固|盒裝配件|售價|價格|價錢|交易方式|交易地點|連絡方式|聯絡方式|其他資訊|商品照|補充說明)[^「」\n]{0,10})」")
+_COLON_FIELD_RE = re.compile(r"^\s*(型號|品名|物品|規格|容量|顏色|保固|盒裝配件|售價|價格|價錢|交易方式|交易地點|連絡方式|聯絡方式)\s*[:：]")
 
 
 def _field_line(line):
@@ -419,6 +420,8 @@ def _field_line(line):
     line = re.sub(r"^\s*[:：]\s*(?=[\[【［「])", "", line)
     # 「型號」iphone duo：用引號當範本括號，只認已知欄位名，免得內文引號被當成欄位
     line = _QUOTE_FIELD_RE.sub(r"[\1]", line, count=1)
+    # 「品名：AirPod pro 3」沒有括號、只用冒號
+    line = _COLON_FIELD_RE.sub(r"[\1]：", line, count=1)
     return _FIELD_NAME_RE.sub(r"[\1", line, count=1)
 
 

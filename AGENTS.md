@@ -44,6 +44,7 @@
   - 2026-10-18：標題寫了兩支以上 iPhone（`multi_phone_title`：兩個 iPhone／Air、兩個容量、斜線分隔的型號、「兩支」「各一」）也算一篇多支，`rule_extract` 不給型號，舊列由 `drop_misparsed` 以「一篇多支」改略過。
   - 2026-10-22：型號欄第一行是 Apple Watch、AirPods、iPad、Mac 等其他產品且沒寫 iPhone（`sells_other_product`，沿用 iPhone 舊文改賣別的、標題沒改）時 `rule_extract` 不給型號；已在統計內的列本文被這樣改過時記「排除誤判」改成略過，不記改價（M.1792475735 一例）。
   - 2026-10-27：範本括號寫成「型號」「售價」（全形引號）時，`_field_line` 只在引號內是已知欄位名時當成 [欄位]，內文其他引號不動（M.1793034542 一例）。
+  - 2026-10-29：欄位只寫「品名：」「售價：」沒有括號時，`_field_line` 對已知欄位名補上括號，才能切出先賣配件、後賣 iPhone 的兩段（M.1793197424 一例）。
 
 ### 2026-10-06 一篇賣多支（只算刊登價）
 - POYU 選擇：一篇賣多樣商品的文章，拆出每支 iPhone 只算進刊登數與刊登價，不算售出（無法判斷是哪一支賣掉）。
@@ -170,3 +171,9 @@
 ### 2026-10-28 Cloudflare Pages 標準網址
 - Cloudflare Pages 將 `.html` 永久轉至無副檔名網址。機型頁與歷代價格頁的 canonical、og:url、JSON-LD、Sitemap 及新站內連結統一使用無副檔名網址，避免 canonical 指回轉址來源。
 - `models/*.html`、`models/*.json`、`prices.html` 的實體檔案不變。既有 `.html` 書籤由 Pages 的既有轉址承接，容量參數與收藏仍依機型／容量運作；不新增轉址規則。
+
+### 2026-10-30 本機爬蟲
+- `python -m jp.local --data <私人資料庫的 jp 目錄> [--dry-run] [--only pastec,iosys-sell]` 從家用 IP 收モバステ買取與イオシス販賣，沿用 `jp.buyback` 的 fetch、驗證及 CSV 更新。モバステ寫入私人 `jp/`，販賣價獨立寫入 `jp/sell/`，同一 KEY／CSV 欄位但機況不同，不混入買取價格。來源、機況對照與版本判斷見 `docs/local-crawler.md`。
+- 本機全域至少間隔 5 秒；pastec／iosys.co.jp 同站至少 10 秒，駿河屋預留 30 秒；既有イオシス買取仍為 60 秒。CLI 與 `local/run.sh` 共用檔案鎖，整段 pull／抓取／commit／push 不重疊。失敗店保留舊價，CLI 非 0；dry-run 不寫資料或鎖檔，stdout 只印店名、狀態、筆數。
+- `local/run.sh` 使用 `PTT_DATA_DIR` 的獨立私人 clone（預設 `$HOME/Documents/Codex/dispatch/ptt-iphone-data`），只提交 `jp/`，推送失敗最多重試 3 次，不觸發部署。`local/` 提供日本時間 09:40、21:40 的 launchd 範本與安裝說明，本次只產生檔案，未安裝或執行正式抓取。
+- 駿河屋範例僅有書籍／配件，沒有目標手機價格，本版不做解析器；Back Market 為 403 未做；手機王（sogi）條款禁轉載所以不抓。販賣價公開顯示另做，本次不改網站、workflow、實際資料或 secrets。
