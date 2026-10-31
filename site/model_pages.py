@@ -183,6 +183,10 @@ def render_model_html(template, data, model, canonical_url, asset_prefix=""):
     title = model + " 二手行情、各容量價格 · PTT MacShop交易觀測"
     description = (f'{model} 的 PTT MacShop 刊登行情：{stats.get("listed", 0)} 筆刊登，'
                    f'刊登價中位數 {money(stats.get("median_price"))}。售出價格為賣家售出時最後標價，非實際成交價。')
+    if model == "iPhone Duo":
+        title = "iPhone Duo 二手行情與全新未拆價格｜PTT MacShop交易觀測"
+        description = ("整理 PTT MacShop 的 iPhone Duo 刊登資料，查看各容量統計、全新未拆與二手價格走勢，"
+                       "以及售出時最後標價。刊登價與售出標價均不代表實際成交價。")
     html = re.sub(r"<title>.*?</title>", lambda _: f"<title>{escape(title)}</title>", strip_social_meta(template), count=1)
     html = re.sub(r'<meta name="description" content="[^"]*">',
                   lambda _: f'<meta name="description" content="{escape(description, quote=True)}">', html, count=1)
@@ -192,6 +196,12 @@ def render_model_html(template, data, model, canonical_url, asset_prefix=""):
                         [("PTT MacShop交易觀測", root_url), (model, canonical_url)], site_url=root_url) + "</head>", 1)
     html = html.replace("<body>", f'<body data-model="{escape(model, quote=True)}">', 1)
     html = html.replace('<h1 id="model-name">載入中…</h1>', f'<h1 id="model-name">{escape(model)}</h1>')
+    if model == "iPhone Duo":
+        html = html.replace('<p class="sub"><span id="updated">',
+                            '<p class="sub">查看 iPhone Duo 全新未拆與二手刊登行情、各容量統計及價格走勢。</p>\n'
+                            '      <p class="sub"><span id="updated">', 1)
+        html = html.replace('<p class="hint">「成交價」',
+                            '<p class="hint">各容量統計包含全新未拆與二手刊登。「成交價」', 1)
     updated = f'最後回訪 {data.get("last_checked") or "—"} · 這個機型共追蹤 {len(listings)} 篇'
     html = html.replace('<span id="updated">載入中…</span>', f'<span id="updated">{escape(updated)}</span>')
     html = html.replace('<main class="wrap" id="model-main" hidden>', '<main class="wrap" id="model-main">')
@@ -237,3 +247,23 @@ def build_model_pages(out_dir, data, site_url):
         html = render_model_html(template, data, row["model"], site_url + model_url_path(row["model"]), asset_prefix="../")
         (out / path).write_text(html, encoding="utf-8")
     return paths
+
+
+def link_duo_markets(out_dir, model_paths, jp_urls, site_url):
+    """只互連本輪實際建出的台灣與中文日本 Duo 頁，不新增頁面。"""
+    from pathlib import Path
+    tw_path = model_path("iPhone Duo")
+    jp_path = "jp/iphone-duo/index.html"
+    if tw_path not in model_paths or site_url + "jp/iphone-duo/" not in jp_urls:
+        return
+    out = Path(out_dir)
+    if not (out / tw_path).is_file() or not (out / jp_path).is_file():
+        return
+    for path, href, label in (
+        (tw_path, "../jp/iphone-duo/", "iPhone Duo 日本店家買取價（日圓）"),
+        (jp_path, "../../models/iphone-duo", "iPhone Duo 台灣 PTT 刊登行情"),
+    ):
+        page = out / path
+        html = page.read_text(encoding="utf-8")
+        link = f'<p class="hint"><a href="{href}">{label}</a></p>\n'
+        page.write_text(html.replace('</main>', link + '</main>', 1), encoding="utf-8")
