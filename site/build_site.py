@@ -661,6 +661,8 @@ def build(out_dir, data_dir=DATA_DIR):
     from jp_pages import render_jp_pages
     jp_payload = build_jp(out_dir, data_dir)
     jp_urls = render_jp_pages(out_dir, jp_payload, SITE_URL)
+    from model_pages import link_duo_markets
+    link_duo_markets(out_dir, paths, jp_urls, SITE_URL)
     lastmods = sitemap_lastmods(data, data_dir, jp_payload["latest"])
     # 含日本頁的 HTML 統一代換正式網址；不改站內相對連結或 GA 官方碼。
     for path in Path(out_dir).rglob("*.html"):

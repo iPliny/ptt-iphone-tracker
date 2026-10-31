@@ -65,6 +65,25 @@ class ModelHtmlTest(unittest.TestCase):
         self.assertNotIn("全新未拆</div>", html)  # 全部容量只列二手
         self.assertIn("7 天 −3.2% · 30 天 —", html)
 
+    def test_duo_crosslinks_require_both_current_build_outputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            tw = out / "models/iphone-duo.html"
+            jp = out / "jp/iphone-duo/index.html"
+            for path in (tw, jp):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("<main>行情</main>")
+            # 即使輸出目錄有舊檔，本輪缺任一頁也不連結。
+            for paths, urls in (([], ["https://example.test/jp/iphone-duo/"]),
+                                (["models/iphone-duo.html"], [])):
+                M.link_duo_markets(out, paths, urls, "https://example.test/")
+                self.assertNotIn("href=", tw.read_text())
+                self.assertNotIn("href=", jp.read_text())
+            M.link_duo_markets(out, ["models/iphone-duo.html"],
+                               ["https://example.test/jp/iphone-duo/"], "https://example.test/")
+            self.assertIn('href="../jp/iphone-duo/"', tw.read_text())
+            self.assertIn('href="../../models/iphone-duo"', jp.read_text())
+
     def test_trend_change_rounds_half_up_like_javascript(self):
         self.assertEqual(M.trend_change([40000] + [None] * 6 + [40900], 7), "+2.3%")
 
