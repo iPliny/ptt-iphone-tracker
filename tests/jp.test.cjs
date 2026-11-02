@@ -287,7 +287,7 @@ test('モバステ來源連結涵蓋比較表與最近變動，拒絕偽裝網�
   }
 });
 
-test('歷史最高價依當時確認時間判斷，不因快照末尾停更而改寫早期最高價',()=>{
+test('歷史最高價只在各店最後成功超過48小時後排除停更店家',()=>{
   const prices=[row('モバステ',1,210000),row('イオシス',1,200000)];
   const runs=[{shop:'モバステ',status:'ok',run_at:at(1)},
     ...[1,2,3,4].map(day=>({shop:'イオシス',status:'ok',run_at:at(day)}))];
@@ -302,11 +302,28 @@ test('歷史最高價依當時確認時間判斷，不因快照末尾停更而�
     {shop:'モバステ',status:'ok',run_at:at(5)},
     {shop:'モバステ',status:'ok',run_at:'invalid'}]);
   const best=restored.series[jp.SHOPS.length];
-  assert.equal(best[restored.times.indexOf(Date.parse(at(4)))],200000); // 未來成功不回填，失敗不續期
+  assert.equal(best[restored.times.indexOf(Date.parse(at(4)))],210000); // 最後成功以前一律有效
   assert.equal(best.at(-1),210000); // 同價成功也恢復
   const observed=jp.timeline([...prices,row('モバステ',4,211000)],'iPhone 18 Pro','256GB','all',Date.parse(at(4)));
   assert.equal(observed.series[jp.SHOPS.length].at(-1),211000); // 無 runs 時以觀測續期
   const expired=jp.timeline(prices,'iPhone 18 Pro','256GB','all',Date.parse(at(4)));
   assert.equal(expired.series[jp.SHOPS.length][0],210000);
   assert.equal(expired.series[jp.SHOPS.length].at(-1),null);
+});
+
+test('同價每天成功但公開runs只留最近7天，全部與30天歷史最高價仍全程有效',()=>{
+  const prices=[row('モバステ',1,210000)]; // 同價不追加 prices
+  const dailyRuns=Array.from({length:20},(_,i)=>({shop:'モバステ',status:'ok',run_at:at(i+1)}));
+  const end=Date.parse(at(20));
+  const publicRuns=dailyRuns.filter(r=>Date.parse(r.run_at)>=end-7*86400000);
+  for (const days of ['all','30']) {
+    const chart=jp.timeline(prices,'iPhone 18 Pro','256GB',days,end,publicRuns);
+    assert.equal(chart.start,Date.parse(at(1)));
+    assert.equal(chart.end,end);
+    assert.ok(chart.series[jp.SHOPS.length].every(price=>price===210000));
+    assert.deepEqual(chart,jp.timeline(prices,'iPhone 18 Pro','256GB',days,end,[dailyRuns.at(-1),...publicRuns]));
+    // 比對完整紀錄，裁切前後每個歷史時點的最高價都相同。
+    const full=jp.timeline(prices,'iPhone 18 Pro','256GB',days,end,dailyRuns);
+    assert.ok(full.series[jp.SHOPS.length].every(price=>price===210000));
+  }
 });

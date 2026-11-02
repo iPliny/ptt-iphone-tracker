@@ -88,17 +88,23 @@
     if (!events.length) return {times:[], series:[], start:end, end};
     end = Math.max(end, events[events.length-1].time);
     const start = days === 'all' ? events[0].time : Math.max(events[0].time, end - Number(days)*DAY);
-    // 只使用該時點以前的成功紀錄或觀測；未改價的成功抓取也會延長有效期。
+    // runs 只保留最近 7 天與各店最後成功，不能用歷史紀錄缺口判定過期。
     const confirmations = [
       ...runs.filter(r=>r.status==='ok').map(r=>({shop:r.shop, time:Date.parse(r.run_at)})),
       ...prices.map(r=>({shop:r.shop, time:Date.parse(r.observed_at)})),
     ].filter(r=>SHOPS.includes(r.shop) && Number.isFinite(r.time)).sort((a,b)=>a.time-b.time);
-    // 嚴格超過 48 小時才逾期，並在無改價時仍讓最高價線反映逾期／恢復。
-    const times = [...new Set([start, ...events.map(r=>r.time),
-      ...confirmations.flatMap(r=>[r.time, r.time+2*DAY+1]), end])]
-      .filter(t=>t>=start && t<=end).sort((a,b)=>a-b);
     const confirmed = new Map();
-    let confirmationIndex=0;
+    for (const record of confirmations) confirmed.set(record.shop, record.time);
+    // 最後成功以前一律有效；嚴格超過最後成功 48 小時才排除。
+    // 沒有成功紀錄的舊 payload，沿用價格觀測時間作為備援。
+    for (const shop of SHOPS) {
+      const successes = runs.filter(r=>r.shop===shop && r.status==='ok')
+        .map(r=>Date.parse(r.run_at)).filter(Number.isFinite);
+      if (successes.length) confirmed.set(shop, Math.max(...successes));
+    }
+    const times = [...new Set([start, ...events.map(r=>r.time),
+      ...confirmations.map(r=>r.time), ...[...confirmed.values()].flatMap(t=>[t+2*DAY, t+2*DAY+1]), end])]
+      .filter(t=>t>=start && t<=end).sort((a,b)=>a-b);
     const values = SHOPS.map(()=>null), series = [...SHOPS, '當下最高價'].map(()=>[]);
     let index=0;
     for (const time of times) {
@@ -108,10 +114,6 @@
       }
       const visible = visiblePrices(values);
       visible.forEach((p,i) => series[i].push(p));
-      while (confirmationIndex < confirmations.length && confirmations[confirmationIndex].time <= time) {
-        const record = confirmations[confirmationIndex++];
-        confirmed.set(record.shop, record.time);
-      }
       const present=visible.filter((v,i)=>Number.isFinite(v) && time-confirmed.get(SHOPS[i])<=2*DAY);
       series[SHOPS.length].push(present.length ? Math.max(...present) : null);
     }
