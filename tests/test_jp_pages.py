@@ -85,6 +85,19 @@ class JpPagesTest(unittest.TestCase):
         self.assertTrue(offered[-1])
         self.assertEqual(groups[0]["highest"], 160000)
 
+    def test_mobasute_source_links(self):
+        for source in ("https://pastec.net/iphone/?a=1&b=2", "https://pastec.net.evil.test/",
+                       "http://pastec.net/", "javascript:alert(1)"):
+            latest = [row("モバステ", 180000, source_url=source)]
+            for lang in ("zh", "ja"):
+                html = P.page_html({"latest": latest}, "iPhone 17 Pro", lang, SITE)
+                cell = html.split('<td data-label="モバステ"')[1].split('</td>')[0]
+                if source.startswith("https://pastec.net/"):
+                    self.assertIn('href="https://pastec.net/iphone/?a=1&amp;b=2"', cell)
+                    self.assertIn("¥180,000", cell)
+                else:
+                    self.assertNotIn('<a href=', cell)
+
     def test_page_metadata_and_links(self):
         latest = [row("mobile-mix", 173000), row("アメモバ", 151000, condition="中古上限"),
                   row("イオシス", 166000, source_url="javascript:alert(1)")]

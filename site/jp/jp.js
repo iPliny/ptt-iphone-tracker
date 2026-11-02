@@ -46,7 +46,7 @@
   const safeURL = value => {
     try {
       const u = new URL(value);
-      return u.protocol === 'https:' && ['mobile-mix.jp','k-tai-iosys.com','amemoba.com'].includes(u.hostname) ? u.href : '';
+      return u.protocol === 'https:' && ['mobile-mix.jp','k-tai-iosys.com','amemoba.com','pastec.net'].includes(u.hostname) ? u.href : '';
     } catch (_) { return ''; }
   };
 
@@ -83,13 +83,22 @@
   }
 
   function timeline(prices, model, storage, days, end, runs=[]) {
-    const stale=staleShops(runs,end);
     const events = prices.filter(r => mainRow(r) && r.model === model && r.storage === storage && SHOPS.includes(r.shop) && Number.isFinite(Date.parse(r.observed_at)))
       .map(r => ({...r, time:Date.parse(r.observed_at)})).sort((a,b) => a.time-b.time);
     if (!events.length) return {times:[], series:[], start:end, end};
     end = Math.max(end, events[events.length-1].time);
     const start = days === 'all' ? events[0].time : Math.max(events[0].time, end - Number(days)*DAY);
-    const times = [...new Set([start, ...events.filter(r => r.time >= start && r.time <= end).map(r => r.time), end])].sort((a,b)=>a-b);
+    // 只使用該時點以前的成功紀錄或觀測；未改價的成功抓取也會延長有效期。
+    const confirmations = [
+      ...runs.filter(r=>r.status==='ok').map(r=>({shop:r.shop, time:Date.parse(r.run_at)})),
+      ...prices.map(r=>({shop:r.shop, time:Date.parse(r.observed_at)})),
+    ].filter(r=>SHOPS.includes(r.shop) && Number.isFinite(r.time)).sort((a,b)=>a.time-b.time);
+    // 嚴格超過 48 小時才逾期，並在無改價時仍讓最高價線反映逾期／恢復。
+    const times = [...new Set([start, ...events.map(r=>r.time),
+      ...confirmations.flatMap(r=>[r.time, r.time+2*DAY+1]), end])]
+      .filter(t=>t>=start && t<=end).sort((a,b)=>a-b);
+    const confirmed = new Map();
+    let confirmationIndex=0;
     const values = SHOPS.map(()=>null), series = [...SHOPS, '當下最高價'].map(()=>[]);
     let index=0;
     for (const time of times) {
@@ -99,7 +108,11 @@
       }
       const visible = visiblePrices(values);
       visible.forEach((p,i) => series[i].push(p));
-      const present=visible.filter((v,i)=>!stale.has(SHOPS[i]) && Number.isFinite(v));
+      while (confirmationIndex < confirmations.length && confirmations[confirmationIndex].time <= time) {
+        const record = confirmations[confirmationIndex++];
+        confirmed.set(record.shop, record.time);
+      }
+      const present=visible.filter((v,i)=>Number.isFinite(v) && time-confirmed.get(SHOPS[i])<=2*DAY);
       series[SHOPS.length].push(present.length ? Math.max(...present) : null);
     }
     return {times, series, start, end};
@@ -184,7 +197,9 @@
     const rows=visible.map(r=>{
       const delta=Number.isFinite(r.new_price)&&Number.isFinite(r.old_price)?r.new_price-r.old_price:null;
       const change=delta===null?(r.new_price===null?T.removed:T.restored):(delta>0?T.up:T.down)+money(Math.abs(delta));
-      return '<div class="jp-change"><time datetime="'+esc(r.observed_at)+'">'+esc(dateTime(r.observed_at))+'</time><strong>'+esc(r.shop)+'</strong><span class="spec">'+esc(r.model+' '+r.storage+(r.color?' · '+r.color:''))+'</span><span class="amount">'+money(r.old_price)+' → '+money(r.new_price)+'<span class="delta">'+esc(change)+'</span></span></div>';
+      const url=safeURL(r.source_url);
+      const shop='<strong>'+esc(r.shop)+'</strong>';
+      return '<div class="jp-change"><time datetime="'+esc(r.observed_at)+'">'+esc(dateTime(r.observed_at))+'</time>'+(url?'<a href="'+esc(url)+'">'+shop+'</a>':shop)+'<span class="spec">'+esc(r.model+' '+r.storage+(r.color?' · '+r.color:''))+'</span><span class="amount">'+money(r.old_price)+' → '+money(r.new_price)+'<span class="delta">'+esc(change)+'</span></span></div>';
     }).join('');
     const button=changes.length>10?'<button type="button" class="jp-changes-toggle" aria-expanded="'+expanded+'" aria-controls="changes-list">'+esc(expanded?T.collapseChanges:T.moreChanges(changes.length-10))+'</button>':'';
     return '<div id="changes-list">'+rows+'</div>'+button;

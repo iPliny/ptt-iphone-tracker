@@ -15,7 +15,7 @@ SHOPS = ["mobile-mix", "イオシス", "アメモバ", "モバステ"]
 STORAGES = ["256GB", "512GB", "1TB", "2TB"]
 MODELS = ["iPhone Duo", "iPhone 18 Pro", "iPhone 18 Pro Max", "iPhone 17 Pro", "iPhone 17 Pro Max", "iPhone 17", "iPhone Air"]
 CONDITIONS = ["未開封", "中古上限"]
-SOURCE_HOSTS = {"mobile-mix.jp", "k-tai-iosys.com", "amemoba.com"}
+SOURCE_HOSTS = {"mobile-mix.jp", "k-tai-iosys.com", "amemoba.com", "pastec.net"}
 GA_ID = "G-G3GH12TQSZ"
 
 # 介面文字與 jp.js 的 I18N 對應；改字時兩邊一起改。
