@@ -32,7 +32,7 @@ test('階梯線保留期間前的價格，消失斷線，恢復才重畫',()=>{
   const timeline=jp.timeline(prices,'iPhone 18 Pro','256GB','7',Date.parse(at(9)));
   assert.equal(timeline.start,Date.parse(at(2)));
   assert.deepEqual(timeline.series[0],[200000,null,205000,205000]);
-  assert.deepEqual(timeline.series[3],[200000,190000,205000,205000]);
+  assert.deepEqual(timeline.series[jp.SHOPS.length],[200000,190000,205000,205000]);
   const path=jp.stepPath([0,1,2,3],[10,null,20,20],x=>x,y=>y);
   assert.equal(path,'M0.00 10.00 H1.00 M2.00 20.00 H3.00 V20.00');
 });
@@ -200,4 +200,75 @@ test('中古切換：比較表、走勢、變動改用中古上限；沒有中�
   } finally { jp.setLang('zh'); jp.setCondition('未開封'); }
   assert.equal(jp.setCondition('bogus'),'未開封');
   assert.equal(jp.comparison(latest,'iPhone 18 Pro')[0].highest,212000);
+});
+
+test('モバステは比較・中古・履歴・最高価格線に含まれる',()=>{
+  for (const condition of ['未開封','中古上限']) {
+    jp.setCondition(condition);
+    try {
+      const prices=[row('イオシス',1,190000,{condition}),row('モバステ',1,200000,{condition}),row('モバステ',2,210000,{condition})];
+      const latest=prices.slice(0,1).concat(prices.slice(-1));
+      assert.equal(jp.comparison(latest,'iPhone 18 Pro')[0].highest,210000);
+      assert.match(jp.renderComparison({latest,prices},'iPhone 18 Pro'),/モバステ/);
+      const chart=jp.timeline(prices,'iPhone 18 Pro','256GB','all',Date.parse(at(3)));
+      assert.equal(chart.series.length,jp.SHOPS.length+1);
+      assert.equal(chart.series[3].at(-1),210000);
+      assert.equal(chart.series[jp.SHOPS.length].at(-1),210000);
+      const svg=jp.renderChart(chart,800);
+      assert.match(svg,/shop-4 jp-high/);assert.doesNotMatch(svg,/shop-3 jp-high/);
+      assert.equal(jp.recentChanges(prices,Date.parse(at(3)))[0].shop,'モバステ');
+    } finally {jp.setCondition('未開封');}
+  }
+});
+test('48時間を超えた最後の成功を旧データとして両言語で表示する',()=>{
+  const runs=[{shop:'モバステ',status:'ok',run_at:at(1)},{shop:'モバステ',status:'fetch_error',run_at:at(3)}];
+  assert.equal(jp.shopStatuses(runs,Date.parse(at(3))).at(-1).stale,false);
+  assert.equal(jp.shopStatuses(runs,Date.parse(at(3))+1).at(-1).stale,true);
+  assert.equal(jp.shopStatuses([],Date.parse(at(3))).at(-1).stale,false);
+  try {
+    assert.match(jp.renderStatuses(runs,Date.parse(at(4))),/舊資料/);
+    jp.setLang('ja');assert.match(jp.renderStatuses(runs,Date.parse(at(4))),/古いデータ/);
+  } finally {jp.setLang('zh');}
+});
+
+test('無成功紀錄使用中日文 none，不輸出 undefined；日文頁保留正確文字',()=>{
+  const fs=require('node:fs');
+  assert.match(fs.readFileSync('site/jp/ja/index.html','utf8'),/実際の買取には/);
+  for (const [lang,label] of [['zh','尚無紀錄'],['ja','記録なし']]) {
+    try {
+      jp.setLang(lang);
+      const html=jp.renderStatuses([{shop:'モバステ',status:'fetch_error',run_at:at(4)}]);
+      assert.ok(html.includes(label));assert.doesNotMatch(html,/undefined/);
+    } finally {jp.setLang('zh');}
+  }
+});
+test('快照超過48小時的舊價保留標記但排除最高、價差及最高價線',()=>{
+  const runs=[{shop:'モバステ',status:'ok',run_at:at(1)},
+    {shop:'イオシス',status:'ok',run_at:at(4)}];
+  const end=Date.parse(at(4));
+  assert.equal(jp.referenceTime({runs}),end);
+  assert.equal(jp.referenceTime({runs,generated_at:at(3)}),Date.parse(at(3)));
+  for(const condition of ['未開封','中古上限']) {
+    jp.setCondition(condition);
+    try {
+      const latest=[row('モバステ',1,210000,{condition}),row('イオシス',4,200000,{condition})];
+      const data={latest,prices:latest,runs,generated_at:at(4)};
+      const group=jp.comparison(latest,'iPhone 18 Pro',jp.staleShops(runs,end))[0];
+      assert.equal(group.highest,200000);assert.equal(group.spread,null);
+      const chart=jp.timeline(latest,'iPhone 18 Pro','256GB','all',end,runs);
+      assert.equal(chart.series[3].at(-1),210000);
+      assert.equal(chart.series[jp.SHOPS.length].at(-1),200000);
+      for(const [lang,label,ok] of [['zh','舊資料','抓取正常'],['ja','古いデータ','取得正常']]) {
+        jp.setLang(lang);
+        const html=jp.renderComparison(data,'iPhone 18 Pro');
+        const cell=html.match(/<td data-label="モバステ"[^>]*>[\s\S]*?<\/td>/)[0];
+        assert.match(cell,/¥210,000/);assert.ok(cell.includes(label));assert.doesNotMatch(cell,/jp-best|jp-badge/);
+        const status=jp.renderStatuses(runs,end).split('<article>').at(-1);
+        assert.ok(status.includes(label));assert.ok(!status.includes(ok));assert.match(status,/2026-10-01/);
+      }
+      const stale=jp.staleShops(runs,Date.parse(at(7)));
+      assert.equal(jp.comparison(latest,'iPhone 18 Pro',stale)[0].highest,null);
+      assert.equal(jp.timeline(latest,'iPhone 18 Pro','256GB','all',Date.parse(at(7)),runs).series[jp.SHOPS.length].at(-1),null);
+    } finally {jp.setCondition('未開封');jp.setLang('zh');}
+  }
 });

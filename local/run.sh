@@ -58,12 +58,17 @@ if [ -n "$outside_paths" ]; then
     printf '尚未推送的 commit 含 jp/ 以外檔案，停止同步。\n'
     exit 1
 fi
-"$PTT_PYTHON" -m jp.local --data "$PTT_DATA_DIR/jp"
+crawl_status=0
+"$PTT_PYTHON" -m jp.local --data "$PTT_DATA_DIR/jp" || crawl_status=$?
+commit_note=""
+if [ "$crawl_status" -ne 0 ]; then
+    commit_note="（抓取失敗 exit ${crawl_status}）"
+fi
 git -C "$PTT_DATA_DIR" add -- jp/
 diff_status=0
 git -C "$PTT_DATA_DIR" diff --cached --quiet || diff_status=$?
 if [ "$diff_status" -eq 1 ]; then
-    git -C "$PTT_DATA_DIR" commit -m "本機日本價格更新 $(TZ=Asia/Tokyo date '+%Y-%m-%d %H:%M:%S %z')"
+    git -C "$PTT_DATA_DIR" commit -m "本機日本價格更新 ${commit_note} $(TZ=Asia/Tokyo date '+%Y-%m-%d %H:%M:%S %z')"
 elif [ "$diff_status" -ne 0 ]; then
     exit "$diff_status"
 fi
@@ -71,7 +76,7 @@ fi
 for attempt in 0 1 2 3; do
     if git -C "$PTT_DATA_DIR" push origin HEAD:main; then
         printf '%s 同步完成\n' "$(TZ=Asia/Tokyo date +%FT%T%z)"
-        exit 0
+        exit "$crawl_status"
     fi
     if [ "$attempt" -eq 3 ]; then
         printf '推送失敗，已重試 3 次；保留本機 commit。\n'

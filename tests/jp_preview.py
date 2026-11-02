@@ -28,6 +28,10 @@ def preview(data_root):
         rows = [r for name, (url, model) in zip(names, pages.items()) if name
                 for r in parser(read(name), url)[0] if r["model"] == model]
         base.append(dict(shop=shop, rows=rows))
+    base.append(dict(shop="モバステ", rows=[dict(shop="モバステ", model="iPhone 18 Pro",
+        storage="256GB", condition=c, carrier="SIMフリー", color="", price_jpy=p,
+        shop_updated="", source_url="https://pastec.net/iphone")
+        for c, p in [("未開封", 215000), ("中古上限", 190000)]]))
     today = datetime.now(TOKYO).replace(second=0, microsecond=0)
     # 最後一次同價，前一次同時有漲有跌，方便驗收快報回溯；不產生未來時間。
     adjustments = [[-4000, -2000, 0], [-1000, -1000, 1000], [-1000, 0, 1000],
@@ -36,7 +40,7 @@ def preview(data_root):
         results = copy.deepcopy(base)
         for index, result in enumerate(results):
             for row in result["rows"]:
-                row["price_jpy"] += offsets[index]
+                row["price_jpy"] += offsets[index % len(offsets)]
         if day == 3:
             results[2]["rows"] = [r for r in results[2]["rows"] if not (r["model"] == "iPhone 18 Pro" and r["storage"] == "256GB")]
         apply_results(dest, results, (today - timedelta(days=6-day)).isoformat())

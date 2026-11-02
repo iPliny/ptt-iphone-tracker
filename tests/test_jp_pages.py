@@ -22,6 +22,36 @@ def row(shop, price, storage="256GB", condition="未開封", model="iPhone 17 Pr
 
 
 class JpPagesTest(unittest.TestCase):
+    def test_stale_prices_excluded_from_best_and_spread(self):
+        payload = {"generated_at": "2026-10-21T00:00:00+09:00", "runs": [
+            {"shop": "モバステ", "status": "ok", "run_at": "2026-10-18T00:00:00+09:00"},
+            {"shop": "イオシス", "status": "ok", "run_at": "2026-10-21T00:00:00+09:00"}],
+            "latest": [row(shop, price, condition=condition) for condition in P.CONDITIONS
+                       for shop, price in [("モバステ", 180000), ("イオシス", 170000)]]}
+        self.assertEqual(P.stale_shops(payload), {"モバステ"})
+        self.assertEqual(P.stale_shops({**payload, "generated_at": ""}), {"モバステ"})
+        self.assertEqual(P.stale_shops({**payload, "generated_at": "2026-10-20T00:00:00+09:00"}), set())
+        for condition, key in [("未開封", "best"), ("中古上限", "best_used")]:
+            groups, offered = P.comparison(payload["latest"], "iPhone 17 Pro", condition, P.stale_shops(payload))
+            self.assertEqual((groups[0]["highest"], groups[0]["spread"]), (170000, None))
+            for lang, label in [("zh", "舊資料"), ("ja", "古いデータ")]:
+                text = P.TEXT[lang]
+                self.assertIn("イオシス", P.best_line(groups, text, key))
+                html = P.table(groups, offered, text)
+                cell = html.split('<td data-label="モバステ"')[1].split('</td>')[0]
+                self.assertIn("¥180,000", cell)
+                self.assertIn(label, cell)
+                self.assertNotIn("jp-best", cell)
+                self.assertNotIn("jp-badge", cell)
+                page = P.page_html(payload, "iPhone 17 Pro", lang, SITE)
+                self.assertIn(label, page)
+                self.assertIn("9:40", page)
+                self.assertIn("21:40", page)
+                self.assertNotIn(text[key].format(s="256GB", shop="モバステ", p="¥180,000"), page)
+            groups, _ = P.comparison(payload["latest"], "iPhone 17 Pro", condition, set(P.SHOPS))
+            self.assertIsNone(groups[0]["highest"])
+            self.assertEqual(P.best_line(groups, P.TEXT["zh"], key), "")
+
     def test_visible_prices_matches_jp_js(self):
         # 與 tests/jp.test.cjs 的 visiblePrices 案例相同。
         self.assertEqual(P.visible_prices([200000, 210000, 90000]), [200000, 210000, None])
@@ -37,11 +67,23 @@ class JpPagesTest(unittest.TestCase):
         groups, offered = P.comparison(latest, "iPhone 17 Pro", "未開封")
         self.assertEqual((groups[0]["highest"], groups[0]["spread"]), (173000, 7000))
         groups, offered = P.comparison(latest, "iPhone 17 Pro", "中古上限")
-        self.assertEqual(offered, [False, True, True])
+        self.assertEqual(offered, [False, True, True, False])
         html = P.table(groups, offered, P.TEXT["ja"])
         self.assertIn("中古買取なし", html)
         self.assertIn('class="jp-best"', html)
         self.assertNotIn("990,000", html)
+
+    def test_mobasute_best_new_and_used(self):
+        latest = [row("モバステ", 180000), row("モバステ", 160000, condition="中古上限"),
+                  row("イオシス", 150000, condition="中古上限")]
+        for lang in ("zh", "ja"):
+            html = P.page_html({"latest": latest}, "iPhone 17 Pro", lang, SITE)
+            self.assertIn("モバステ", html)
+            self.assertIn("¥160,000", html)
+            self.assertIn("A〜C", html)
+        groups, offered = P.comparison(latest, "iPhone 17 Pro", "中古上限")
+        self.assertTrue(offered[-1])
+        self.assertEqual(groups[0]["highest"], 160000)
 
     def test_page_metadata_and_links(self):
         latest = [row("mobile-mix", 173000), row("アメモバ", 151000, condition="中古上限"),
@@ -56,7 +98,7 @@ class JpPagesTest(unittest.TestCase):
             self.assertIn('href="../?m=iPhone+17+Pro&amp;c=used"', html)
             self.assertIn('href="../iphone-air/"', html)
             self.assertNotIn("javascript:", html)
-            self.assertEqual(html.count("jp-none"), 2)  # 只有中古表的 mobile-mix、イオシス
+            self.assertEqual(html.count("jp-none"), 3)  # 只有中古表的 mobile-mix、イオシス
             self.assertIn("¥173,000", html)
             data = json.loads(html.split('<script type="application/ld+json">')[1].split("</script>")[0])
             self.assertEqual(data["itemListElement"][-1]["item"], SITE + path)
