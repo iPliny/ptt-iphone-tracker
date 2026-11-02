@@ -46,7 +46,7 @@ class DataPrivacyTests(unittest.TestCase):
             self.assertEqual(raw.read_text(), 'source_url\nprivate\n')
 
     def test_jp_allowlist_excludes_carriers_unknown_columns_and_raw_logs(self):
-        base = dict(shop='mobile-mix', model='iPhone 18 Pro', storage='256GB',
+        base = dict(shop='モバステ', model='iPhone 18 Pro', storage='256GB',
                     condition='未開封', carrier='SIMフリー', color='', price_jpy=200000,
                     raw_note='PRIVATE_NOTE', error='PRIVATE_ERROR')
         rows = J.public_rows([base, {**base, 'carrier': 'docomo'}, {**base, 'model': 'unlisted'}], J.LATEST_FIELDS)
@@ -55,9 +55,9 @@ class DataPrivacyTests(unittest.TestCase):
         self.assertNotIn('raw_note', rows[0])
         self.assertNotIn('error', rows[0])
         runs = J.public_runs([
-            dict(shop='mobile-mix', run_at='2026-10-01T00:00:00+09:00', status='ok', rows='3', error='secret'),
-            dict(shop='mobile-mix', run_at='2026-10-02T00:00:00+09:00', status='parse_error', error='old error'),
-            dict(shop='mobile-mix', run_at='2026-10-26T00:00:00+09:00', status='fetch_error', error='secret'),
+            dict(shop='モバステ', run_at='2026-10-01T00:00:00+09:00', status='ok', rows='3', error='secret'),
+            dict(shop='モバステ', run_at='2026-10-02T00:00:00+09:00', status='parse_error', error='old error'),
+            dict(shop='モバステ', run_at='2026-10-26T00:00:00+09:00', status='fetch_error', error='secret'),
         ])
         self.assertEqual([r['status'] for r in runs], ['ok', 'fetch_error'])
         self.assertTrue(all(set(r) == {'shop', 'run_at', 'status'} for r in runs))

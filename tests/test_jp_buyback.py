@@ -135,6 +135,18 @@ class StoreTests(unittest.TestCase):
     def write(self, rows, at, extra=()):
         return jp.apply_results(self.directory, [result("mobile-mix", rows), *extra], at)
 
+    def test_cloud_updates_preserve_local_shop_snapshot_and_history(self):
+        local_rows = [{**self.rows[0], "shop": "モバステ", "color": "", "condition": c}
+                      for c in ("未開封", "中古上限")]
+        jp.apply_results(self.directory, [result("モバステ", local_rows)], T0)
+        before = {name: self.read(name) for name in ("latest", "prices")}
+        cloud = jp.collect(fetcher=shop_page)
+        jp.apply_results(self.directory, cloud, T1)
+        jp.apply_results(self.directory, [{"shop": "mobile-mix", "status": "fetch_error"}], T2)
+        for name in before:
+            self.assertEqual([r for r in self.read(name) if r["shop"] == "モバステ"], before[name])
+        self.assertTrue(all(r["last_checked"] == T1 for r in self.read("latest") if r["shop"] != "モバステ"))
+
     def test_unchanged_changed_removed_and_returned(self):
         self.write(self.rows, T0)
         first = (self.directory / "prices.csv").read_bytes()

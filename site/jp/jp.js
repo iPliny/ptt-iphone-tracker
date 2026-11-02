@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const MODELS = ['iPhone Duo', 'iPhone 18 Pro', 'iPhone 18 Pro Max', 'iPhone 17 Pro', 'iPhone 17 Pro Max', 'iPhone 17', 'iPhone Air'];
-  const SHOPS = ['mobile-mix', 'イオシス', 'アメモバ'];
+  const SHOPS = ['mobile-mix', 'イオシス', 'アメモバ', 'モバステ'];
   const STORAGES = ['256GB', '512GB', '1TB', '2TB'];
   const DAY = 86400000;
   // 介面文字：中文版 jp/、日文版 jp/ja/ 共用同一份程式，依 <html lang> 切換。
@@ -12,7 +12,7 @@
       chartLabel:'各店與當下最高買取價階梯走勢，日圓，日本時間', chartTitle:c=>c+'・SIMフリー主價走勢',
       cond:{'未開封':'未開封','中古上限':'中古'}, notOffered:'不收中古', highest:'當下最高價',
       loadFailed:'資料暫時無法載入，請稍後重試', checked:'最近確認：', removed:'下架／不收', restored:'重新收購',
-      up:'上漲 ', down:'下跌 ', noChanges:'最近 7 天沒有改價紀錄', ok:'抓取正常', failed:'暫時抓不到',
+      up:'上漲 ', down:'下跌 ', noChanges:'最近 7 天沒有改價紀錄', stale:'舊資料（超過 48 小時未更新）', ok:'抓取正常', failed:'暫時抓不到',
       notStarted:'尚未開始抓取', lastOk:'最後成功：', moreChanges:n=>'更多（還有 '+n+' 筆）', collapseChanges:'收起',
       flashFallback:'，各店沒有改價。以下是最近一次有改價的抓取：', flashPastCount:n=>'該次共 '+n+' 筆改價',
       flashAt:'最新一次抓取：', flashNone:'這次各店都沒有改價', flashUp:'提價最多', flashDown:'砍價最多', flashCount:n=>'這次共 '+n+' 筆改價', csv:{latest:'最新報價', prices:'價格歷史', runs:'抓取紀錄'}},
@@ -21,7 +21,7 @@
       chartLabel:'各店と現在の最高買取価格の推移（円・日本時間）', chartTitle:c=>c+'・SIMフリーの基本価格の推移',
       cond:{'未開封':'未開封','中古上限':'中古'}, notOffered:'中古買取なし', highest:'現在の最高価格',
       loadFailed:'データを読み込めませんでした。しばらくしてから再度お試しください', checked:'最終確認：', removed:'掲載終了／買取不可', restored:'買取再開',
-      up:'値上げ ', down:'値下げ ', noChanges:'直近 7 日間の価格変更はありません', ok:'取得正常', failed:'一時的に取得できません',
+      up:'値上げ ', down:'値下げ ', noChanges:'直近 7 日間の価格変更はありません', stale:'古いデータ（48 時間を超えて更新なし）', ok:'取得正常', failed:'一時的に取得できません',
       notStarted:'未取得', lastOk:'最終取得成功：', moreChanges:n=>'さらに表示（残り '+n+' 件）', collapseChanges:'閉じる',
       flashFallback:'は価格変更なし。直近で価格変更があった取得：', flashPastCount:n=>'その取得での価格変更 '+n+' 件',
       flashAt:'最新の取得：', flashNone:'今回はどの店舗も価格変更なし', flashUp:'最大の値上げ', flashDown:'最大の値下げ', flashCount:n=>'今回の価格変更 '+n+' 件', csv:{latest:'最新価格', prices:'価格履歴', runs:'取得ログ'}},
@@ -46,7 +46,7 @@
   const safeURL = value => {
     try {
       const u = new URL(value);
-      return u.protocol === 'https:' && ['mobile-mix.jp','k-tai-iosys.com','amemoba.com'].includes(u.hostname) ? u.href : '';
+      return u.protocol === 'https:' && ['mobile-mix.jp','k-tai-iosys.com','amemoba.com','pastec.net'].includes(u.hostname) ? u.href : '';
     } catch (_) { return ''; }
   };
 
@@ -62,23 +62,49 @@
     });
   }
 
-  function comparison(latest, model) {
+  // 與靜態頁共用快照時鐘；不讀瀏覽器現在時間。
+  function referenceTime(data) {
+    const generated=Date.parse(data.generated_at);
+    if (Number.isFinite(generated)) return generated;
+    const times=(data.runs || []).filter(r=>r.status==='ok').map(r=>Date.parse(r.run_at)).filter(Number.isFinite);
+    return times.length ? Math.max(...times) : NaN;
+  }
+  const staleShops = (runs, end) => new Set(shopStatuses(runs || [], end).filter(s=>s.stale).map(s=>s.shop));
+
+  function comparison(latest, model, stale=new Set()) {
     return STORAGES.filter(storage => latest.some(r => r.model === model && r.storage === storage && mainRow(r))).map(storage => {
       const rows = SHOPS.map(shop => latest.find(r => r.shop === shop && r.model === model && r.storage === storage && mainRow(r)) || null);
       const values = visiblePrices(rows.map(r => r?.price_jpy ?? null));
-      const present = values.filter(Number.isFinite);
-      return {storage, rows, values, highest:present.length ? Math.max(...present) : null,
+      const outdated = SHOPS.map(shop=>stale.has(shop));
+      const present = values.filter((v,i)=>!outdated[i] && Number.isFinite(v));
+      return {storage, rows, values, outdated, highest:present.length ? Math.max(...present) : null,
         spread:present.length >= 2 ? Math.max(...present)-Math.min(...present) : null};
     });
   }
 
-  function timeline(prices, model, storage, days, end) {
+  function timeline(prices, model, storage, days, end, runs=[]) {
     const events = prices.filter(r => mainRow(r) && r.model === model && r.storage === storage && SHOPS.includes(r.shop) && Number.isFinite(Date.parse(r.observed_at)))
       .map(r => ({...r, time:Date.parse(r.observed_at)})).sort((a,b) => a.time-b.time);
     if (!events.length) return {times:[], series:[], start:end, end};
     end = Math.max(end, events[events.length-1].time);
     const start = days === 'all' ? events[0].time : Math.max(events[0].time, end - Number(days)*DAY);
-    const times = [...new Set([start, ...events.filter(r => r.time >= start && r.time <= end).map(r => r.time), end])].sort((a,b)=>a-b);
+    // runs 只保留最近 7 天與各店最後成功，不能用歷史紀錄缺口判定過期。
+    const confirmations = [
+      ...runs.filter(r=>r.status==='ok').map(r=>({shop:r.shop, time:Date.parse(r.run_at)})),
+      ...prices.map(r=>({shop:r.shop, time:Date.parse(r.observed_at)})),
+    ].filter(r=>SHOPS.includes(r.shop) && Number.isFinite(r.time)).sort((a,b)=>a.time-b.time);
+    const confirmed = new Map();
+    for (const record of confirmations) confirmed.set(record.shop, record.time);
+    // 最後成功以前一律有效；嚴格超過最後成功 48 小時才排除。
+    // 沒有成功紀錄的舊 payload，沿用價格觀測時間作為備援。
+    for (const shop of SHOPS) {
+      const successes = runs.filter(r=>r.shop===shop && r.status==='ok')
+        .map(r=>Date.parse(r.run_at)).filter(Number.isFinite);
+      if (successes.length) confirmed.set(shop, Math.max(...successes));
+    }
+    const times = [...new Set([start, ...events.map(r=>r.time),
+      ...confirmations.map(r=>r.time), ...[...confirmed.values()].flatMap(t=>[t+2*DAY, t+2*DAY+1]), end])]
+      .filter(t=>t>=start && t<=end).sort((a,b)=>a-b);
     const values = SHOPS.map(()=>null), series = [...SHOPS, '當下最高價'].map(()=>[]);
     let index=0;
     for (const time of times) {
@@ -88,8 +114,8 @@
       }
       const visible = visiblePrices(values);
       visible.forEach((p,i) => series[i].push(p));
-      const present=visible.filter(Number.isFinite);
-      series[3].push(present.length ? Math.max(...present) : null);
+      const present=visible.filter((v,i)=>Number.isFinite(v) && time-confirmed.get(SHOPS[i])<=2*DAY);
+      series[SHOPS.length].push(present.length ? Math.max(...present) : null);
     }
     return {times, series, start, end};
   }
@@ -173,17 +199,24 @@
     const rows=visible.map(r=>{
       const delta=Number.isFinite(r.new_price)&&Number.isFinite(r.old_price)?r.new_price-r.old_price:null;
       const change=delta===null?(r.new_price===null?T.removed:T.restored):(delta>0?T.up:T.down)+money(Math.abs(delta));
-      return '<div class="jp-change"><time datetime="'+esc(r.observed_at)+'">'+esc(dateTime(r.observed_at))+'</time><strong>'+esc(r.shop)+'</strong><span class="spec">'+esc(r.model+' '+r.storage+(r.color?' · '+r.color:''))+'</span><span class="amount">'+money(r.old_price)+' → '+money(r.new_price)+'<span class="delta">'+esc(change)+'</span></span></div>';
+      const url=safeURL(r.source_url);
+      const shop='<strong>'+esc(r.shop)+'</strong>';
+      return '<div class="jp-change"><time datetime="'+esc(r.observed_at)+'">'+esc(dateTime(r.observed_at))+'</time>'+(url?'<a href="'+esc(url)+'">'+shop+'</a>':shop)+'<span class="spec">'+esc(r.model+' '+r.storage+(r.color?' · '+r.color:''))+'</span><span class="amount">'+money(r.old_price)+' → '+money(r.new_price)+'<span class="delta">'+esc(change)+'</span></span></div>';
     }).join('');
     const button=changes.length>10?'<button type="button" class="jp-changes-toggle" aria-expanded="'+expanded+'" aria-controls="changes-list">'+esc(expanded?T.collapseChanges:T.moreChanges(changes.length-10))+'</button>':'';
     return '<div id="changes-list">'+rows+'</div>'+button;
   }
 
-  function shopStatuses(runs) {
+  function shopStatuses(runs, now=referenceTime({runs})) {
     return SHOPS.map(shop=>{
-      const all=runs.filter(r=>r.shop===shop).slice().sort((a,b)=>Date.parse(a.run_at)-Date.parse(b.run_at));
-      return {shop, latest:all[all.length-1], success:all.filter(r=>r.status==='ok').at(-1)};
+      const all=runs.filter(r=>r.shop===shop && Number.isFinite(Date.parse(r.run_at))).slice().sort((a,b)=>Date.parse(a.run_at)-Date.parse(b.run_at));
+      const success=all.filter(r=>r.status==='ok').at(-1);
+      return {shop, latest:all.at(-1), success, stale:!!success && now-Date.parse(success.run_at)>2*DAY};
     });
+  }
+
+  function renderStatuses(runs, now=referenceTime({runs})) {
+    return shopStatuses(runs, now).map(s=>'<article><strong>'+s.shop+'</strong><p'+(s.stale || (s.latest&&s.latest.status!=='ok')?' class="failed"':'')+'>'+(s.stale?T.stale:(s.latest?(s.latest.status==='ok'?T.ok:T.failed):T.notStarted))+'</p><p>'+T.lastOk+(s.success?esc(dateTime(s.success.run_at))+T.jst:T.none)+'</p></article>').join('');
   }
 
   function colorNotes(data, row, values, shopIndex) {
@@ -200,18 +233,18 @@
   }
 
   function renderComparison(data, model) {
-    const groups=comparison(data.latest,model);
+    const groups=comparison(data.latest,model,staleShops(data.runs,referenceTime(data)));
     if (!groups.length) return '<p class="empty">'+T.preparing+'</p>';
     // 整份資料都沒有這個狀態的店（mobile-mix 只收未開封）標示不收，不和「—」待確認混在一起。
     const offered=SHOPS.map(shop=>COND==='未開封' || data.latest.some(r=>r.shop===shop && mainRow(r)));
     return '<table class="jp-table"><thead><tr><th scope="col">'+T.storage+'</th>'+SHOPS.map(s=>'<th scope="col">'+s+'</th>').join('')+'<th scope="col">'+T.spread+'</th></tr></thead><tbody>'+groups.map(group=>
       '<tr><th scope="row">'+group.storage+'</th>'+group.rows.map((row,i)=>{
-        const price=group.values[i], best=price!==null && price===group.highest;
+        const price=group.values[i], best=!group.outdated[i] && price!==null && price===group.highest;
         const info=row ? T.since+dateTime(row.since)+T.jst+T.shopUpdated+(row.shop_updated || T.unmarked) : '';
         const url=row ? safeURL(row.source_url) : '';
         if (!offered[i]) return '<td data-label="'+SHOPS[i]+'"><div><span class="jp-none">'+T.notOffered+'</span></div></td>';
         const label='<span class="jp-price">'+money(price)+'</span>';
-        return '<td data-label="'+SHOPS[i]+'"'+(best?' class="jp-best"':'')+'><div>'+(url?'<a href="'+esc(url)+'" title="'+esc(info)+'">'+label+'</a>':label)+(best?'<span class="jp-badge">'+T.best+'</span>':'')+(price!==null?colorNotes(data,row,group.rows.map(r=>r?.price_jpy ?? null),i):'')+'</div></td>';
+        return '<td data-label="'+SHOPS[i]+'"'+(best?' class="jp-best"':'')+'><div>'+(url?'<a href="'+esc(url)+'" title="'+esc(info)+'">'+label+'</a>':label)+(group.outdated[i] && row?'<span class="jp-stale">'+T.stale+'</span>':'')+(best?'<span class="jp-badge">'+T.best+'</span>':'')+(price!==null?colorNotes(data,row,group.rows.map(r=>r?.price_jpy ?? null),i):'')+'</div></td>';
       }).join('')+'<td data-label="'+T.spread+'"><span class="jp-spread">'+money(group.spread)+'</span></td></tr>').join('')+'</tbody></table>';
   }
 
@@ -233,16 +266,16 @@
       svg+='<text class="axis" x="'+x(t)+'" y="'+(h-17)+'" text-anchor="'+(span?(i?'end':'start'):'middle')+'">'+esc(dateTime(t).slice(5))+'</text>';
     });
     chart.series.forEach((values,i)=>{
-      svg+='<path class="jp-series shop-'+i+(i===3?' jp-high':'')+'" d="'+stepPath(chart.times,values,x,y)+'"/>';
+      svg+='<path class="jp-series shop-'+i+(i===SHOPS.length?' jp-high':'')+'" d="'+stepPath(chart.times,values,x,y)+'"/>';
       chart.times.forEach((time,j)=>{
         if(!Number.isFinite(values[j]) || (j>0 && values[j]===values[j-1] && j<chart.times.length-1)) return;
-        svg+='<circle class="shop-'+i+'" cx="'+x(time)+'" cy="'+y(values[j])+'" r="'+(i===3?3:2.5)+'" fill="currentColor"><title>'+esc((SHOPS[i]||T.highest)+' '+dateTime(time)+T.jst+' '+money(values[j]))+'</title></circle>';
+        svg+='<circle class="shop-'+i+'" cx="'+x(time)+'" cy="'+y(values[j])+'" r="'+(i===SHOPS.length?3:2.5)+'" fill="currentColor"><title>'+esc((SHOPS[i]||T.highest)+' '+dateTime(time)+T.jst+' '+money(values[j]))+'</title></circle>';
       });
     });
     return svg+'</svg>';
   }
 
-  const api={MODELS, SHOPS, setLang, setCondition, visiblePrices, comparison, timeline, stepPath, recentChanges, flash, renderFlash, renderChanges, shopStatuses, renderComparison, renderChart, dateTime, money};
+  const api={referenceTime, staleShops, MODELS, SHOPS, setLang, setCondition, visiblePrices, comparison, timeline, stepPath, recentChanges, flash, renderFlash, renderChanges, shopStatuses, renderStatuses, renderComparison, renderChart, dateTime, money};
   if(typeof module!=='undefined' && module.exports) module.exports=api;
   if(typeof document==='undefined') return;
 
@@ -265,7 +298,7 @@
       updated.textContent=(updated.dataset.snapshot ? updated.textContent+' · ' : '')+T.loadFailed;
       return;
     }
-    const end=Date.parse(data.generated_at);
+    const end=referenceTime(data);
     const last=data.latest.map(r=>r.last_checked).filter(Boolean).sort().at(-1);
     get('updated').textContent=last?T.checked+dateTime(last)+T.jst:T.preparing;
     const params=new URLSearchParams(location.search);
@@ -281,9 +314,9 @@
       const available=STORAGES.filter(s=>data.prices.some(r=>r.model===model && r.storage===s && mainRow(r)));
       for(const option of get('trend-storage').options) option.disabled=available.length>0 && !available.includes(option.value);
       if(available.length && !available.includes(get('trend-storage').value)) get('trend-storage').value=available[0];
-      get('trend').innerHTML=renderChart(timeline(data.prices,model,get('trend-storage').value,get('trend-days').value,end),get('trend').clientWidth);
+      get('trend').innerHTML=renderChart(timeline(data.prices,model,get('trend-storage').value,get('trend-days').value,end,data.runs),get('trend').clientWidth);
     };
-    get('legend').innerHTML=[...SHOPS,T.highest].map((s,i)=>'<span><i class="jp-key shop-'+i+(i===3?' best':'')+'"></i>'+s+'</span>').join('');
+    get('legend').innerHTML=[...SHOPS,T.highest].map((s,i)=>'<span><i class="jp-key shop-'+i+(i===SHOPS.length?' best':'')+'"></i>'+s+'</span>').join('');
     let changes=[], expanded=false;
     // 切換未開封／中古：標籤、說明文字與四個區塊一起重畫；網址加 ?c=used 方便分享。
     const render=()=>{
@@ -318,7 +351,7 @@
       get('changes').innerHTML=renderChanges(changes,expanded);
       get('changes').querySelector('.jp-changes-toggle').focus();
     });
-    get('statuses').innerHTML=shopStatuses(data.runs).map(s=>'<article><strong>'+s.shop+'</strong><p'+(s.latest&&s.latest.status!=='ok'?' class="failed"':'')+'>'+(s.latest?(s.latest.status==='ok'?T.ok:T.failed):T.notStarted)+'</p><p>'+T.lastOk+(s.success?esc(dateTime(s.success.run_at))+T.jst:T.none)+'</p></article>').join('');
+    get('statuses').innerHTML=renderStatuses(data.runs || [],end);
   }
   boot();
 })();

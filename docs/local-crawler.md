@@ -54,4 +54,6 @@
 
 HTML 未提供可確認的價格 JSON API 網址。後續可先保存精確機型搜尋的 HTML，並檢視檔案引用的 `/drupal/modules/surugaya_buy/assets/js/search_buy_pc.js`、`/drupal/themes/surugaya/js/ansinSearch/kaitori.js`，確認手機商品與價格實際來源；目前未取得這兩個檔案。若之後採集，仍須遵守至少 30 秒同站間隔，不繞過驗證。
 
-Back Market 日本列表 curl 為 403，本版未做。手機王（sogi）條款禁止轉載，因此不抓。網站 `site/` 與 GitHub workflows 均未修改；販賣價的公開呈現及推送後部署留待後續決定。
+Back Market 日本列表 curl 為 403，本版未做。手機王（sogi）條款禁止轉載，因此不抓。モバステ買取已納入網站日本買取頁，中古採 A〜C 最高收購價；店家狀態會標示超過 48 小時未更新。イオシス販賣仍未公開，不呈現台日價差，GitHub workflows 不變。
+
+`local/run.sh` 抓取失敗仍提交並推送 `jp/` 的失敗紀錄，commit 訊息標明失敗；同步成功後保留爬蟲原本的非 0 結束碼，避免未提交的 runs.csv 阻塞下一輪。安全檢查及推送重試不變，離線替身測試見 `tests/test_local_runner.py`。

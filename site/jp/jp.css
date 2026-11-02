@@ -24,7 +24,8 @@
 .shop-0 { color: #2563eb; stroke: #2563eb; }
 .shop-1 { color: #a16207; stroke: #a16207; }
 .shop-2 { color: #9333ea; stroke: #9333ea; }
-.shop-3 { color: #15803d; stroke: #15803d; }
+.shop-3 { color: #be185d; stroke: #be185d; }
+.shop-4 { color: #15803d; stroke: #15803d; }
 .jp-change { display: grid; grid-template-columns: 145px 90px 1fr 180px; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); align-items: start; font-size: 13px; }
 .jp-change time { color: var(--muted); font-size: 12px; }
 .jp-change .amount { font-variant-numeric: tabular-nums; }
@@ -37,7 +38,7 @@
 .jp-flash-item.up .amount { color: #dc2626; }
 .jp-flash-item.down .amount { color: #15803d; }
 .jp-flash-item .detail { margin-left: 8px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.jp-statuses { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+.jp-statuses { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 12px; }
 .jp-statuses article { padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
 .jp-statuses p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
 .jp-statuses .failed { color: #b45309; }
@@ -47,7 +48,8 @@
   .shop-0 { color: #60a5fa; stroke: #60a5fa; }
   .shop-1 { color: #fbbf24; stroke: #fbbf24; }
   .shop-2 { color: #c084fc; stroke: #c084fc; }
-  .shop-3 { color: #4ade80; stroke: #4ade80; }
+  .shop-3 { color: #f9a8d4; stroke: #f9a8d4; }
+  .shop-4 { color: #4ade80; stroke: #4ade80; }
   .jp-statuses .failed { color: #fbbf24; }
   .jp-flash-item.up .amount { color: #f87171; }
   .jp-flash-item.down .amount { color: #4ade80; }
@@ -79,3 +81,5 @@
 .jp-none { color: var(--muted); font-size: 13px; }
 .jp-models { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 4px 0 0; list-style: none; }
 .jp-models a { display: inline-block; border: 1px solid var(--line); border-radius: 999px; padding: 4px 14px; font-size: 14px; }
+
+.jp-stale { display: inline-block; font-weight: 700; color: #92400e; background: #fef3c7; border: 1px solid #b45309; border-radius: 4px; padding: 2px 5px; margin-left: 5px; }

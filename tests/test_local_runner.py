@@ -109,11 +109,20 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertFalse(any(c[0] == "commit" for c in calls))
 
-    def test_failed_crawl_does_not_stage_commit_or_push(self):
-        result, calls = self.run_script(FAKE_CRAWL_STATUS="1")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertFalse(any(c[0] in ("add", "commit", "push") for c in calls))
-        self.assertIn("失敗", (self.root / "Library/Logs/ptt-local-crawler.log").read_text())
+    def test_failed_crawl_syncs_failure_and_preserves_exit_status(self):
+        result, calls = self.run_script(FAKE_CRAWL_STATUS="7", FAKE_PUSH_FAILURES="1")
+        self.assertEqual(result.returncode, 7)
+        self.assertIn(["add", "--", "jp/"], calls)
+        self.assertIn("抓取失敗 exit 7", next(c for c in calls if c[0] == "commit")[2])
+        self.assertEqual(sum(c[0] == "push" for c in calls), 2)
+        self.assertLess(next(i for i,c in enumerate(calls) if c[0] == "commit"),
+                        next(i for i,c in enumerate(calls) if c[0] == "push"))
+
+    def test_failed_crawl_without_changes_still_pushes_and_fails(self):
+        result, calls = self.run_script(FAKE_CRAWL_STATUS="7", FAKE_CHANGED="0")
+        self.assertEqual(result.returncode, 7)
+        self.assertFalse(any(c[0] == "commit" for c in calls))
+        self.assertTrue(any(c[0] == "push" for c in calls))
 
     def test_push_retries_three_times_then_fails(self):
         result, calls = self.run_script(FAKE_PUSH_FAILURES="10")
