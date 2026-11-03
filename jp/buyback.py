@@ -232,6 +232,25 @@ def fetch(url, *, host_intervals=None):
                 raise
 
 
+def fetch_error(exc):
+    """可公開的診斷：不輸出回應本文、URL query、憑證或任意例外全文。"""
+    response = getattr(exc, "response", None)
+    status = getattr(response, "status_code", None)
+    if isinstance(status, int):
+        return f"{type(exc).__name__}: HTTP {status}"
+    message = str(exc)
+    http = re.search(r"HTTP(?: Error)?[ :]+(\d{3})", message, re.I)
+    if http:
+        return f"{type(exc).__name__}: HTTP {http.group(1)}"
+    curl = re.search(r"curl:\s*\((\d+)\)", message)
+    code = f" curl error {curl.group(1)}" if curl else ""
+    reason = next((label for word, label in (
+        ("timed out", "連線逾時"), ("timeout", "連線逾時"),
+        ("resolve", "DNS 解析失敗"), ("ssl", "TLS 錯誤"),
+        ("connect", "連線失敗")) if word in message.lower()), "請查私人 runs.csv")
+    return f"{type(exc).__name__}:{code} {reason}"
+
+
 def read_csv(path):
     if not path.exists():
         return []
@@ -271,7 +290,7 @@ def validate_rows(shop, rows, previous, *, conditions=("未開封", "中古上�
     return unique
 
 
-def apply_results(data_dir, results, run_at=None, *, conditions=("未開封", "中古上限")):
+def apply_results(data_dir, results, run_at=None, *, conditions=("未開封", "中古上限"), baseline_dir=None):
     """每店獨立驗證與更新；失敗店保留 latest、prices，只有 runs 記失敗。"""
     data_dir = Path(data_dir)
     run_at = run_at or datetime.now(TOKYO).isoformat(timespec="seconds")
@@ -281,6 +300,16 @@ def apply_results(data_dir, results, run_at=None, *, conditions=("未開封", "�
     run_at = dt.astimezone(TOKYO).isoformat(timespec="seconds")
     latest = {row_key(r): r for r in read_csv(data_dir / "latest.csv")}
     history = {row_key(r): r for r in read_csv(data_dir / "prices.csv")}
+    seeded_history = {}
+    if baseline_dir is not None:
+        # 初次接手各店時沿用舊價格與 since；只帶入該店，不複製其他店資料。
+        missing = {r["shop"] for r in results if r.get("status", "ok") == "ok"} - {r["shop"] for r in latest.values()}
+        for name, target in (("latest.csv", latest), ("prices.csv", history)):
+            for row in read_csv(Path(baseline_dir) / name):
+                if row["shop"] in missing:
+                    target[row_key(row)] = row
+                    if name == "prices.csv":
+                        seeded_history[row_key(row)] = row
     events, runs = [], []
     any_ok = False
     for result in results:
@@ -294,6 +323,7 @@ def apply_results(data_dir, results, run_at=None, *, conditions=("未開封", "�
                 status, error = "parse_error", str(exc)
         if status == "ok":
             any_ok = True
+            events.extend(r for r in seeded_history.values() if r["shop"] == shop)
             for key, row in current.items():
                 old = history.get(key)
                 changed = old is None or str(old["price_jpy"]) != str(row["price_jpy"])
@@ -324,18 +354,20 @@ def apply_results(data_dir, results, run_at=None, *, conditions=("未開封", "�
     return runs
 
 
-def collect(fetcher=None):
+def collect(fetcher=None, *, only=None):
     fetcher = fetcher or fetch
     shops = [("mobile-mix", [MOBILEMIX_URL], lambda html, url: parse_mobilemix(html)),
              ("イオシス", IOSYS_URLS, parse_iosys), ("アメモバ", AMEMOBA_URLS, parse_amemoba)]
     results = []
     for shop, urls, parser in shops:
+        if only is not None and shop not in only:
+            continue
         rows, dates, status, error = [], [], "ok", ""
         for url in urls:
             try:
                 html = fetcher(url)
             except Exception as exc:
-                status, error = "fetch_error", f"{url}: {type(exc).__name__}: {exc}"
+                status, error = "fetch_error", f"{url}: {fetch_error(exc)}: {exc}"
                 break
             try:
                 parsed, updated = parser(html, url)
@@ -364,7 +396,8 @@ def main():
     report = results if args.dry_run else apply_results(args.data, results)
     # 公開 Actions log 不輸出整列價格資料或內部錯誤；完整紀錄只存私人 CSV。
     print(json.dumps([{"shop": r["shop"], "status": r["status"],
-                       "rows": len(r["rows"]) if isinstance(r["rows"], list) else r["rows"]}
+                       "rows": len(r["rows"]) if isinstance(r["rows"], list) else r["rows"],
+                       **({"error": fetch_error(RuntimeError(r.get("error", "")))} if r["status"] == "fetch_error" else {})}
                       for r in report], ensure_ascii=False, indent=2))
     return 0 if all(r["status"] == "ok" for r in results) else 1 if args.dry_run else 0
 

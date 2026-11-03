@@ -37,3 +37,7 @@ POYU 於 **2026-10-30 家用 IP** 實抓並提供原始 HTML；本次只讀取 p
 - イオシス目錄只留四個已確認機型入口。商品頁只留 7 件商品的名稱、等級、價格、商品連結與原始分頁，含重複規格、Pro Max、電信版及利用限制▲；聚合後 6 筆。測試中的改價、缺欄及後頁為明示合成變體，不是真實店家後續報價。
 - 全部裁切檔移除 script、追蹤碼、圖片、form/input、session／個人化內容與事件屬性；商品價格與名稱保留原值。
 - `suruga.html` 僅用於判讀，沒有複製到公開 repo：來源 https://www.suruga-ya.jp/kaitori/search_buy?search_word=iPhone ，原始 SHA-256 `597239ea8696f8a3c33137f476353091a245dc9b98e0de6b3d895dbef46c50c3`。沒有目標手機價格，故不建立 parser／fixture，細節見 `docs/local-crawler.md`。
+
+### 2026-11-03 停更查核
+
+`iosys-live-20261103.html`：本機以既有 `jp.buyback.fetch` 擷取 https://k-tai-iosys.com/pricelist/smartphone/iphone/iphone18-pro/ ，HTTP 200，既有 parser 解析 40 筆。原 HTML SHA-256 `a3947a5e4c24a7f6d6f585dc038da2bea6b549b5f47b8a2e044de3ea385f6a51`。fixture 只保留商品列的 name、carrer、s-price、a-price，data-group-id 改為 fixture；沒有改價格或名稱。此證據僅代表本機可讀，不能證明 Actions 的失敗是 403。

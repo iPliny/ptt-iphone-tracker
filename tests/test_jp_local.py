@@ -76,11 +76,11 @@ class LocalStorageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "jp"
             local.save_or_check(target, [buy, sell], run_at=AT)
-            self.assertEqual({r["shop"] for r in jp.read_csv(target / "prices.csv")}, {"モバステ"})
+            self.assertEqual({r["shop"] for r in jp.read_csv(target / "local/prices.csv")}, {"モバステ"})
             self.assertEqual({r["condition"] for r in jp.read_csv(target / "sell/prices.csv")}, {"中古A"})
-            before = (target / "prices.csv").read_bytes()
+            before = (target / "local/prices.csv").read_bytes()
             local.save_or_check(target, [sell], run_at=AT)
-            self.assertEqual((target / "prices.csv").read_bytes(), before)
+            self.assertEqual((target / "local/prices.csv").read_bytes(), before)
 
     def test_dry_run_no_files_and_summary_only(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -95,16 +95,16 @@ class LocalStorageTests(unittest.TestCase):
         result = pastec_result()
         with tempfile.TemporaryDirectory() as tmp:
             local.save_or_check(tmp, [result], run_at=AT)
-            before = {p.name: p.read_bytes() for p in Path(tmp).iterdir()}
+            before = {p.name: p.read_bytes() for p in (Path(tmp) / "local").iterdir()}
             bad = copy.deepcopy(result)
             bad["rows"] = bad["rows"][:1]  # 少一半不可誤報成功。
             with patch.object(local, "collect", return_value=[bad]), contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(local.main(["--data", tmp, "--dry-run"]), 1)
-            self.assertEqual(before, {p.name: p.read_bytes() for p in Path(tmp).iterdir()})
+            self.assertEqual(before, {p.name: p.read_bytes() for p in (Path(tmp) / "local").iterdir()})
             with patch.object(local, "collect", return_value=[bad]), contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(local.main(["--data", tmp]), 1)
             for name in ("prices.csv", "latest.csv"):
-                self.assertEqual(before[name], (Path(tmp) / name).read_bytes())
+                self.assertEqual(before[name], (Path(tmp) / "local" / name).read_bytes())
 
     def test_only_rejects_unknown_or_duplicate(self):
         for value in ("suruga", "pastec,pastec", "iosys-sell,", ""):

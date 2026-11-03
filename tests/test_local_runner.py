@@ -60,7 +60,8 @@ class RunnerTests(unittest.TestCase):
             with open(os.environ['FAKE_CALLS'], 'a') as stream:
                 stream.write(json.dumps(args) + '\\n')
             if args[0] == os.environ.get('FAKE_FAIL_COMMAND'): sys.exit(128)
-            if args[0] == 'rev-parse': print(os.environ['PTT_DATA_DIR'])
+            if args[0] == 'rev-parse':
+                print(os.environ['PTT_DATA_DIR'] + '/.git/' + args[-1] if '--git-path' in args else os.environ['PTT_DATA_DIR'])
             elif args[0] == 'remote': print(os.environ.get('FAKE_REMOTE', 'git@github.com:iPliny/ptt-iphone-data.git'))
             elif args[0] == 'branch': print('main')
             elif args[0] == 'status': print(os.environ.get('FAKE_DIRTY', ''), end='')
@@ -98,7 +99,7 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn(["add", "--", "jp/"], calls)
         self.assertIn(["crawl", "--data", str(self.data / "jp")], calls)
-        self.assertEqual(sum(c[0] == "pull" for c in calls), 2)
+        self.assertEqual(sum(c[0] == "fetch" for c in calls), 2)
         self.assertEqual(sum(c[0] == "push" for c in calls), 2)
         self.assertTrue(next(c for c in calls if c[0] == "commit")[2].startswith("本機日本價格更新 "))
         self.assertFalse(any("dispatch" in str(c) for c in calls))
@@ -115,8 +116,25 @@ class RunnerTests(unittest.TestCase):
         self.assertIn(["add", "--", "jp/"], calls)
         self.assertIn("抓取失敗 exit 7", next(c for c in calls if c[0] == "commit")[2])
         self.assertEqual(sum(c[0] == "push" for c in calls), 2)
+        self.assertLess(next(i for i,c in enumerate(calls) if c[0] == "crawl"),
+                        next(i for i,c in enumerate(calls) if c[0] == "commit"))
         self.assertLess(next(i for i,c in enumerate(calls) if c[0] == "commit"),
                         next(i for i,c in enumerate(calls) if c[0] == "push"))
+
+    def test_pending_failure_committed_before_fetch_and_crawl(self):
+        from tests.test_jp_stale import run_csv
+        path = self.data / "jp/local/runs.csv"
+        path.parent.mkdir(parents=True)
+        path.write_text(run_csv("pending failure"))
+        result, calls = self.run_script(FAKE_DIRTY="?? jp/local/runs.csv")
+        self.assertEqual(result.returncode, 0)
+        self.assertIn(["add", "--", "jp/local/runs.csv"], calls)
+        commit = next(i for i, c in enumerate(calls) if c[0] == "commit")
+        fetch = next(i for i, c in enumerate(calls) if c[0] == "fetch")
+        crawl = next(i for i, c in enumerate(calls) if c[0] == "crawl")
+        self.assertLess(commit, fetch)
+        self.assertLess(fetch, crawl)
+        self.assertTrue(any(c[0] == "push" for c in calls))
 
     def test_failed_crawl_without_changes_still_pushes_and_fails(self):
         result, calls = self.run_script(FAKE_CRAWL_STATUS="7", FAKE_CHANGED="0")

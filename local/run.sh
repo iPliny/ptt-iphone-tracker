@@ -41,18 +41,15 @@ for remote in "$(git -C "$PTT_DATA_DIR" remote get-url --all origin)" "$(git -C 
         *) printf 'origin 的取得與推送網址必須都是 iPliny/ptt-iphone-data；停止同步。\n'; exit 1 ;;
     esac
 done
+"$PTT_PYTHON" -m jp.local_sync check "$PTT_DATA_DIR"
 if [ "$(git -C "$PTT_DATA_DIR" branch --show-current)" != main ]; then
     printf '私人資料庫必須位於 main 分支。\n'
     exit 1
 fi
-working_status="$(git -C "$PTT_DATA_DIR" status --porcelain)"
-if [ -n "$working_status" ]; then
-    printf '私人資料庫有未提交變更，請先處理後再執行。\n'
-    exit 1
-fi
+"$PTT_PYTHON" -m jp.local_sync prepare "$PTT_DATA_DIR"
 
 printf '%s 開始本機日本價格更新\n' "$(TZ=Asia/Tokyo date +%FT%T%z)"
-git -C "$PTT_DATA_DIR" pull --rebase origin main
+"$PTT_PYTHON" -m jp.local_sync sync "$PTT_DATA_DIR"
 outside_paths="$(git -C "$PTT_DATA_DIR" diff --name-only origin/main...HEAD -- . ':!jp/')"
 if [ -n "$outside_paths" ]; then
     printf '尚未推送的 commit 含 jp/ 以外檔案，停止同步。\n'
@@ -82,5 +79,5 @@ for attempt in 0 1 2 3; do
         printf '推送失敗，已重試 3 次；保留本機 commit。\n'
         exit 1
     fi
-    git -C "$PTT_DATA_DIR" pull --rebase origin main
+    "$PTT_PYTHON" -m jp.local_sync sync "$PTT_DATA_DIR"
 done

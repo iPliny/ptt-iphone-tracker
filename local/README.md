@@ -1,6 +1,6 @@
 # 本機日本價格爬蟲
 
-`run.sh` 在家用 Mac 執行，使用私人資料庫 `iPliny/ptt-iphone-data` 的獨立 clone。來源、欄位與機況對照見 [本機爬蟲說明](../docs/local-crawler.md)。買取資料寫入私人資料庫的 `jp/`，販賣資料寫入 `jp/sell/`；不觸發網站部署。
+`run.sh` 在家用 Mac 執行，使用私人資料庫 `iPliny/ptt-iphone-data` 的獨立 clone。來源、欄位與機況對照見 [本機爬蟲說明](../docs/local-crawler.md)。買取資料寫入私人資料庫的 `jp/local/`，販賣資料寫入 `jp/sell/`；不觸發網站部署。
 
 先確認 Python 已安裝專案 `requirements.txt` 既有套件，並已透過本機 Git 登入私人資料庫。腳本使用 `PTT_PYTHON` 指定的 Python；未設定時優先使用程式庫 `.venv/bin/python`，再找 `python3`。`PTT_DATA_DIR` 預設為 `$HOME/Documents/Codex/dispatch/ptt-iphone-data`。
 
@@ -20,11 +20,11 @@ PTT_DATA_DIR="$HOME/Documents/Codex/dispatch/ptt-iphone-data" \
 /bin/bash "$HOME/Documents/Codex/dispatch/ptt-iphone-tracker/local/run.sh"
 ```
 
-腳本確認獨立 clone、取得與推送的 origin 都是指定資料庫、分支為 `main`，且工作目錄及 index 都乾淨，再 `git pull --rebase origin main`。若本機尚未推送的 commit 含 `jp/` 以外檔案，也會停止。抓取成功後只 `git add -- jp/`，有變動才以「本機日本價格更新 <日本時間>」提交，再推送；第一次推送失敗後最多重試 3 次，每次先 rebase，衝突即停。所有輸出追加至 `~/Library/Logs/ptt-local-crawler.log`。
+腳本確認獨立 clone、取得與推送的 origin 都是指定資料庫、分支為 `main`，工作目錄若只有白名單 runs.csv 追加的失敗紀錄會先提交，其他未提交變更停止，再 fetch 並 rebase `origin/main`。若本機尚未推送的 commit 含 `jp/` 以外檔案，也會停止。抓取完成後（含失敗）只 `git add -- jp/`，有變動才以「本機日本價格更新 <日本時間>」提交，再推送；第一次推送失敗後最多重試 3 次，每次先 rebase，只有 runs.csv 的純追加衝突自動合併去重，其餘衝突中止本次 rebase 並停止。所有輸出追加至 `~/Library/Logs/ptt-local-crawler.log`。
 
 整段 Git 同步與直接執行 `jp.local` 共用 `fcntl.flock` 鎖；鎖住既存 `jp/local_lock.py`，不建立鎖檔，程序結束即釋放。重疊執行會回傳非 0。請固定使用同一份程式庫 checkout，不要在執行途中更換此檔案或另開 clone 排程。
 
-任何步驟失敗即停止並回傳非 0；抓取失敗可能留下 `runs.csv` 或其他成功店家的更新，請檢查私人 CSV 與 log，先自行處理未提交變更再重跑。push 全數失敗則保留本機 commit，下次乾淨執行會再次推送。腳本不自動 reset、丟棄變更或解決 rebase 衝突。
+抓取失敗仍提交並推送失敗紀錄與成功店家的更新，同步成功後回傳爬蟲原本的非 0。push 全數失敗則保留本機 commit，下次乾淨執行會再次推送。腳本不 reset、不 force push、不丟棄別人的資料。啟動時若已有 rebase／merge，自動 abort 回原分支並記錄 log 後繼續，abort 失敗才停止；cherry-pick／revert 仍須人工處理。
 
 ## 安裝 launchd
 
