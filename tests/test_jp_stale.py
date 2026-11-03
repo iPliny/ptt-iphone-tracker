@@ -12,10 +12,11 @@ from unittest.mock import patch
 
 from jp import buyback as jp, local, local_sync
 from tests.test_jp_buyback import shop_page
-from tests.test_jp_local import pastec_result
+from tests.test_jp_local import complete_pastec_pages, pastec_result
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "site"))
-from jp_build import buyback_sources
+from jp_build import buyback_sources, public_runs
+import jp_pages
 
 T0 = "2026-11-01T09:40:00+09:00"
 T1 = "2026-11-02T09:40:00+09:00"
@@ -78,6 +79,35 @@ class OwnershipTests(unittest.TestCase):
             self.assertEqual(reports[0]["status"], "parse_error")
             self.assertEqual(buyback_sources(root)["latest"], before)
             self.assertFalse((root / "local/latest.csv").exists())
+
+    def test_partial_parse_error_keeps_snapshot_and_marks_stale_on_site(self):
+        pages = complete_pastec_pages()
+        result = local.collect(("pastec",), pages.__getitem__)[0]
+        self.assertEqual((result["status"], len(result["rows"])), ("ok", 48))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.assertEqual(local.save_or_check(root, [result], run_at=T0)[0]["status"], "ok")
+            before = {name: (root / "local" / name).read_bytes()
+                      for name in ("latest.csv", "prices.csv")}
+            # 最後一個規格頁的未開封價格留空，前面 23 頁仍經實際解析。
+            last_url = result["rows"][-1]["source_url"]
+            self.assertIn("171,000円", pages[last_url])
+            pages[last_url] = pages[last_url].replace("171,000円", "", 1)
+            partial = local.collect(("pastec",), pages.__getitem__)[0]
+            self.assertEqual((partial["status"], len(partial["rows"])), ("parse_error", 46))
+            failed_at = "2026-11-03T09:40:01+09:00"
+            reports = local.save_or_check(root, [partial], run_at=failed_at)
+            self.assertEqual((reports[0]["status"], reports[0]["rows"]), ("parse_error", 46))
+            for name, original in before.items():
+                self.assertEqual((root / "local" / name).read_bytes(), original)
+            sources = buyback_sources(root)
+            self.assertEqual({r["price_jpy"] for r in sources["latest"]},
+                             {r["price_jpy"] for r in result["rows"]})
+            runs = public_runs(sources["runs"])
+            self.assertEqual([r["status"] for r in runs], ["ok", "parse_error"])
+            payload = dict(sources, runs=runs, generated_at=failed_at)
+            self.assertIn("モバステ", jp_pages.stale_shops(payload))
+            self.assertIn("舊資料", jp_pages.page_html(payload, "iPhone 17 Pro", "zh", "https://example.com"))
 
     def test_http_diagnostics_without_response_or_secrets(self):
         exc = jp.requests.RequestsError("HTTP Error 403 secret URL https://example.com/?token=secret")

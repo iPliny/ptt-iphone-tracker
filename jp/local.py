@@ -58,6 +58,12 @@ def collect(only=SOURCES, fetcher=None):
                     if updated:
                         dates.append(updated)
                     url = iosys_next_page(html, url) if source == "iosys-sell" else None
+            if source == "pastec":
+                expected_rows = {(model, storage, condition) for model, storage in pages.values()
+                                 for condition in ("未開封", "中古上限")}
+                actual_rows = [(r["model"], r["storage"], r["condition"]) for r in result["rows"]]
+                if len(actual_rows) != len(expected_rows) or set(actual_rows) != expected_rows:
+                    raise jp.ParseError("モバステ目標規格或機況筆數不完整")
             if source == "iosys-sell":
                 result["rows"] = minimum_prices(result["rows"])
             result["shop_updated"] = max(dates, default="")
