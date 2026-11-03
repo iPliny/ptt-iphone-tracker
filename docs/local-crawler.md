@@ -1,14 +1,14 @@
 # 本機日本價格爬蟲（2026-10-30）
 
-`python -m jp.local --data <私人資料庫的 jp 目錄> [--dry-run] [--only pastec,iosys-sell]` 使用家用 IP，來源為 POYU 於 2026-10-30 保存的 HTML。這次僅以離線 fixture 驗收；沒有重新連線或寫入正式資料。安裝與解除排程見 [local/README.md](../local/README.md)。
+`python -m jp.local --data <私人資料庫的 jp 目錄> [--dry-run] [--only pastec,iosys-sell,iosys-buyback]` 使用家用 IP，初版 parser 依 POYU 於 2026-10-30 保存的 HTML 驗收；2026-11-03 的連線查核與分流交接見下方。安裝與解除排程見 [local/README.md](../local/README.md)。
 
 ## 資料與共用邏輯
 
-モバステ買取寫入指定目錄的 `prices.csv`、`latest.csv`、`runs.csv`；イオシス販賣寫入其 `sell/` 子目錄的同名檔案。兩者共用 `jp.buyback` 的 `KEY`、CSV 欄位、時間格式、歷史追加與最新快照更新，販賣價不進買取 CSV。`source_url` 對モバステ是郵送買取規格頁，對イオシス販賣是該組最低價的商品頁；同價時依網址排序選擇，顏色留空。
+モバステ與イオシス買取寫入指定目錄的 `local/` 子目錄內的 `prices.csv`、`latest.csv`、`runs.csv`；イオシス販賣寫入其 `sell/` 子目錄的同名檔案。兩者共用 `jp.buyback` 的 `KEY`、CSV 欄位、時間格式、歷史追加與最新快照更新，販賣價不進買取 CSV。`source_url` 對モバステ是郵送買取規格頁，對イオシス販賣是該組最低價的商品頁；同價時依網址排序選擇，顏色留空。
 
 `buyback.fetch` 新增可選的各站間隔，`validate_rows`、`apply_results` 新增可選的機況清單，原本呼叫的預設值不變。全域請求（含重試）至少相隔 5 秒；pastec.net、iosys.co.jp 各至少 10 秒；駿河屋保留 30 秒設定但沒有啟用抓取；既有 k-tai-iosys.com 仍為 60 秒。每次失敗最多重試一次，全部序列執行。
 
-整個來源的任一頁抓取、解析或分頁失敗，該店整批保留舊價；0 筆、筆數少至少一半、衝突鍵等沿用驗證。其他來源仍可更新，失敗寫私人 `runs.csv`，CLI 回傳非 0。`--dry-run` 同樣驗證既有快照與本次筆數，但不建立資料目錄、CSV 或鎖檔。stdout 只含店家、狀態及筆數。檔案鎖共用於 CLI 與整段本機 Git 同步，固定使用同一份程式庫 checkout。
+整個來源的任一頁抓取、解析或分頁失敗，該店整批保留舊價；0 筆、筆數少至少一半、衝突鍵等沿用驗證。其他來源仍可更新，失敗寫私人 `runs.csv`，CLI 回傳非 0。`--dry-run` 同樣驗證既有快照與本次筆數，但不建立資料目錄、CSV 或鎖檔。stdout 含店家、狀態、筆數與抓取失敗的 HTTP 狀態／連線錯誤類別。檔案鎖共用於 CLI 與整段本機 Git 同步，固定使用同一份程式庫 checkout。
 
 ## モバステ（pastec）買取
 
@@ -57,3 +57,14 @@ HTML 未提供可確認的價格 JSON API 網址。後續可先保存精確機�
 Back Market 日本列表 curl 為 403，本版未做。手機王（sogi）條款禁止轉載，因此不抓。モバステ買取已納入網站日本買取頁，中古採 A〜C 最高收購價；店家狀態會標示超過 48 小時未更新。イオシス販賣仍未公開，不呈現台日價差，GitHub workflows 不變。
 
 `local/run.sh` 抓取失敗仍提交並推送 `jp/` 的失敗紀錄，commit 訊息標明失敗；同步成功後保留爬蟲原本的非 0 結束碼，避免未提交的 runs.csv 阻塞下一輪。安全檢查及推送重試不變，離線替身測試見 `tests/test_local_runner.py`。
+
+
+## 2026-11-03 停更修正與交接
+
+イオシス七個原買取入口在本機均實測 HTTP 200，既有 parser 共解析 240 筆（40／40／30／40／20／30／40）；Actions 舊 log 只有 fetch_error，沒有 HTTP 狀態，故不能把根因斷言為 Cloudflare 403。新增的診斷會顯示 HTTP 狀態或 curl 錯誤碼／連線類別，完整 Actions 例外仍留私人 runs.csv。沒有改網址、parser 或排程，也不使用代理或繞過驗證。
+
+本機預設新增 `iosys-buyback`，沿用 IOSYS_PAGES 與既有 60 秒間隔。買取三檔獨立放在 `jp/local/`，Actions 繼續寫 `jp/`；販賣仍在 `jp/sell/`。網站在該店第一次本機成功後採用本機快照及後續紀錄，保留之前的 Actions 歷史，排除接手後該店的 Actions 價格與狀態。首次接手用舊快照驗證筆數，保留同價 since，也能記錄下架；失敗不接手。兩邊不再同寫任何買取 CSV，無須改 Actions 排程或停用來源。
+
+`jp.local_sync` 先 fetch 再 rebase，僅白名單 `jp/runs.csv`、`jp/local/runs.csv`、`jp/sell/runs.csv` 允許 CSV 完整列合併去重，且兩邊都必須包含共同基底的完整列集合；以兩邊列的聯集保留順序並去重，支援多個本機 commit。其他衝突中止本次 rebase、保留原 commit；啟動前殘留 rebase／merge 會先 abort 並記錄後繼續，abort 失敗才停止；只有白名單 runs.csv 追加失敗紀錄的未提交變更會自動提交，其他變更停止。失敗仍提交／推送的行為已存在於此分支，這次保留並以測試確認。
+
+Claude 後續處理（本次未執行）：先暫停 launchd 並備份私人 checkout（含 .git、未提交變更及 rebase 現場），更新 runner 後，啟動時會自動 abort 殘留 rebase／merge 回原 commit，再提交僅追加的失敗紀錄；若有其他未提交變更，仍需人工整理。確認 main、乾淨且資料無遺失後，將本次程式更新到本機 runner；先以 `--only iosys-buyback --dry-run --data <暫存目錄>` 驗證，再正式跑一次並確認 push。網站建置端也必須套用 jp_build.py 才會讀取新子目錄。不要刪舊 jp/ CSV，不要 force push。

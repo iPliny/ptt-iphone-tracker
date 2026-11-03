@@ -59,13 +59,41 @@ def read_rows(path):
     return rows
 
 
+def buyback_sources(source):
+    """本機成功接手後，該店以獨立快照為準；保留接手前的 Actions 歷史。"""
+    local = source / "local"
+    latest = read_rows(local / "latest.csv")
+    owned = {r["shop"] for r in latest}
+    runs = read_rows(local / "runs.csv")
+    cutoffs = {}
+    for row in runs:
+        if row.get("status") == "ok" and row.get("shop") in owned:
+            at = datetime.fromisoformat(row["run_at"])
+            cutoffs[row["shop"]] = min(at, cutoffs.get(row["shop"], at))
+    result = {"latest": [r for r in read_rows(source / "latest.csv") if r["shop"] not in owned] + latest}
+    for name, field in (("prices", "observed_at"), ("runs", "run_at")):
+        old = []
+        for row in read_rows(source / f"{name}.csv"):
+            cutoff = cutoffs.get(row["shop"])
+            if cutoff is None or datetime.fromisoformat(row[field]) < cutoff:
+                old.append(row)
+        local_rows = read_rows(local / f"{name}.csv")
+        if name == "prices":
+            # 接手時保存的基底只供下輪比價；公開歷史仍取舊檔，避免重複。
+            local_rows = [r for r in local_rows if r["shop"] not in cutoffs
+                          or datetime.fromisoformat(r[field]) >= cutoffs[r["shop"]]]
+        result[name] = old + local_rows
+    return result
+
+
 def build_jp(out_dir, data_dir):
     out, source = Path(out_dir), Path(data_dir) / "jp"
     shutil.copytree(Path(__file__).parent / "jp", out / "jp", dirs_exist_ok=True)
+    sources = buyback_sources(source)
     payload = {
-        "latest": public_rows(read_rows(source / "latest.csv"), LATEST_FIELDS),
-        "prices": public_rows(read_rows(source / "prices.csv"), PRICE_FIELDS),
-        "runs": public_runs(read_rows(source / "runs.csv")),
+        "latest": public_rows(sources["latest"], LATEST_FIELDS),
+        "prices": public_rows(sources["prices"], PRICE_FIELDS),
+        "runs": public_runs(sources["runs"]),
     }
     payload["generated_at"] = datetime.now(ZoneInfo("Asia/Tokyo")).isoformat(timespec="seconds")
     (out / "jp" / "data.json").write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

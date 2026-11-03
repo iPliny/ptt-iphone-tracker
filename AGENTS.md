@@ -177,3 +177,9 @@
 - 本機全域至少間隔 5 秒；pastec／iosys.co.jp 同站至少 10 秒，駿河屋預留 30 秒；既有イオシス買取仍為 60 秒。CLI 與 `local/run.sh` 共用檔案鎖，整段 pull／抓取／commit／push 不重疊。失敗店保留舊價，CLI 非 0；dry-run 不寫資料或鎖檔，stdout 只印店名、狀態、筆數。
 - `local/run.sh` 使用 `PTT_DATA_DIR` 的獨立私人 clone（預設 `$HOME/Documents/Codex/dispatch/ptt-iphone-data`），只提交 `jp/`，推送失敗最多重試 3 次，不觸發部署。`local/` 提供日本時間 09:40、21:40 的 launchd 範本與安裝說明，本次只產生檔案，未安裝或執行正式抓取。
 - 駿河屋範例僅有書籍／配件，沒有目標手機價格，本版不做解析器；Back Market 為 403 未做；手機王（sogi）條款禁轉載所以不抓。販賣價公開顯示另做，本次不改網站、workflow、實際資料或 secrets。
+
+
+### 2026-11-03 本機日本買取分流
+- 本機 `jp.local` 預設含 `iosys-buyback`；モバステ／イオシス買取改寫 `jp/local/{latest,prices,runs}.csv`，Actions 仍寫 `jp/` 原三檔，販賣價仍在 `jp/sell/`。欄位與 append-only 語意不變，不搬動或刪除舊資料。
+- `site/jp_build.py:buyback_sources` 以各店首次本機成功為接手點：之前保留舊歷史，之後只採本機價格／狀態與快照，Actions 不覆蓋本機來源。首次接手仍依舊快照檢查筆數、保留 since 與下架事件。
+- `jp.local_sync` 僅自動合併執行紀錄的純追加衝突；其他衝突 abort 本次 rebase，啟動時自動 abort 殘留 rebase／merge 並記錄，失敗才停止；cherry-pick／revert 仍需人工處理。失敗紀錄仍 commit/push，禁止 force push。交接見 docs/local-crawler.md。

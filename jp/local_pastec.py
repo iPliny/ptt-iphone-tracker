@@ -8,6 +8,18 @@ from . import buyback as jp
 
 PASTEC_INDEX = "https://pastec.net/iphone"
 PASTEC_SHOP = "モバステ"
+# 郵送買取列表中各目標機型的容量；新增機型或容量時須同步更新。
+PASTEC_CAPACITIES = {
+    "iPhone 18 Pro": ("256GB", "512GB", "1TB", "2TB"),
+    "iPhone 18 Pro Max": ("256GB", "512GB", "1TB", "2TB"),
+    "iPhone Duo": ("256GB", "512GB", "1TB", "2TB"),
+    "iPhone 17 Pro": ("256GB", "512GB", "1TB"),
+    "iPhone 17 Pro Max": ("256GB", "512GB", "1TB", "2TB"),
+    "iPhone 17": ("256GB", "512GB"),
+    "iPhone Air": ("256GB", "512GB", "1TB"),
+}
+PASTEC_EXPECTED_SPECS = frozenset((model, storage) for model, capacities in PASTEC_CAPACITIES.items()
+                                   for storage in capacities)
 
 
 def discover_pastec_pages(html):
@@ -28,16 +40,22 @@ def discover_pastec_pages(html):
         clean = urlunsplit(("https", "pastec.net", url.path, "purchase_type=net", ""))
         if clean in pages and pages[clean] != spec:
             raise jp.ParseError("モバステ同一連結規格矛盾")
+        if spec in pages.values() and clean not in pages:
+            raise jp.ParseError("モバステ規格連結重複")
         pages[clean] = spec
-    if not pages:
-        raise jp.ParseError("モバステ目標機型連結為 0 筆")
+    if set(PASTEC_CAPACITIES) != set(jp.MODELS) or set(pages.values()) != PASTEC_EXPECTED_SPECS:
+        raise jp.ParseError("モバステ目標規格清單不完整或不符預期")
     return pages
 
 
 def parse_pastec(html, url):
     soup = BeautifulSoup(html, "html.parser")
-    card = soup.select_one(".assess__model-card-content")
-    name = card.select_one(".assess__model-card-name") if card else None
+    new_card = soup.select_one(".assess__iphone-model-card")
+    old_card = soup.select_one(".assess__model-card-content")
+    if new_card and old_card:
+        raise jp.ParseError("モバステ新舊機型欄位並存")
+    card = new_card or old_card
+    name = card.select_one(".assess__iphone-model-card-name, .assess__model-card-name") if card else None
     if name is None:
         raise jp.ParseError("モバステ機型欄位消失")
     spec = jp.model_storage(name.get_text(" ", strip=True))
@@ -47,12 +65,22 @@ def parse_pastec(html, url):
     version = jp.carrier_name(badge.get_text(" ", strip=True)) if badge else None
     if not version:
         raise jp.ParseError("モバステ版本不明；不推定 SIMフリー")
-    table = soup.select_one("table.assess__table")
+    new_table = soup.select_one("table.p-priceRankTable__table")
+    old_table = soup.select_one("table.assess__table")
+    if new_table and old_table:
+        raise jp.ParseError("モバステ新舊買取表並存")
+    table = new_table or old_table
     if table is None:
         raise jp.ParseError("モバステ買取表消失")
     values = {}
     for tr in table.select("tr"):
-        label, cell = tr.find("th"), tr.find("td")
+        if "p-priceRankTable__table" in table.get("class", []):
+            label = tr.select_one(".p-priceRankTable__badge")
+            cell = tr.select_one("td.p-priceRankTable__price")
+            if tr.select_one("td.p-priceRankTable__rank") is not None and cell is not None and label is None:
+                raise jp.ParseError("モバステ機況欄位消失")
+        else:
+            label, cell = tr.find("th"), tr.find("td")
         if label is None:
             continue
         condition = jp.normalized(label.get_text(" ", strip=True))
@@ -60,13 +88,15 @@ def parse_pastec(html, url):
             continue  # 開封済新品、ジャンク、不動品不混入中古上限。
         if condition in values:
             raise jp.ParseError("モバステ機況重複")
-        values[condition] = jp.yen(cell)
-    if "未開封" not in values or not any(k.startswith("中古") for k in values):
+        price = jp.yen(cell)
+        if price is None:
+            raise jp.ParseError("モバステ目標機況價格無法確認")
+        values[condition] = price
+    if set(values) != {"未開封", "中古 A", "中古 B", "中古 C"}:
         raise jp.ParseError("モバステ未開封或中古機況列消失")
     updated = jp.page_date(soup)
-    used = [v for k, v in values.items() if k.startswith("中古") and v is not None]
+    used = [v for k, v in values.items() if k.startswith("中古")]
     rows = []
-    for condition, price in (("未開封", values["未開封"]), ("中古上限", max(used, default=None))):
-        if price is not None:
-            rows.append(jp.make_row(PASTEC_SHOP, spec, condition, version, price, url, updated))
+    for condition, price in (("未開封", values["未開封"]), ("中古上限", max(used))):
+        rows.append(jp.make_row(PASTEC_SHOP, spec, condition, version, price, url, updated))
     return rows, updated
