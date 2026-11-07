@@ -28,49 +28,21 @@ PTT_DATA_DIR="$HOME/Documents/Codex/dispatch/ptt-iphone-data" \
 
 ## 安裝 launchd
 
-目前只提供範本，尚未安裝。`StartCalendarInterval` 使用 **Mac 系統時區**，請在系統設定將時區設為 `Asia/Tokyo`，才能每天日本時間 09:40、21:40 執行。plist 的 `TZ` 僅控制子程序，不會改變 launchd 的排程時區。這是登入使用者的 LaunchAgent；睡眠、關機或未登入會影響實際啟動時間。
+`StartCalendarInterval` 使用 **Mac 系統時區**，請在系統設定將時區設為 `Asia/Tokyo`，才能每天日本時間 09:40、21:40 執行。plist 的 `TZ` 僅控制子程序，不會改變 launchd 的排程時區。這是登入使用者的 LaunchAgent；睡眠、關機或未登入會影響實際啟動時間。
 
-確認 Python 路徑後，以 `plistlib` 填入絕對路徑（支援路徑中的空白與 XML 特殊字元），然後安裝：
+先確保 `/opt/homebrew/bin/python3` 可用、本機 Git 可讀取兩個 repo 並推送私人資料庫。從含本次更新的程式庫執行：
 
 ```sh
-cd "$HOME/Documents/Codex/dispatch/ptt-iphone-tracker"
-export PTT_PYTHON="$PWD/.venv/bin/python"
-export PTT_DATA_DIR="$HOME/Documents/Codex/dispatch/ptt-iphone-data"
-"$PTT_PYTHON" - <<'PY'
-import os
-from pathlib import Path
-import plistlib
-
-root = Path.cwd().resolve()
-home = Path.home()
-values = {
-    "__CODE_DIR__": str(root),
-    "__DATA_DIR__": str(Path(os.environ["PTT_DATA_DIR"]).expanduser().resolve()),
-    "__PYTHON__": str(Path(os.environ["PTT_PYTHON"]).expanduser().absolute()),
-    "__HOME__": str(home),
-}
-def fill(value):
-    if isinstance(value, str):
-        for key, replacement in values.items():
-            value = value.replace(key, replacement)
-        return value
-    if isinstance(value, list):
-        return [fill(item) for item in value]
-    if isinstance(value, dict):
-        return {key: fill(item) for key, item in value.items()}
-    return value
-
-template = root / "local/com.crawlsnek.ptt-local-crawler.plist"
-target = home / "Library/LaunchAgents/com.crawlsnek.ptt-local-crawler.plist"
-target.parent.mkdir(parents=True, exist_ok=True)
-(home / "Library/Logs").mkdir(parents=True, exist_ok=True)
-target.write_bytes(plistlib.dumps(fill(plistlib.loads(template.read_bytes()))))
-print(target)
-PY
-plutil -lint "$HOME/Library/LaunchAgents/com.crawlsnek.ptt-local-crawler.plist"
-launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.crawlsnek.ptt-local-crawler.plist"
-launchctl print "gui/$(id -u)/com.crawlsnek.ptt-local-crawler"
+/bin/bash local/install.sh "$HOME/ai-cowork/ptt-local-crawler"
 ```
+
+安裝可重複執行：寫入 `~/Library/Application Support/crawlsnek/ptt-local-crawler.conf`（純文字 `BASE=/絕對路徑`，空白不加引號），把 bootstrap 複製到同目錄的 `ptt-bootstrap.sh`，產生 `~/Library/LaunchAgents/com.crawlsnek.ptt-local-crawler.plist`，bootout 舊服務後 bootstrap 載入。不立即執行爬蟲；log 仍是 `~/Library/Logs/ptt-local-crawler.log`。未傳參數時沿用 conf，沒有 conf 則預設 `~/ai-cowork/ptt-local-crawler`。
+
+plist 只呼叫固定位置的 bootstrap，不依賴 repo 位置或 WorkingDirectory。每次啟動先讀 conf，核對 BASE 下 `ptt-iphone-tracker`、`ptt-iphone-data` 兩個獨立 clone 的 fetch／push origin。找不到有效 BASE 時搜尋 HOME 深度 5 內的資料 clone（BASE 名稱不限），核對兩個 origin；所有有效候選記 log，選資料庫最近 commit 時間最新者，同時間依路徑排序。不分大小寫排除 `~/Library`、`~/.Trash`、`~/Documents`、`~/Desktop`、`~/Downloads` 與指向它們的符號連結。
+
+沒有 conf，或 conf 明確標記 `BASE_EXISTED=0` 且 BASE 不存在又沒有候選時才 clone；舊 conf 視為曾安裝，找不到候選即大聲報錯、非 0 結束，不建立替代資料庫。成功後 conf 寫入 `BASE_EXISTED=1`；既存錯誤 clone 不覆寫。程式庫每輪先 `git pull --ff-only`，失敗記 log 後沿用現有版本。缺少 `.venv` 時依下述 Python 順序建立，首次或 requirements 更新時安裝依賴；安裝失敗下輪重試。最後以 BASE 設定 `PTT_DATA_DIR`、`PTT_PYTHON` 並 exec `run.sh`。
+
+**不要搬動或刪除 BASE 資料夾。** 需要搬移時，先停排程並等待執行結束，再搬完整兩個 clone（含未提交資料與 `.git`），最後以新 BASE 重跑 `install.sh`，或修改 conf；避免搬到 TCC 目錄。自我搜尋是失聯時的補救，不取代正常搬移程序。bootstrap 更新後也要重跑安裝，固定位置的副本才會更新。
 
 如需立即執行（會提交並推送私人資料）：
 
@@ -85,4 +57,12 @@ launchctl bootout "gui/$(id -u)/com.crawlsnek.ptt-local-crawler"
 rm "$HOME/Library/LaunchAgents/com.crawlsnek.ptt-local-crawler.plist"
 ```
 
-解除安裝保留私人資料、Git commits 與 log。改排程或路徑時，先 bootout，重新產生 plist，再 bootstrap。
+解除安裝保留私人資料、Git commits、conf、bootstrap 與 log。改排程後重跑 `install.sh`。
+
+## 雲端停更告警
+
+`.github/workflows/local-crawler-watch.yml` 每兩小時（UTC 偶數小時的 31 分）讀取私人資料庫 `jp/local/runs.csv`，由 `DATA_REPO_TOKEN` checkout；以工作流程的 `issues: write` 權限管理程式庫 issue。GitHub schedule 可能延遲，14 小時是成功紀錄門檻，並非保證第 14 小時即發通知。
+
+モバステ、イオシス任一家最後 `status=ok` 超過 14 小時，或沒有有效成功紀錄，就建立固定標題「本機爬蟲停更告警」的 issue；已有 open issue 則編輯內文更新狀態，只有停更店家集合改變時留言。兩家都恢復到 14 小時內才留言並關閉。只採含時區、非未來的成功時間，失敗不延長健康時間；紀錄須已推送才算恢復。issue 僅含店名與成功／檢查時間，不含私人 CSV 原列或錯誤內容。checkout／API 失敗會使 workflow 失敗，不誤報恢復；通知是否送達依 GitHub 個人的 watch／通知設定。
+
+安裝前驗證兩個 clone 與 BASE，若 launchd 顯示正在執行或 runner 鎖被占用則提示並退出；安裝期間持有 runner 鎖。bootout 後 bootstrap 最多嘗試 4 次，間隔 2 秒，耗盡後非 0 結束。Python 依序尋找 `/opt/homebrew/bin/python3`、`/usr/local/bin/python3`、`/usr/bin/python3`；bootstrap 的 Git 指令限制 120 秒（clone 300 秒），pip 限制 600 秒，以 timeout 或 perl alarm 執行，兩者皆無則直接執行。測試使用暫存 HOME 與假 launchctl，不載入實際排程。

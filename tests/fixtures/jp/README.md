@@ -49,3 +49,7 @@ POYU 於 **2026-10-30 家用 IP** 實抓並提供原始 HTML；本次只讀取 p
 同日另擷取 18 Pro Max 與 Duo 的 256GB 規格頁；實際回傳舊版版型，非新版。fixture 只保留機型卡與價格表，內容未改：
 - `local-pastec-iphone18promax256gb-20261104.html`：https://pastec.net/iphone/iphone18promax256gb?purchase_type=net ，原始 SHA-256 `3308700397f586c0dc14a77181c115de39c94aff80f341922d233605c985568c`。
 - `local-pastec-iphoneduo256gb-20261104.html`：https://pastec.net/iphone/iphoneduo256gb?purchase_type=net ，原始 SHA-256 `a2c62382092afd8b9b2b5eafbdb6ec366e92c2a3e007737cf8a76cff47f1bab8`。
+
+### 2026-11-07 停更告警
+
+`local-runs-watch.csv` 為合成資料，沿用實際 `jp/local/runs.csv` 的 `run_at,shop,status,rows,error` 欄位與已確認店名「モバステ」「イオシス」；時間、筆數、失敗內容供離線測試使用，沒有複製私人紀錄。
