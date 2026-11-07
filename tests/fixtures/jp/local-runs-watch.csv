@@ -1,0 +1,4 @@
+run_at,shop,status,rows,error
+2026-11-07T09:40:00+09:00,モバステ,ok,48,
+2026-11-07T09:40:00+09:00,イオシス,ok,240,
+2026-11-07T21:40:00+09:00,イオシス,fetch_error,0,synthetic failure

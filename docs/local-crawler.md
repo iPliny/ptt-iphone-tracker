@@ -68,3 +68,18 @@ Back Market 日本列表 curl 為 403，本版未做。手機王（sogi）條款
 `jp.local_sync` 先 fetch 再 rebase，僅白名單 `jp/runs.csv`、`jp/local/runs.csv`、`jp/sell/runs.csv` 允許 CSV 完整列合併去重，且兩邊都必須包含共同基底的完整列集合；以兩邊列的聯集保留順序並去重，支援多個本機 commit。其他衝突中止本次 rebase、保留原 commit；啟動前殘留 rebase／merge 會先 abort 並記錄後繼續，abort 失敗才停止；只有白名單 runs.csv 追加失敗紀錄的未提交變更會自動提交，其他變更停止。失敗仍提交／推送的行為已存在於此分支，這次保留並以測試確認。
 
 Claude 後續處理（本次未執行）：先暫停 launchd 並備份私人 checkout（含 .git、未提交變更及 rebase 現場），更新 runner 後，啟動時會自動 abort 殘留 rebase／merge 回原 commit，再提交僅追加的失敗紀錄；若有其他未提交變更，仍需人工整理。確認 main、乾淨且資料無遺失後，將本次程式更新到本機 runner；先以 `--only iosys-buyback --dry-run --data <暫存目錄>` 驗證，再正式跑一次並確認 push。網站建置端也必須套用 jp_build.py 才會讀取新子目錄。不要刪舊 jp/ CSV，不要 force push。
+
+
+## 2026-11-07 路徑自我修復與雲端告警
+
+11/04 搬移 BASE 後，舊 plist 寫死的 repo 路徑失效並 exit 78；本次改由 repo 外固定位置 `~/Library/Application Support/crawlsnek/ptt-bootstrap.sh` 啟動。`local/install.sh [BASE絕對路徑]` 冪等寫 conf、複製 bootstrap、產生 plist 並重新載入，保留 09:40／21:40（系統需為 JST）與既有 log。安裝不立即抓取。詳細命令見 [安裝說明](../local/README.md#安裝-launchd)。
+
+bootstrap 讀同目錄 `ptt-local-crawler.conf` 的 BASE，預設 `~/ai-cowork/ptt-local-crawler`。失聯時搜尋 HOME 深度 5 內的資料 clone，BASE 名稱不限，核對兩個 clone 的 origin；多個有效候選全部記 log，選資料庫最近 commit 時間最新者（同時間依路徑排序）。不分大小寫排除 Library／.Trash／Documents／Desktop／Downloads 及指向它們的符號連結。只有沒有 conf，或明確標記 `BASE_EXISTED=0` 且 BASE 不存在又無候選時才 clone；舊 conf 一律視為曾安裝，找不到候選即大聲記 log 並非 0 結束，不另建資料庫。成功安裝或找到 BASE 後保存 `BASE_EXISTED=1`。建立 `.venv` 並安裝依賴；不覆寫既有無效 clone。每輪程式庫 pull --ff-only 失敗不阻擋舊版執行，最後以 BASE 設定兩個環境變數交給 run.sh。依賴安裝失敗仍停止並留下 log，下輪重試。
+
+不要搬動或刪除 BASE 資料夾；要搬請先停排程、等執行結束、保留兩個完整 clone，再跑 install.sh 指定新路徑或改 conf。安裝與更新固定 bootstrap 副本都需人工執行安裝腳本。
+
+雲端 `local-crawler-watch.yml` 每兩小時以既有 `DATA_REPO_TOKEN` 取得私人資料，檢查 `jp/local/runs.csv` 的モバステ、イオシス最後成功時間。任一家超過 14 小時（或缺少有效紀錄）建立「本機爬蟲停更告警」，已有 open 則編輯內文，只有停更店家集合改變時留言，兩家均恢復後留言關閉。權限為 contents: read、issues: write，不依賴 Mac 存活。只公開店名與成功時間，不轉貼原始列、錯誤或價格。GitHub 排程有延遲，通知須依帳戶設定；資料 checkout／API 失敗由 workflow 失敗顯示，不當成恢復。
+
+本次只修改程式與離線測試；沒有執行 install.sh、更新實際 runner 或啟用雲端排程。部署程式後仍須安裝與觀察實際排程／成功推送才能確認運作。
+
+安裝前驗證兩個 clone 與 BASE，若 launchd 顯示正在執行或 runner 鎖被占用則提示並退出；安裝期間持有 runner 鎖。bootout 後 bootstrap 最多嘗試 4 次，間隔 2 秒，耗盡後非 0 結束。Python 依序尋找 `/opt/homebrew/bin/python3`、`/usr/local/bin/python3`、`/usr/bin/python3`；bootstrap 的 Git 指令限制 120 秒（clone 300 秒），pip 限制 600 秒，以 timeout 或 perl alarm 執行，兩者皆無則直接執行。測試使用暫存 HOME 與假 launchctl，不載入實際排程。

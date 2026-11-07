@@ -4,12 +4,9 @@
 <dict>
     <key>Label</key><string>com.crawlsnek.ptt-local-crawler</string>
     <key>ProgramArguments</key>
-    <array><string>/bin/bash</string><string>__CODE_DIR__/local/run.sh</string></array>
-    <key>WorkingDirectory</key><string>__CODE_DIR__</string>
+    <array><string>/bin/bash</string><string>__BOOTSTRAP__</string></array>
     <key>EnvironmentVariables</key>
     <dict>
-        <key>PTT_DATA_DIR</key><string>__DATA_DIR__</string>
-        <key>PTT_PYTHON</key><string>__PYTHON__</string>
         <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
         <key>TZ</key><string>Asia/Tokyo</string>
     </dict>

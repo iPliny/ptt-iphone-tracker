@@ -1,0 +1,33 @@
+# 獨立於家用 Mac；成功紀錄須已推送到私人資料庫才算恢復。
+name: 本機爬蟲停更檢查
+
+on:
+  schedule:
+    - cron: "31 */2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: local-crawler-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: 取得私人資料庫
+        uses: ./.github/actions/checkout-data
+        with:
+          token: ${{ secrets.DATA_REPO_TOKEN }}
+      - name: 檢查成功時間並更新告警
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/local_crawler_watch.py data/jp/local/runs.csv

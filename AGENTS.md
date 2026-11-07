@@ -183,3 +183,9 @@
 - 本機 `jp.local` 預設含 `iosys-buyback`；モバステ／イオシス買取改寫 `jp/local/{latest,prices,runs}.csv`，Actions 仍寫 `jp/` 原三檔，販賣價仍在 `jp/sell/`。欄位與 append-only 語意不變，不搬動或刪除舊資料。
 - `site/jp_build.py:buyback_sources` 以各店首次本機成功為接手點：之前保留舊歷史，之後只採本機價格／狀態與快照，Actions 不覆蓋本機來源。首次接手仍依舊快照檢查筆數、保留 since 與下架事件。
 - `jp.local_sync` 僅自動合併執行紀錄的純追加衝突；其他衝突 abort 本次 rebase，啟動時自動 abort 殘留 rebase／merge 並記錄，失敗才停止；cherry-pick／revert 仍需人工處理。失敗紀錄仍 commit/push，禁止 force push。交接見 docs/local-crawler.md。
+
+
+### 2026-11-07 本機爬蟲路徑與停更防護
+- 不要搬動或刪除 BASE 資料夾（預設 `~/ai-cowork/ptt-local-crawler`）；要搬請先停排程並等待執行結束，保留完整 clone，再跑 `local/install.sh 新BASE` 或改 `~/Library/Application Support/crawlsnek/ptt-local-crawler.conf`，不可放進 Library／.Trash／Documents／Desktop／Downloads（不分大小寫，含符號連結）。
+- plist 由 repo 外固定的 `~/Library/Application Support/crawlsnek/ptt-bootstrap.sh` 啟動；更新 bootstrap 後須重跑 install.sh。安裝保留 09:40／21:40 JST（取決於 Mac 系統時區）與既有 log，不立即抓取。bootstrap 自動搜尋核對 origin，多候選記 log 並選資料庫最近 commit 最新者；只有無 conf，或明確 BASE_EXISTED=0 且 BASE 不存在、無候選時才 clone，既有 conf 失聯則報錯非 0；install.sh 寫 conf 前驗證路徑，爬蟲執行中提示退出、bootstrap 失敗最多嘗試 4 次。pull --ff-only 失敗沿用現有版本；詳細邊界見 local/README.md。
+- `local-crawler-watch.yml` 每兩小時讀私人 `jp/local/runs.csv`，モバステ／イオシス任一家超過 14 小時未成功即建固定標題 issue，既有 open 編輯內文，僅停更店家集合改變或全部恢復時留言，全部恢復後關閉；只有店名與時間可公開，不得加入原始資料列或內部錯誤。測試以暫存 HOME／合成 CSV 與 API 替身執行，不操作實際安裝。
