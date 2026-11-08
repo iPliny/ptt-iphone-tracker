@@ -8,6 +8,8 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from unittest.mock import patch
+import shutil
 
 from jp.local_lock import LOCK_ENV, execution_lock
 
@@ -15,7 +17,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class LockTests(unittest.TestCase):
-    def test_independent_process_cannot_overlap_or_create_lock_file(self):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.home = Path(temp.name)
+        self.path = self.home / "locks/runner.lock"
+        env = patch.dict(os.environ, {"HOME": str(self.home), "PTT_LOCAL_LOCK_PATH": str(self.path)})
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop(LOCK_ENV, None)
+
+    def test_independent_process_cannot_overlap(self):
         before = set((ROOT / "jp").iterdir())
         env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
         env.pop(LOCK_ENV, None)
@@ -26,6 +38,40 @@ class LockTests(unittest.TestCase):
             self.assertIn("已在執行", result.stderr)
         self.assertEqual(subprocess.run(command, cwd=ROOT, env=env, capture_output=True).returncode, 0)
         self.assertEqual(set((ROOT / "jp").iterdir()), before)
+        self.assertEqual(self.path.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(self.path.parent.stat().st_mode & 0o777, 0o700)
+
+    def test_replacing_module_inode_does_not_bypass_lock(self):
+        checkout = self.home / "checkout"
+        shutil.copytree(ROOT / "jp", checkout / "jp", ignore=shutil.ignore_patterns("__pycache__"))
+        module = checkout / "jp/local_lock.py"
+        command = [sys.executable, "-m", "jp.local_lock", "--", sys.executable, "-c", "pass"]
+        with execution_lock():
+            old_inode = module.stat().st_ino
+            replacement = module.with_suffix(".new")
+            replacement.write_bytes(module.read_bytes())
+            replacement.replace(module)
+            self.assertNotEqual(old_inode, module.stat().st_ino)
+            result = subprocess.run(command, cwd=checkout, capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(subprocess.run(command, cwd=checkout, capture_output=True).returncode, 0)
+
+    def test_inherited_unlocked_or_wrong_inode_fd_rejected(self):
+        self.path.parent.mkdir()
+        self.path.touch()
+        for path in (self.path, self.home / "wrong.lock"):
+            with path.open("w+") as handle:
+                with patch.dict(os.environ, {LOCK_ENV: str(handle.fileno())}):
+                    with self.assertRaises(RuntimeError):
+                        with execution_lock():
+                            pass
+
+    def test_inherited_separate_open_of_locked_inode_rejected(self):
+        with execution_lock(), self.path.open() as handle:
+            with patch.dict(os.environ, {LOCK_ENV: str(handle.fileno())}):
+                with self.assertRaises(RuntimeError):
+                    with execution_lock():
+                        pass
 
     def test_inherited_lock_survives_child_context_exit(self):
         env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
@@ -51,6 +97,7 @@ class RunnerTests(unittest.TestCase):
         self.bin.mkdir()
         self.log = self.root / "calls.jsonl"
         self.env = {**os.environ, "HOME": str(self.root), "PTT_DATA_DIR": str(self.data),
+                    "PTT_LOCAL_LOCK_PATH": str(self.root / "locks/runner.lock"),
                     "PTT_PYTHON": str(self.bin / "python"), "FAKE_CALLS": str(self.log),
                     "PATH": str(self.bin) + os.pathsep + os.environ.get("PATH", "")}
         self.env.pop(LOCK_ENV, None)

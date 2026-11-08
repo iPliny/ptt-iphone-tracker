@@ -7,6 +7,7 @@ from pathlib import Path
 
 from . import buyback as jp
 from .local_lock import execution_lock
+from contextlib import nullcontext
 from .local_pastec import PASTEC_INDEX, PASTEC_SHOP, discover_pastec_pages, parse_pastec
 from .local_iosys import (IOSYS_SELL_INDEX, SELL_CONDITIONS, discover_iosys_pages,
                           iosys_next_page, minimum_prices, parse_iosys_sell)
@@ -117,7 +118,7 @@ def main(argv=None):
     parser.add_argument("--only", type=source_list, default=SOURCES, help="pastec,iosys-sell,iosys-buyback（預設全部）")
     args = parser.parse_args(argv)
     try:
-        with execution_lock():
+        with nullcontext() if args.dry_run else execution_lock():
             results = collect(args.only)
             report = save_or_check(args.data, results, dry_run=args.dry_run)
     except (OSError, RuntimeError):

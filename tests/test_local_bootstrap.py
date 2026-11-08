@@ -1,5 +1,7 @@
 """只在暫存 HOME 測試，絕不觸碰實際排程或私人 clone。"""
 import os
+import fcntl
+import sys
 from pathlib import Path
 import plistlib
 import subprocess
@@ -12,8 +14,11 @@ BOOT = ROOT / "local/bootstrap.sh"
 
 
 def shell(home, command):
+    env = {**os.environ, "HOME": str(home),
+           "PTT_LOCAL_LOCK_PATH": str(home / "Library/Application Support/crawlsnek/ptt-local-crawler.lock")}
+    env.pop("PTT_LOCAL_LOCK_FD", None)
     return subprocess.run(["/bin/bash", "-c", 'source "$1"; timed() { shift; "$@"; }; ' + command, "test", str(BOOT)],
-                          env={**os.environ, "HOME": str(home)}, text=True, capture_output=True)
+                          env=env, text=True, capture_output=True)
 
 
 def clones(base, wrong=False):
@@ -136,6 +141,35 @@ class LocalBootstrapTests(unittest.TestCase):
         assert (tmp_path / "result").read_text().splitlines() == [str(base / "ptt-iphone-data"), str(python)]
         assert "pull 失敗" in (tmp_path / "Library/Logs/ptt-local-crawler.log").read_text()
 
+    def test_busy_bootstrap_never_pulls_or_installs(self):
+        lock = self.home / "Library/Application Support/crawlsnek/ptt-local-crawler.lock"
+        lock.parent.mkdir(parents=True)
+        with lock.open("w+") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = shell(self.home, 'git() { echo "$*" >> "$HOME/git-calls"; }; main')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.home / "git-calls").exists())
+        self.assertIn("正在執行", (self.home / "Library/Logs/ptt-local-crawler.log").read_text())
+
+    def test_bootstrap_passes_held_lock_through_run_to_python(self):
+        base = clones(self.home / "runner")
+        config(self.home, base)
+        code = base / "ptt-iphone-tracker"
+        (code / ".venv/bin").mkdir(parents=True)
+        (code / ".venv/bin/python").symlink_to(sys.executable)
+        (code / "requirements.txt").write_text("")
+        (code / ".venv/ptt-requirements.txt").write_text("")
+        (code / "local").mkdir()
+        (code / "local/run.sh").write_text(
+            'cd "' + str(ROOT) + '"\n"$PTT_PYTHON" -m jp.local_lock --check\n'
+            'if env -u PTT_LOCAL_LOCK_FD "$PTT_PYTHON" -m jp.local_lock -- /usr/bin/true; then exit 9; fi\n'
+            '"$PTT_PYTHON" -c \'import os; from jp.local_lock import execution_lock; '
+            'from pathlib import Path; '
+            'ctx=execution_lock(); ctx.__enter__(); Path(os.environ["HOME"], "held").touch()\'\n')
+        result = shell(self.home, 'git() { if [ "$3" = pull ]; then return 0; else command git "$@"; fi; }; main')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.home / "held").exists())
+
     def test_plist_has_stable_entry_and_original_schedule(self):
         data = plistlib.loads((ROOT / "local/com.crawlsnek.ptt-local-crawler.plist").read_bytes())
         assert data["ProgramArguments"] == ["/bin/bash", "__BOOTSTRAP__"]
@@ -227,9 +261,9 @@ touch "$HOME/pip-ok"
         for name in ('install.sh', 'bootstrap.sh', 'com.crawlsnek.ptt-local-crawler.plist'):
             shutil.copy(ROOT / 'local' / name, stage / 'local' / name)
         base = clones(self.home / 'runner')
-        lock = base / 'ptt-iphone-tracker/jp/local_lock.py'
+        lock = self.home / "test-lock/runner.lock"
         lock.parent.mkdir()
-        lock.write_text('# fixture lock\n')
+        lock.touch()
         bindir = self.home / 'bin'
         bindir.mkdir()
         scripts = {
@@ -252,7 +286,7 @@ esac
             path.chmod(0o700)
         def run(path=base):
             return subprocess.run(['/bin/bash', str(stage / 'local/install.sh'), str(path)],
-                                  env={**os.environ, 'HOME': str(self.home), 'PATH': f'{bindir}:' + os.environ['PATH']},
+                                  env={**os.environ, 'HOME': str(self.home), 'PTT_LOCAL_LOCK_PATH': str(lock), 'PATH': f'{bindir}:' + os.environ['PATH']},
                                   capture_output=True, text=True, timeout=30)
         return base, lock, run
 

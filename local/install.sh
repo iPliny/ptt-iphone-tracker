@@ -14,17 +14,8 @@ state="$(launchctl print "$domain/com.crawlsnek.ptt-local-crawler" 2>/dev/null |
 if printf '%s\n' "$state" | /usr/bin/grep -Eq 'state = running|pid = [0-9]+'; then
     log '爬蟲正在執行，請等結束後再安裝。' >&2; exit 1
 fi
-# 手動啟動的 runner 也使用此檔案鎖。
-exec 9< "$BASE/ptt-iphone-tracker/jp/local_lock.py"
-# flock 綁定共用的 open-file description；shell 保留 fd 9 到安裝結束。
-"$(find_python)" - <<'PYLOCK'
-import fcntl
-import sys
-try:
-    fcntl.flock(9, fcntl.LOCK_EX | fcntl.LOCK_NB)
-except BlockingIOError:
-    sys.exit("爬蟲正在執行，請等結束後再安裝。")
-PYLOCK
+# 與 bootstrap、手動 runner 使用同一把固定鎖。
+acquire_runner_lock
 save_base
 mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
 cp "$CODE_DIR/local/bootstrap.sh" "$CONFIG_DIR/ptt-bootstrap.sh"

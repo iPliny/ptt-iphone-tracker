@@ -200,7 +200,7 @@ class LocalStorageTests(unittest.TestCase):
             with patch.object(local, "collect", return_value=[bad]), contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(local.main(["--data", tmp, "--dry-run"]), 1)
             self.assertEqual(before, {p.name: p.read_bytes() for p in (Path(tmp) / "local").iterdir()})
-            with patch.object(local, "collect", return_value=[bad]), contextlib.redirect_stdout(io.StringIO()):
+            with patch.dict("os.environ", {"PTT_LOCAL_LOCK_PATH": str(Path(tmp) / "locks/runner.lock")}), patch.object(local, "collect", return_value=[bad]), contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(local.main(["--data", tmp]), 1)
             for name in ("prices.csv", "latest.csv"):
                 self.assertEqual(before[name], (Path(tmp) / "local" / name).read_bytes())

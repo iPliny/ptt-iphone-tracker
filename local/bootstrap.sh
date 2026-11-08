@@ -17,6 +17,33 @@ timed() {
     else "$@"; fi
 }
 
+# shell 保留 fd；Perl 與它共用 open-file description，退出不解鎖。
+acquire_runner_lock() {
+    export PTT_LOCAL_LOCK_PATH="${PTT_LOCAL_LOCK_PATH:-$CONFIG_DIR/ptt-local-crawler.lock}"
+    mkdir -p "$(dirname "$PTT_LOCAL_LOCK_PATH")"
+    chmod 700 "$(dirname "$PTT_LOCAL_LOCK_PATH")"
+    local new_lock=0
+    if [ -z "${PTT_LOCAL_LOCK_FD:-}" ]; then
+        exec 9<> "$PTT_LOCAL_LOCK_PATH"
+        chmod 600 "$PTT_LOCAL_LOCK_PATH"
+        export PTT_LOCAL_LOCK_FD=9
+        new_lock=1
+    fi
+    if ! /usr/bin/perl -MFcntl=:flock -e '
+        open(my $lock, "+<&=$ENV{PTT_LOCAL_LOCK_FD}") or die "$!\n";
+        my @actual = stat($lock); my @expected = stat($ENV{PTT_LOCAL_LOCK_PATH});
+        die "invalid lock\n" unless @actual && @expected && $actual[0] == $expected[0] && $actual[1] == $expected[1];
+        unless ($ARGV[0]) {
+            open(my $probe, "<", $ENV{PTT_LOCAL_LOCK_PATH}) or die "$!\n";
+            die "unlocked fd\n" if flock($probe, LOCK_EX | LOCK_NB);
+        }
+        flock($lock, LOCK_EX | LOCK_NB) or die "busy lock\n";
+    ' "$new_lock"; then
+        log '爬蟲正在執行，或繼承的檔案鎖無效；停止更新。' >&2
+        return 1
+    fi
+}
+
 find_python() {
     local python
     for python in /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3; do
@@ -133,6 +160,7 @@ main() {
     mkdir -p "$HOME/Library/Logs"
     exec >> "$HOME/Library/Logs/ptt-local-crawler.log" 2>&1
     export GIT_TERMINAL_PROMPT=0
+    acquire_runner_lock
     locate_base
     local code="$BASE/ptt-iphone-tracker"
     if ! timed 120 git -C "$code" pull --ff-only; then log '程式庫 pull 失敗，沿用現有版本'; fi
