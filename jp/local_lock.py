@@ -1,4 +1,4 @@
-"""本機爬蟲與 Git 同步共用的檔案鎖；鎖既存程式檔，不建立鎖檔。"""
+"""本機爬蟲與 Git 同步共用的檔案鎖；使用 checkout 外的固定鎖檔。"""
 from __future__ import annotations
 
 import contextlib
@@ -8,7 +8,12 @@ from pathlib import Path
 import sys
 
 LOCK_ENV = "PTT_LOCAL_LOCK_FD"
-LOCK_PATH = Path(__file__).resolve()
+LOCK_PATH_ENV = "PTT_LOCAL_LOCK_PATH"
+
+
+def lock_path():
+    return Path(os.environ.get(LOCK_PATH_ENV, str(
+        Path.home() / "Library/Application Support/crawlsnek/ptt-local-crawler.lock"))).expanduser()
 
 
 class AlreadyRunning(RuntimeError):
@@ -20,10 +25,26 @@ def execution_lock():
     inherited = os.environ.get(LOCK_ENV)
     owned = inherited is None
     try:
-        fd = os.open(LOCK_PATH, os.O_RDONLY) if owned else int(inherited)
-        actual, expected = os.fstat(fd), LOCK_PATH.stat()
+        path = lock_path()
+        if owned:
+            path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            path.parent.chmod(0o700)
+            fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+            os.fchmod(fd, 0o600)
+        else:
+            fd = int(inherited)
+        actual, expected = os.fstat(fd), path.stat()
         if (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino):
             raise ValueError("鎖的檔案不符")
+        if not owned:
+            # 獨立 open 必須被擋住，且同一 open-file description 再取鎖須成功。
+            with path.open("rb") as probe:
+                try:
+                    fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    pass
+                else:
+                    raise ValueError("繼承的 fd 未持鎖")
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except (OSError, ValueError) as exc:
         if owned and "fd" in locals():

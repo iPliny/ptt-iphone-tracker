@@ -8,7 +8,7 @@
 
 `buyback.fetch` 新增可選的各站間隔，`validate_rows`、`apply_results` 新增可選的機況清單，原本呼叫的預設值不變。全域請求（含重試）至少相隔 5 秒；pastec.net、iosys.co.jp 各至少 10 秒；駿河屋保留 30 秒設定但沒有啟用抓取；既有 k-tai-iosys.com 仍為 60 秒。每次失敗最多重試一次，全部序列執行。
 
-整個來源的任一頁抓取、解析或分頁失敗，該店整批保留舊價；0 筆、筆數少至少一半、衝突鍵等沿用驗證。其他來源仍可更新，失敗寫私人 `runs.csv`，CLI 回傳非 0。`--dry-run` 同樣驗證既有快照與本次筆數，但不建立資料目錄、CSV 或鎖檔。stdout 含店家、狀態、筆數與抓取失敗的 HTTP 狀態／連線錯誤類別。檔案鎖共用於 CLI 與整段本機 Git 同步，固定使用同一份程式庫 checkout。
+整個來源的任一頁抓取、解析或分頁失敗，該店整批保留舊價；0 筆、筆數少至少一半、衝突鍵等沿用驗證。其他來源仍可更新，失敗寫私人 `runs.csv`，CLI 回傳非 0。`--dry-run` 同樣驗證既有快照與本次筆數，但不建立資料目錄、CSV 或鎖檔。stdout 含店家、狀態、筆數與抓取失敗的 HTTP 狀態／連線錯誤類別。固定鎖檔預設為 `$HOME/Library/Application Support/crawlsnek/ptt-local-crawler.lock`，可用 `PTT_LOCAL_LOCK_PATH` 覆寫；資料夾權限 700、鎖檔 600，鎖檔不刪除。bootstrap 在任何 pull、venv、pip 前由系統 `/usr/bin/perl` 取得非阻塞 flock，透過 `PTT_LOCAL_LOCK_FD` 將 fd 傳給 exec 的 run.sh 與 Python，一路持鎖到結束。CLI、手動 runner 與 install 共用此鎖，繼承時核對 dev/inode 與持鎖狀態；重疊執行非 0 結束。dry-run 不取鎖、不建立鎖檔。
 
 ## モバステ（pastec）買取
 

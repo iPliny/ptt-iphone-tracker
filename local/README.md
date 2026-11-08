@@ -22,7 +22,7 @@ PTT_DATA_DIR="$HOME/Documents/Codex/dispatch/ptt-iphone-data" \
 
 腳本確認獨立 clone、取得與推送的 origin 都是指定資料庫、分支為 `main`，工作目錄若只有白名單 runs.csv 追加的失敗紀錄會先提交，其他未提交變更停止，再 fetch 並 rebase `origin/main`。若本機尚未推送的 commit 含 `jp/` 以外檔案，也會停止。抓取完成後（含失敗）只 `git add -- jp/`，有變動才以「本機日本價格更新 <日本時間>」提交，再推送；第一次推送失敗後最多重試 3 次，每次先 rebase，只有 runs.csv 的純追加衝突自動合併去重，其餘衝突中止本次 rebase 並停止。所有輸出追加至 `~/Library/Logs/ptt-local-crawler.log`。
 
-整段 Git 同步與直接執行 `jp.local` 共用 `fcntl.flock` 鎖；鎖住既存 `jp/local_lock.py`，不建立鎖檔，程序結束即釋放。重疊執行會回傳非 0。請固定使用同一份程式庫 checkout，不要在執行途中更換此檔案或另開 clone 排程。
+固定鎖檔預設為 `$HOME/Library/Application Support/crawlsnek/ptt-local-crawler.lock`，可用 `PTT_LOCAL_LOCK_PATH` 覆寫；資料夾權限 700、鎖檔 600，鎖檔不刪除。bootstrap 在任何 pull、venv、pip 前由系統 `/usr/bin/perl` 取得非阻塞 flock，透過 `PTT_LOCAL_LOCK_FD` 將 fd 傳給 exec 的 run.sh 與 Python，一路持鎖到結束。CLI、手動 runner 與 install 共用此鎖，繼承時核對 dev/inode 與持鎖狀態；重疊執行非 0 結束。dry-run 不取鎖、不建立鎖檔。
 
 抓取失敗仍提交並推送失敗紀錄與成功店家的更新，同步成功後回傳爬蟲原本的非 0。push 全數失敗則保留本機 commit，下次乾淨執行會再次推送。腳本不 reset、不 force push、不丟棄別人的資料。啟動時若已有 rebase／merge，自動 abort 回原分支並記錄 log 後繼續，abort 失敗才停止；cherry-pick／revert 仍須人工處理。
 
