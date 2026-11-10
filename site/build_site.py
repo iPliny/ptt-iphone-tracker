@@ -593,12 +593,12 @@ def sitemap_lastmods(data, data_dir=None, jp_latest=()):
         from column import load_issues, issue_url
         for issue in load_issues(os.path.join(data_dir, "column")):
             newest(issue_url(issue), [issue.get("generated_at")])
-        from blog import load_posts
+        from blog import load_posts, archived_original, canonical_url
         posts = load_posts(os.path.join(data_dir, "blog"), os.path.join(data_dir, "weekly"))
         newest(SITE_URL + "weekly/", [p.get(key) for p in posts for key in ("published", "updated")])
         for post in posts:
-            if post["origin"] == "site":
-                newest(post["url"], [post.get("published"), post.get("updated")])
+            if post["origin"] == "site" or archived_original(post):
+                newest(canonical_url(post), [post.get("published"), post.get("updated")])
     jp_day = max((day for row in jp_latest if (day := sitemap_day(row.get("last_checked")))), default="")
     if jp_day:
         lastmods[SITE_URL + "jp/"] = lastmods[SITE_URL + "jp/ja/"] = jp_day

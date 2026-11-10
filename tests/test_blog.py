@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from xml.etree import ElementTree
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "site"))
 import blog as B  # noqa: E402
@@ -76,7 +77,9 @@ class BlogTest(unittest.TestCase):
         write_csv(os.path.join(self.dir, "events.csv"), S_EVENT_HEADER, [])
         B.sync(self.posts, os.path.join(self.dir, "blog"))
         out = os.path.join(self.dir, "out")
-        S.build(out, self.dir)
+        # 未列入已下架清單的轉貼，維持既有 Blogger canonical。
+        with patch.dict(B.RETIRED_ORIGINALS, {}, clear=True):
+            S.build(out, self.dir)
         page = read(os.path.join(out, "weekly", "2026-10-11", "index.html"))
         index = read(os.path.join(out, "weekly", "index.html"))
         self.assertIn('<link rel="canonical" href="https://tcssh.blogspot.com/2026/10/iphone318-propro20261011.html">', page)
@@ -90,6 +93,40 @@ class BlogTest(unittest.TestCase):
         locs = [e.text for e in ElementTree.parse(os.path.join(out, "sitemap.xml")).findall("s:url/s:loc", ns)]
         self.assertIn(S.SITE_URL + "weekly/", locs)
         self.assertFalse(any("weekly/2026" in u for u in locs))  # 各篇 canonical 在 Blogger
+
+    def test_retired_originals_get_indexable_archive_urls_without_changing_source(self):
+        write_csv(os.path.join(self.dir, "listings.csv"), LISTING_HEADER, [])
+        write_csv(os.path.join(self.dir, "events.csv"), S_EVENT_HEADER, [])
+        posts = []
+        for day, source in B.RETIRED_ORIGINALS.items():
+            posts.append(dict(self.posts[0], id=day, url=source, published=day + "T19:00:00+08:00",
+                              updated=day + "T20:00:00+08:00"))
+        blog_dir = os.path.join(self.dir, "blog")
+        B.sync(posts, blog_dir)
+        before = {p["id"]: read(os.path.join(blog_dir, p["id"] + ".json")) for p in posts}
+        out = os.path.join(self.dir, "out")
+        S.build(out, self.dir)
+        ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+        entries = ElementTree.parse(os.path.join(out, "sitemap.xml")).findall("s:url", ns)
+        dates = {e.findtext("s:loc", namespaces=ns): e.findtext("s:lastmod", namespaces=ns) for e in entries}
+        for p in posts:
+            url = f"{S.SITE_URL}weekly/{p['id']}/"
+            page = read(os.path.join(out, "weekly", p["id"], "index.html"))
+            self.assertIn(f'<link rel="canonical" href="{url}">', page)
+            self.assertIn(f'<meta property="og:url" content="{url}">', page)
+            self.assertIn("原刊於 Blogger，原文已下架", page)
+            self.assertNotIn('content="noindex"', page)
+            self.assertNotIn(p["url"], page)
+            self.assertEqual(dates[url], p["id"])  # 保留來源日期，不用修復／建置日
+            self.assertEqual(read(os.path.join(blog_dir, p["id"] + ".json")), before[p["id"]])
+
+    def test_archive_override_requires_exact_source_and_blogger_origin(self):
+        post = dict(self.posts[-1], origin="blogger")
+        self.assertTrue(B.archived_original(post))
+        for changed in (dict(post, url="https://example.com/live"), dict(post, id="2026-10-12"),
+                        dict(post, origin="site")):
+            self.assertFalse(B.archived_original(changed))
+            self.assertEqual(B.canonical_url(changed), changed["url"])
 
 
     def draft(self, **kw):
@@ -135,7 +172,7 @@ class BlogTest(unittest.TestCase):
         ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
         locs = [e.text for e in ElementTree.parse(os.path.join(out, "sitemap.xml")).findall("s:url/s:loc", ns)]
         self.assertIn(url, locs)
-        self.assertNotIn(f"{S.SITE_URL}weekly/2026-10-11/", locs)
+        self.assertIn(f"{S.SITE_URL}weekly/2026-10-11/", locs)
 
 
 if __name__ == "__main__":
