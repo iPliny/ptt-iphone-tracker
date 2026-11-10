@@ -327,3 +327,53 @@ test('同價每天成功但公開runs只留最近7天，全部與30天歷史最�
     assert.ok(full.series[jp.SHOPS.length].every(price=>price===210000));
   }
 });
+
+test('販賣價依機況與容量取最低，保留等級連結，48小時邊界與白名單網址',()=>{
+  jp.setLang('zh');
+  const sell=(condition,price,extra={})=>row('イオシス',8,price,{condition,last_checked:'2026-11-08T09:00:00+09:00',source_url:'https://iosys.co.jp/items/123',...extra});
+  const data={generated_at:'2026-11-10T09:00:00+09:00',sell:[sell('未使用品',180000),sell('未使用品',175000),sell('中古A',140000),sell('中古B',130000),sell('中古C',120000),sell('中古C',1,{carrier:'docomo'}),sell('中古C',150000,{storage:'512GB'})]};
+  jp.setCondition('未開封');
+  assert.equal(jp.sellMinima(data.sell,'iPhone 18 Pro')[0].price_jpy,175000);
+  assert.doesNotMatch(jp.renderSell(data,'iPhone 18 Pro'),/舊資料|jp-outdated/);
+  jp.setCondition('中古上限');
+  assert.deepEqual(jp.sellMinima(data.sell,'iPhone 18 Pro').map(r=>r.price_jpy),[120000,150000]);
+  let html=jp.renderSell({...data,generated_at:'2026-11-10T09:00:01+09:00'},'iPhone 18 Pro');
+  assert.match(html,/舊資料/);assert.match(html,/jp-outdated/);assert.match(html,/中古C/);assert.match(html,/href="https:\/\/iosys.co.jp\/items\/123"/);
+  assert.equal(jp.renderSell({},'iPhone 18 Pro'),'');
+  assert.equal(jp.renderSell({sell:[]},'iPhone 18 Pro'),'');
+  html=jp.renderSell({sell:[sell('中古B',1,{source_url:'https://iosys.co.jp.evil.test/'})]},'iPhone 18 Pro');
+  assert.doesNotMatch(html,/<a /);
+  jp.setLang('ja');assert.match(jp.renderSell(data,'iPhone 18 Pro'),/販売価格/);
+  jp.setLang('zh');jp.setCondition('未開封');
+});
+
+
+test('販賣價同價優先等級再依網址排序',()=>{
+  jp.setCondition('中古上限');
+  const rows=[['中古C','0'],['中古B','1'],['中古A','z'],['中古A','a']].map(([condition,suffix])=>
+    row('イオシス',8,120000,{condition,source_url:'https://iosys.co.jp/items/'+suffix}));
+  const best=jp.sellMinima(rows,'iPhone 18 Pro')[0];
+  assert.equal(best.condition,'中古A');
+  assert.equal(best.source_url,'https://iosys.co.jp/items/a');
+  jp.setCondition('未開封');
+});
+
+test('販賣價確認文字與無效時間，缺產生時間用最新成功抓取',()=>{
+  jp.setCondition('中古上限');
+  const sell=row('イオシス',8,120000,{condition:'中古B',last_checked:'2026-11-08T09:00:00+09:00'});
+  const runs=[{shop:'イオシス',status:'ok',run_at:'2026-11-10T09:00:01+09:00'},
+    {shop:'イオシス',status:'fetch_error',run_at:'2026-11-20T09:00:00+09:00'}];
+  for (const lang of ['zh','ja']) {
+    jp.setLang(lang);
+    let html=jp.renderSell({sell:[sell],runs},'iPhone 18 Pro');
+    assert.match(html,/jp-outdated/);
+    assert.ok(html.includes('<small>確認：2026-11-08 09:00（日本時間）</small>'));
+    assert.doesNotMatch(jp.renderSell({sell:[sell],runs:[{...runs[0],run_at:'2026-11-10T09:00:00+09:00'},runs[1]]},'iPhone 18 Pro'),/jp-outdated/);
+    for (const last_checked of ['', 'invalid', null, '2026-11-08T09:00:00']) {
+      html=jp.renderSell({sell:[{...sell,last_checked}],runs,generated_at:'2026-11-20T09:00:00+09:00'},'iPhone 18 Pro');
+      assert.ok(html.includes('<small>確認：—（日本時間）</small>'));
+      assert.doesNotMatch(html,/jp-outdated|舊資料|古いデータ/);
+    }
+  }
+  jp.setLang('zh');jp.setCondition('未開封');
+});

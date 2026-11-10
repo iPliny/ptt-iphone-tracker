@@ -83,3 +83,11 @@ bootstrap 讀同目錄 `ptt-local-crawler.conf` 的 BASE，預設 `~/ai-cowork/p
 本次只修改程式與離線測試；沒有執行 install.sh、更新實際 runner 或啟用雲端排程。部署程式後仍須安裝與觀察實際排程／成功推送才能確認運作。
 
 安裝前驗證兩個 clone 與 BASE，若 launchd 顯示正在執行或 runner 鎖被占用則提示並退出；安裝期間持有 runner 鎖。bootout 後 bootstrap 最多嘗試 4 次，間隔 2 秒，耗盡後非 0 結束。Python 依序尋找 `/opt/homebrew/bin/python3`、`/usr/local/bin/python3`、`/usr/bin/python3`；bootstrap 的 Git 指令限制 120 秒（clone 300 秒），pip 限制 600 秒，以 timeout 或 perl alarm 執行，兩者皆無則直接執行。測試使用暫存 HOME 與假 launchctl，不載入實際排程。
+
+## 2026-11-10 販賣價公開介面
+
+日本頁讀取 `data/jp/sell/latest.csv`，以 `jp/data.json` 的 `sell` 陣列公開 `shop,model,storage,condition,carrier,price_jpy,last_checked,source_url`；不讀取販賣歷史或抓取紀錄。只公開イオシス、既有機型／容量、SIMフリー、正整數價格與未使用品／中古A／中古B／中古C。缺檔、空檔或沒有符合的資料時不顯示販賣區。
+
+主頁與中日機型頁按機型、容量分組：未開封對照未使用品最低價，中古對照 A／B／C 合併最低價；同價依商品網址、等級排序。保留最低價原始商品連結、等級與日本時間確認時間，不計算買賣價差，也不混入買取最高價、價差或走勢。以建置快照時間比較每筆 `last_checked`，嚴格超過 48 小時顯示舊資料並淡化；商品條件仍以原頁為準，可能含網路利用限制。前段「販賣仍未公開」為當時紀錄。
+
+離線驗證：`python -m unittest discover -s tests`、`node --test tests/*.test.cjs`。販賣資料測試見 `tests/test_jp_sell.py` 與 `tests/jp.test.cjs`，只使用合成資料。

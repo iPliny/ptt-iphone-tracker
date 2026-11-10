@@ -83,3 +83,8 @@
 .jp-models a { display: inline-block; border: 1px solid var(--line); border-radius: 999px; padding: 4px 14px; font-size: 14px; }
 
 .jp-stale { display: inline-block; font-weight: 700; color: #92400e; background: #fef3c7; border: 1px solid #b45309; border-radius: 4px; padding: 2px 5px; margin-left: 5px; }
+
+.jp-sell { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 12px; }
+.jp-sell ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 12px 28px; }
+.jp-sell-item small { display: block; color: var(--muted); }
+.jp-outdated { opacity: .55; }
