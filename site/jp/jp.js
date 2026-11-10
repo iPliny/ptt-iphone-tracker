@@ -8,7 +8,7 @@
   // 介面文字：中文版 jp/、日文版 jp/ja/ 共用同一份程式，依 <html lang> 切換。
   const I18N = {
     zh: {none:'尚無紀錄', notBuying:'不收', since:'此價自 ', jst:'（日本時間）', shopUpdated:'；店家更新日：', unmarked:'未標示',
-      storage:'容量', spread:'價差', best:'最高', preparing:'資料準備中', noPublic:'此期間沒有可公開的價格',
+      sell:'イオシス販賣價（最低）', sellChecked:'確認：', sellNote:'日本購買的商品刊登價；未開封對照未使用品，中古取 A／B／C 最低價。可能含網路利用限制等條件，請查看原始商品頁。', storage:'容量', spread:'價差', best:'最高', preparing:'資料準備中', noPublic:'此期間沒有可公開的價格',
       chartLabel:'各店與當下最高買取價階梯走勢，日圓，日本時間', chartTitle:c=>c+'・SIMフリー主價走勢',
       cond:{'未開封':'未開封','中古上限':'中古'}, notOffered:'不收中古', highest:'當下最高價',
       loadFailed:'資料暫時無法載入，請稍後重試', checked:'最近確認：', removed:'下架／不收', restored:'重新收購',
@@ -17,7 +17,7 @@
       flashFallback:'，各店沒有改價。以下是最近一次有改價的抓取：', flashPastCount:n=>'該次共 '+n+' 筆改價',
       flashAt:'最新一次抓取：', flashNone:'這次各店都沒有改價', flashUp:'提價最多', flashDown:'砍價最多', flashCount:n=>'這次共 '+n+' 筆改價', csv:{latest:'最新報價', prices:'價格歷史', runs:'抓取紀錄'}},
     ja: {none:'記録なし', notBuying:'買取不可', since:'この価格の開始：', jst:'（日本時間）', shopUpdated:'／店舗の更新日：', unmarked:'記載なし',
-      storage:'容量', spread:'価格差', best:'最高', preparing:'データ準備中', noPublic:'この期間に公開できる価格はありません',
+      sell:'イオシス販売価格（最安）', sellChecked:'確認：', sellNote:'購入時の商品掲載価格。未開封は未使用品、中古は A／B／C の最安値です。ネットワーク利用制限などの条件は商品ページでご確認ください。', storage:'容量', spread:'価格差', best:'最高', preparing:'データ準備中', noPublic:'この期間に公開できる価格はありません',
       chartLabel:'各店と現在の最高買取価格の推移（円・日本時間）', chartTitle:c=>c+'・SIMフリーの基本価格の推移',
       cond:{'未開封':'未開封','中古上限':'中古'}, notOffered:'中古買取なし', highest:'現在の最高価格',
       loadFailed:'データを読み込めませんでした。しばらくしてから再度お試しください', checked:'最終確認：', removed:'掲載終了／買取不可', restored:'買取再開',
@@ -232,6 +232,31 @@
     }).join('')+'</ul>';
   }
 
+  function sellMinima(rows, model) {
+    const grades=['未使用品','中古A','中古B','中古C'];
+    const conditions=COND==='未開封'?['未使用品']:['中古A','中古B','中古C'];
+    const found=(rows || []).filter(r=>r.shop==='イオシス' && r.model===model && r.carrier==='SIMフリー'
+      && conditions.includes(r.condition) && Number.isInteger(r.price_jpy) && r.price_jpy>0);
+    return STORAGES.map(storage=>found.filter(r=>r.storage===storage).sort((a,b)=>a.price_jpy-b.price_jpy
+      || grades.indexOf(a.condition)-grades.indexOf(b.condition)
+      || ((a.source_url || '')<(b.source_url || '')?-1:(a.source_url || '')>(b.source_url || '')?1:0))[0]).filter(Boolean);
+  }
+
+  function renderSell(data, model) {
+    const rows=sellMinima(data.sell,model);
+    if (!rows.length) return '';
+    return '<div class="jp-sell"><h3>'+T.sell+'</h3><p class="hint">'+T.sellNote+'</p><ul>'+rows.map(r=>{
+      const at=typeof r.last_checked==='string' && /(?:Z|[+-]\d{2}:?\d{2})$/.test(r.last_checked) ? Date.parse(r.last_checked) : NaN;
+      const stale=Number.isFinite(at) && referenceTime(data)-at>2*DAY;
+      let url='';
+      try {const u=new URL(r.source_url);if(u.protocol==='https:' && u.hostname==='iosys.co.jp') url=u.href;} catch (_) {}
+      const label='<span class="jp-price">'+money(r.price_jpy)+'</span>';
+      return '<li class="jp-sell-item"><strong>'+esc(r.storage)+'</strong> <span class="'+(stale?'jp-outdated':'')+'">'
+        +(url?'<a href="'+esc(url)+'" rel="noopener">'+label+'</a>':label)+' · '+esc(r.condition)+'</span>'
+        +(stale?'<span class="jp-stale">'+T.stale+'</span>':'')+'<small>'+T.sellChecked+esc(Number.isFinite(at)?dateTime(at):'—')+T.jst+'</small></li>';
+    }).join('')+'</ul></div>';
+  }
+
   function renderComparison(data, model) {
     const groups=comparison(data.latest,model,staleShops(data.runs,referenceTime(data)));
     if (!groups.length) return '<p class="empty">'+T.preparing+'</p>';
@@ -275,13 +300,29 @@
     return svg+'</svg>';
   }
 
-  const api={referenceTime, staleShops, MODELS, SHOPS, setLang, setCondition, visiblePrices, comparison, timeline, stepPath, recentChanges, flash, renderFlash, renderChanges, shopStatuses, renderStatuses, renderComparison, renderChart, dateTime, money};
+  const api={sellMinima, renderSell, referenceTime, staleShops, MODELS, SHOPS, setLang, setCondition, visiblePrices, comparison, timeline, stepPath, recentChanges, flash, renderFlash, renderChanges, shopStatuses, renderStatuses, renderComparison, renderChart, dateTime, money};
   if(typeof module!=='undefined' && module.exports) module.exports=api;
   if(typeof document==='undefined') return;
 
   async function boot() {
     const get=id=>document.getElementById(id);
     setLang(document.documentElement.lang);
+    if (document.body.dataset.modelPage) {
+      const render=()=>{
+        document.querySelectorAll('[data-model-cond]').forEach(el=>{el.hidden=el.dataset.modelCond!==COND;});
+        document.querySelectorAll('[data-cond]').forEach(el=>el.setAttribute('aria-pressed',String(el.dataset.cond===COND)));
+        document.querySelectorAll('.jp-lang').forEach(el=>{
+          const url=new URL(el.href);if(COND==='中古上限') url.searchParams.set('c','used');else url.searchParams.delete('c');el.href=url.href;
+        });
+      };
+      setCondition(new URLSearchParams(location.search).get('c')==='used'?'中古上限':'未開封');
+      document.querySelectorAll('[data-cond]').forEach(el=>el.addEventListener('click',()=>{
+        setCondition(el.dataset.cond);const url=new URL(location.href);
+        if(COND==='中古上限') url.searchParams.set('c','used');else url.searchParams.delete('c');
+        history.replaceState(null,'',url);render();
+      }));
+      render();return;
+    }
     for (const id of ['compare-model', 'trend-model']) {
       const select = get(id), selected = select.value;
       select.innerHTML = MODELS.map(m => '<option value="'+esc(m)+'">'+esc(m)+'</option>').join('');
@@ -308,7 +349,7 @@
     if (wanted && [...get('compare-model').options].some(o=>o.value===wanted)) {
       get('compare-model').value=wanted;get('trend-model').value=wanted;
     }
-    const compare=()=>{get('comparison').innerHTML=renderComparison(data,get('compare-model').value);};
+    const compare=()=>{get('comparison').innerHTML=renderComparison(data,get('compare-model').value);get('sell').innerHTML=renderSell(data,get('compare-model').value);};
     const chart=()=>{
       const model=get('trend-model').value;
       const available=STORAGES.filter(s=>data.prices.some(r=>r.model===model && r.storage===s && mainRow(r)));

@@ -10,6 +10,16 @@ from jp_pages import CONDITIONS, MODELS, SHOPS, STORAGES
 
 PRICE_FIELDS = ("shop", "model", "storage", "condition", "carrier", "color", "price_jpy", "observed_at", "source_url")
 LATEST_FIELDS = PRICE_FIELDS + ("since", "last_checked", "shop_updated")
+SELL_FIELDS = ("shop", "model", "storage", "condition", "carrier", "price_jpy", "last_checked", "source_url")
+SELL_CONDITIONS = ("未使用品", "中古A", "中古B", "中古C")
+
+
+def public_sell_rows(rows):
+    return [{k: r.get(k, "") for k in SELL_FIELDS} for r in rows
+            if r.get("shop") == "イオシス" and r.get("model") in MODELS
+            and r.get("storage") in STORAGES and r.get("carrier") == "SIMフリー"
+            and r.get("condition") in SELL_CONDITIONS
+            and isinstance(r.get("price_jpy"), int) and r["price_jpy"] > 0]
 
 
 def public_rows(rows, fields):
@@ -91,6 +101,7 @@ def build_jp(out_dir, data_dir):
     shutil.copytree(Path(__file__).parent / "jp", out / "jp", dirs_exist_ok=True)
     sources = buyback_sources(source)
     payload = {
+        "sell": public_sell_rows(read_rows(source / "sell" / "latest.csv")),
         "latest": public_rows(sources["latest"], LATEST_FIELDS),
         "prices": public_rows(sources["prices"], PRICE_FIELDS),
         "runs": public_runs(sources["runs"]),

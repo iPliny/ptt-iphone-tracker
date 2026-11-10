@@ -30,6 +30,8 @@ TEXT = {
         "cond_note": {"未開封": "イオシス「未使用品」與アメモバ「新品」列為未開封；mobile-mix 依顏色另有價格，見互動頁。",
                       "中古上限": "中古價是各店中古機的收購上限（外觀、電池等狀態最好時），實際依店家查定；mobile-mix 只收未開封。モバステ中古採 A〜C 級的最高收購價。"},
         "h2": "{c}・SIMフリー買取價", "storage": "容量", "spread": "價差", "max": "最高", "none_shop": "不收中古",
+        "sell": "イオシス販賣價（最低）", "sell_checked": "確認：", "condition_label": "機身狀態",
+        "sell_note": "日本購買的商品刊登價；未開封對照未使用品，中古取 A／B／C 最低價。可能含網路利用限制等條件，請查看原始商品頁。",
         "stale": "舊資料（超過 48 小時未更新）",
         "empty": "目前沒有可公開的價格。", "interactive": "查看價格走勢與最近變動", "others": "其他機型",
         "foot": "價格以店家頁面為準，前三家每天約日本時間 9、15、21 點抓取；モバステ由另一排程約 9:40、21:40 更新，實際時間可能延後。本頁只顯示日圓。",
@@ -46,6 +48,8 @@ TEXT = {
         "cond_note": {"未開封": "イオシスの「未使用品」とアメモバの「新品」を未開封としてまとめています。mobile-mix のカラー別価格は比較ページをご覧ください。",
                       "中古上限": "中古の価格は各店が掲載している中古買取の上限額（外装・バッテリーなどの状態が最も良い場合）です。実際の金額は各店の査定によります。mobile-mix は未開封のみ買取しています。モバステの中古価格は A〜C ランクの最高買取額です。"},
         "h2": "{c}・SIMフリーの買取価格", "storage": "容量", "spread": "価格差", "max": "最高", "none_shop": "中古買取なし",
+        "sell": "イオシス販売価格（最安）", "sell_checked": "確認：", "condition_label": "状態",
+        "sell_note": "購入時の商品掲載価格。未開封は未使用品、中古は A／B／C の最安値です。ネットワーク利用制限などの条件は商品ページでご確認ください。",
         "stale": "古いデータ（48 時間を超えて更新なし）",
         "empty": "現在公開できる価格はありません。", "interactive": "価格推移と最近の価格変更を見る", "others": "ほかの機種",
         "foot": "価格は各店のページが優先です。最初の 3 店舗は毎日 9 時・15 時・21 時ごろ（日本時間）、モバステは別のスケジュールで 9:40・21:40 ごろに取得しています。実際の取得は遅れることがあります。",
@@ -92,6 +96,15 @@ def timestamp(value):
         return None
 
 
+def reference_time(payload):
+    end = timestamp(payload.get("generated_at"))
+    if end is not None:
+        return end
+    return max((at for run in payload.get("runs", [])
+                if run.get("status") == "ok" and (at := timestamp(run.get("run_at"))) is not None),
+               default=None)
+
+
 def stale_shops(payload):
     """與 jp.js 一致：產生時間優先，否則用最新成功時間；嚴格超過 48 小時。"""
     successes = {}
@@ -100,9 +113,7 @@ def stale_shops(payload):
         if run.get("status") == "ok" and at is not None:
             shop = run.get("shop")
             successes[shop] = max(at, successes.get(shop, at))
-    end = timestamp(payload.get("generated_at"))
-    if end is None:
-        end = max(successes.values(), default=None)
+    end = reference_time(payload)
     return {shop for shop, at in successes.items() if end is not None and end - at > 48 * 3600}
 
 
@@ -158,6 +169,44 @@ def table(groups, offered, t):
             f'<th scope="col">{t["spread"]}</th></tr></thead><tbody>{"".join(body)}</tbody></table>')
 
 
+def sell_minima(rows, model, condition):
+    """各容量最低刊登價；同價依等級、商品連結排序，與前端一致。"""
+    grades = ("未使用品", "中古A", "中古B", "中古C")
+    allowed = ("未使用品",) if condition == "未開封" else ("中古A", "中古B", "中古C")
+    found = [r for r in rows if r.get("shop") == "イオシス" and r.get("model") == model
+             and r.get("carrier") == "SIMフリー" and r.get("condition") in allowed
+             and isinstance(r.get("price_jpy"), int) and r["price_jpy"] > 0]
+    return [min((r for r in found if r.get("storage") == storage),
+                key=lambda r: (r["price_jpy"], grades.index(r["condition"]), r.get("source_url", "")))
+            for storage in STORAGES if any(r.get("storage") == storage for r in found)]
+
+
+def sell_block(payload, model, condition, t):
+    rows = sell_minima(payload.get("sell", []), model, condition)
+    if not rows:
+        return ""
+    end = reference_time(payload)
+    cells = []
+    for row in rows:
+        at = timestamp(row.get("last_checked"))
+        stale = end is not None and at is not None and end - at > 48 * 3600
+        label = f'<span class="jp-price">{money(row["price_jpy"])}</span>'
+        url = row.get("source_url", "")
+        try:
+            parts = urlsplit(url)
+            safe = parts.scheme == "https" and parts.hostname == "iosys.co.jp"
+        except ValueError:
+            safe = False
+        if safe:
+            label = f'<a href="{E(url, quote=True)}" rel="noopener">{label}</a>'
+        badge = f'<span class="jp-stale">{t["stale"]}</span>' if stale else ""
+        cells.append(f'<li class="jp-sell-item"><strong>{E(row["storage"])}</strong> '
+                     f'<span class="{"jp-outdated" if stale else ""}">{label} · {E(row["condition"])}</span>{badge}'
+                     f'<small>{E(t["sell_checked"])}{E(checked_at([row]) or "—")}（日本時間）</small></li>')
+    return (f'<div class="jp-sell"><h3>{t["sell"]}</h3><p class="hint">{t["sell_note"]}</p>'
+            f'<ul>{"".join(cells)}</ul></div>')
+
+
 def best_line(groups, t, key):
     for g in groups:
         if g["highest"] is not None:
@@ -210,10 +259,10 @@ def page_html(payload, model, lang, site_url, models=MODELS):
     for cond, sid, groups, offered in (("未開封", "new", new_groups, new_offered),
                                        ("中古上限", "used", used_groups, used_offered)):
         content = table(groups, offered, t) if groups else f'<p class="empty">{t["empty"]}</p>'
-        sections.append(f'<section class="card" aria-labelledby="{sid}-title">'
+        sections.append(f'<section class="card" data-model-cond="{cond}" aria-labelledby="{sid}-title">'
                         f'<div class="card-head"><h2 id="{sid}-title">'
                         f'{E(t["h2"].format(c=t["cond"][cond]))}</h2></div>'
-                        f'<p class="intro">{E(t["cond_note"][cond])}</p>{content}'
+                        f'<p class="intro">{E(t["cond_note"][cond])}</p>{content}{sell_block(payload, model, cond, t)}'
                         f'<p class="hint"><a href="{home}?m={E(model.replace(" ", "+"))}'
                         f'{"&amp;c=used" if cond != "未開封" else ""}">{t["interactive"]}</a></p></section>')
     others = "".join(f'<li><a href="../{slug(m)}/">{E(m)}</a></li>' for m in models if m != model)
@@ -244,15 +293,17 @@ def page_html(payload, model, lang, site_url, models=MODELS):
 {hreflang}{social_meta(title, description, url, site_url, locale='ja_JP' if lang == 'ja' else 'zh_TW')}
   <link rel="stylesheet" href="{root}style.css">
   <link rel="stylesheet" href="{jp_root}jp.css">
+  <script defer src="{jp_root}jp.js"></script>
   <script type="application/ld+json">{ld}</script>
 </head>
-<body>
+<body data-model-page="true">
   <header class="top">
     <div class="wrap">
       <a class="back" href="{home}">← {E(t['top'])}</a>
       <a class="jp-lang" href="{switch}" hreflang="{TEXT[other_lang]['lang']}" lang="{TEXT[other_lang]['lang']}">{t['switch']}</a>
       <h1>{E(t['h1'].format(m=model))}</h1>
       <p class="sub">{E(lead)}</p>
+      <div class="jp-cond" role="group" aria-label="{t['condition_label']}"><button type="button" data-cond="未開封" aria-pressed="true">{t['cond']['未開封']}</button><button type="button" data-cond="中古上限" aria-pressed="false">{t['cond']['中古上限']}</button></div>
     </div>
   </header>
   <main class="wrap">
@@ -295,5 +346,6 @@ def render_jp_pages(out_dir, payload, site_url):
         if groups:
             html = re.sub(r'(<div id="comparison" aria-live="polite">).*?(</div>)',
                           lambda m: m[1] + table(groups, offered, TEXT[lang]) + m[2], html, count=1, flags=re.S)
+        html = html.replace("<!--JP_SELL-->", sell_block(payload, "iPhone 18 Pro", "未開封", TEXT[lang]))
         index.write_text(html, encoding="utf-8")
     return urls
