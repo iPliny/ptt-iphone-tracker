@@ -138,7 +138,7 @@ class SocialSitemapTest(unittest.TestCase):
                 self.assertIn('<h1>PTT MacShop交易觀測</h1>', home)
                 self.assertLessEqual(len(Head(home).metas['description'][0]), 120)
 
-    def test_every_sitemap_url_is_self_canonical_and_blogger_urls_stay_external(self):
+    def test_every_sitemap_url_is_self_canonical_including_retired_blogger_archives(self):
         self.all_sections()
         S.build(str(self.out), str(self.data))
         urls = entries((self.out / 'sitemap.xml').read_text())
@@ -153,8 +153,8 @@ class SocialSitemapTest(unittest.TestCase):
         self.assertNotIn(S.SITE_URL + 'column/', urls)
         for name in ('2026-10-04', '2026-10-11'):
             head = Head((self.out / f'weekly/{name}/index.html').read_text())
-            self.assertTrue(head.canonicals[0].startswith('https://tcssh.blogspot.com/'))
-            self.assertNotIn(S.SITE_URL + f'weekly/{name}/', urls)
+            self.assertEqual(head.canonicals, [S.SITE_URL + f'weekly/{name}/'])
+            self.assertIn(S.SITE_URL + f'weekly/{name}/', urls)
 
     def test_column_blog_jp_and_models_use_their_source_dates(self):
         self.all_sections()

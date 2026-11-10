@@ -43,6 +43,24 @@ ATOM = "{http://www.w3.org/2005/Atom}"
 BLOGGER = "{http://schemas.google.com/blogger/2018}"
 # 指向本站的連結（含搬家前的 github.io 網址）改成站內相對路徑
 SITE_HOSTS = {("ipliny.github.io", "/ptt-iphone-tracker/"), ("macshop.crawlsnek.com", "/")}
+# 2026-11-10：這三篇原文已回傳 404；現有公開存檔改以本站為標準網址。
+# 同時比對日期和完整來源網址，不改其他仍在 Blogger 發布的文章。
+RETIRED_ORIGINALS = {
+    "2026-10-02": BLOG_URL + "2026/10/iphone117-pro18-pro-max.html",
+    "2026-10-04": BLOG_URL + "2026/10/iphone217-pro2026104.html",
+    "2026-10-11": BLOG_URL + "2026/10/iphone318-propro20261011.html",
+}
+
+
+def archived_original(post):
+    original = RETIRED_ORIGINALS.get(post.get("id"))
+    return bool(original and post.get("origin") == "blogger" and original == post.get("url"))
+
+
+def canonical_url(post):
+    if archived_original(post):
+        return f"{S.SITE_URL}weekly/{post['id']}/"
+    return post["url"]
 
 
 # ---------- 讀 feed ----------
@@ -315,10 +333,11 @@ def post_html(post, posts, root):
                 "publisher": {"@type": "Organization", "name": BRAND, "url": S.SITE_URL}}
         ld = '\n  <script type="application/ld+json">' + json.dumps(data, ensure_ascii=False).replace("</", "<\\/") + "</script>"
     else:
-        source = f'・轉貼自 <a href="{E(post["url"])}" rel="noopener">Blogger 原文</a>'
+        source = ('・原刊於 Blogger，原文已下架' if archived_original(post) else
+                  f'・轉貼自 <a href="{E(post["url"])}" rel="noopener">Blogger 原文</a>')
         ld = None
-    # canonical：本站原創指本站；Blogger 轉貼指回原文，避免兩邊搶同一篇的搜尋排名
-    return (head(post["title"], post["description"], post["url"], root, ld=ld) + f"""  <header class="top">
+    # 原創及已確認原文下架的存檔指本站；其他轉貼維持原文 canonical。
+    return (head(post["title"], post["description"], canonical_url(post), root, ld=ld) + f"""  <header class="top">
     <div class="wrap">
       <nav class="crumbs" aria-label="breadcrumb"><a href="{root}">{BRAND}</a> › <a href="{root}weekly/">{SECTION}</a> › <span>{E(short_date(post["published"]))}</span></nav>
     </div>
@@ -367,8 +386,9 @@ def render_blog(out_dir, data_dir=S.DATA_DIR):
             f.write(post_html(p, posts, "../../"))
     with open(os.path.join(base, "index.html"), "w", encoding="utf-8") as f:
         f.write(index_html(posts, "../"))
-    # Blogger 轉貼的 canonical 在 Blogger，不列入本站 sitemap
-    return [f"{S.SITE_URL}weekly/"] + [p["url"] for p in posts if p["origin"] == "site"]
+    # 仍指向 Blogger 的轉貼不列入；本站原創與已下架原文的存檔列入。
+    return [f"{S.SITE_URL}weekly/"] + [canonical_url(p) for p in posts
+                                    if p["origin"] == "site" or archived_original(p)]
 
 
 def main():
