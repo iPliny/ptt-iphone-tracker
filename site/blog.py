@@ -50,6 +50,11 @@ RETIRED_ORIGINALS = {
     "2026-10-04": BLOG_URL + "2026/10/iphone217-pro2026104.html",
     "2026-10-11": BLOG_URL + "2026/10/iphone318-propro20261011.html",
 }
+# These old migration destinations now redirect back to the local full archive.
+ARCHIVE_MIGRATION_URLS = {
+    "2026-10-04": "https://crawlsnek.com/reports/macshop-02",
+    "2026-10-11": "https://crawlsnek.com/reports/macshop-03",
+}
 
 
 def archived_original(post):
@@ -189,6 +194,24 @@ def summary(body, limit=120):
     return text if len(text) <= limit else text[:limit - 1] + "…"
 
 
+def restored_archive(post):
+    """Omit the obsolete leading migration notice in known full archives, not source JSON."""
+    target = ARCHIVE_MIGRATION_URLS.get(post["id"])
+    if not target or not archived_original(post):
+        return post
+    notice = re.match(r"\s*<p(?:\s[^>]*)?>(.*?)</p>\s*", post["html"], re.S)
+    if not notice:
+        return post
+    text = html.unescape(re.sub(r"<[^>]+>", "", notice[1])).strip()
+    links = re.findall(r"<a\b[^>]*\bhref=[\"']([^\"']+)[\"']", notice[1], re.I)
+    body = post["html"][notice.end():]
+    if (not text.startswith("本篇完整版與後續週報已移到 CrawlSnek：") or
+            len(links) != 1 or html.unescape(links[0]).rstrip("/") != target or
+            not re.sub(r"<[^>]+>", "", body).strip()):
+        return post
+    return dict(post, html=body, description=summary(body))
+
+
 # ---------- 存檔 ----------
 
 def sync(posts, blog_dir=BLOG_DIR, prune_since=None):
@@ -229,7 +252,7 @@ def load_posts(blog_dir=BLOG_DIR, weekly_dir=WEEKLY_DIR):
                 p["origin"] = origin
                 if origin == "site":
                     p["url"] = f"{S.SITE_URL}weekly/{p['id']}/"
-                by_id[p["id"]] = p
+                by_id[p["id"]] = restored_archive(p)
     return sorted(by_id.values(), key=lambda p: p["published"], reverse=True)
 
 

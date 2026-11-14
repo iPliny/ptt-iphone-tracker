@@ -128,6 +128,43 @@ class BlogTest(unittest.TestCase):
             self.assertFalse(B.archived_original(changed))
             self.assertEqual(B.canonical_url(changed), changed["url"])
 
+    def test_full_archives_drop_self_redirect_notices_from_body_and_metadata_without_writing_sources(self):
+        write_csv(os.path.join(self.dir, "listings.csv"), LISTING_HEADER, [])
+        write_csv(os.path.join(self.dir, "events.csv"), S_EVENT_HEADER, [])
+        posts = []
+        for post in self.posts:
+            target = B.ARCHIVE_MIGRATION_URLS[post["id"]]
+            notice = ('<p><b>本篇完整版與後續週報已移到 CrawlSnek：'
+                      f'<a href="{target}/" rel="noopener">{target.removeprefix("https://")}</a></b></p>\n\n')
+            posts.append(dict(post, html=notice + post["html"], description=B.summary(notice)))
+        blog_dir = os.path.join(self.dir, "blog")
+        B.sync(posts, blog_dir)
+        before = {p["id"]: read(os.path.join(blog_dir, p["id"] + ".json")) for p in posts}
+        out = os.path.join(self.dir, "out")
+        S.build(out, self.dir)
+        index = read(os.path.join(out, "weekly", "index.html"))
+        for original in self.posts:
+            page = read(os.path.join(out, "weekly", original["id"], "index.html"))
+            for output in (page, index):
+                self.assertNotIn("本篇完整版與後續週報已移到", output)
+                self.assertNotIn(B.ARCHIVE_MIGRATION_URLS[original["id"]], output)
+                self.assertIn(original["description"], output)
+            self.assertIn(original["html"].replace("{{ROOT}}", "../../"), page)
+            self.assertIn('原刊於 Blogger，原文已下架', page)
+            self.assertEqual(read(os.path.join(blog_dir, original["id"] + ".json")), before[original["id"]])
+
+    def test_archive_notice_cleanup_preserves_other_sources_destinations_and_notice_only_stubs(self):
+        post = dict(self.posts[-1], origin="blogger")
+        notice = ('<p><strong>本篇完整版與後續週報已移到 CrawlSnek：'
+                  '<a href="https://crawlsnek.com/reports/macshop-03">完整版</a></strong></p>')
+        full = dict(post, html=notice + post["html"])
+        self.assertEqual(B.restored_archive(full)["html"], post["html"])
+        for changed in (dict(full, origin="site"), dict(full, url="https://example.com/live"),
+                        dict(full, id="2026-10-12"), dict(full, html=notice),
+                        dict(full, html=full["html"].replace("macshop-03", "macshop-04")),
+                        dict(full, html=post["html"] + notice)):
+            self.assertEqual(B.restored_archive(changed), changed)
+
 
     def draft(self, **kw):
         d = {"id": "2026-10-18", "title": "iPhone二手週報#4：測試", "description": "本週 iPhone 17 Pro 二手刊登價整理。",
