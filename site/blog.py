@@ -50,6 +50,11 @@ RETIRED_ORIGINALS = {
     "2026-10-04": BLOG_URL + "2026/10/iphone217-pro2026104.html",
     "2026-10-11": BLOG_URL + "2026/10/iphone318-propro20261011.html",
 }
+# These old migration destinations now redirect back to the local full archive.
+ARCHIVE_MIGRATION_URLS = {
+    "2026-10-04": "https://crawlsnek.com/reports/macshop-02",
+    "2026-10-11": "https://crawlsnek.com/reports/macshop-03",
+}
 
 
 def archived_original(post):
@@ -183,10 +188,48 @@ def clean_html(raw):
 
 
 def summary(body, limit=120):
-    """搜尋說明：第一段純文字，最多 limit 字。"""
-    m = re.search(r"<p>(.*?)</p>", body, re.S)
-    text = html.unescape(re.sub(r"<[^>]+>", "", m.group(1) if m else body)).strip()
+    """搜尋說明：第一段非空白的純文字，最多 limit 字。"""
+    text = ""
+    for paragraph in re.findall(r"<p(?:\s[^>]*)?>(.*?)</p>", body, re.S | re.I):
+        text = html.unescape(re.sub(r"<[^>]+>", "", paragraph)).strip()
+        if text:
+            break
+    if not text:
+        text = html.unescape(re.sub(r"<[^>]+>", "", body)).strip()
     return text if len(text) <= limit else text[:limit - 1] + "…"
+
+
+class _ArchiveNotice(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.text, self.hrefs = [], []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            self.hrefs.append(dict(attrs).get("href"))
+
+    def handle_data(self, data):
+        self.text.append(data)
+
+
+def restored_archive(post):
+    """Omit the obsolete leading migration notice in known full archives, not source JSON."""
+    target = ARCHIVE_MIGRATION_URLS.get(post["id"])
+    if not target or not archived_original(post):
+        return post
+    notice = re.match(r"\s*<p(?:\s[^>]*)?>(.*?)</p>\s*", post["html"], re.S | re.I)
+    if not notice:
+        return post
+    parsed = _ArchiveNotice()
+    parsed.feed(notice[1])
+    text = "".join(parsed.text).strip().rstrip("/")
+    expected = "本篇完整版與後續週報已移到 CrawlSnek：" + target.removeprefix("https://")
+    links = parsed.hrefs
+    body = post["html"][notice.end():]
+    if (text != expected or len(links) != 1 or not links[0] or links[0].rstrip("/") != target or
+            not html.unescape(re.sub(r"<[^>]+>", "", body)).strip()):
+        return post
+    return dict(post, html=body, description=summary(body))
 
 
 # ---------- 存檔 ----------
@@ -229,7 +272,7 @@ def load_posts(blog_dir=BLOG_DIR, weekly_dir=WEEKLY_DIR):
                 p["origin"] = origin
                 if origin == "site":
                     p["url"] = f"{S.SITE_URL}weekly/{p['id']}/"
-                by_id[p["id"]] = p
+                by_id[p["id"]] = restored_archive(p)
     return sorted(by_id.values(), key=lambda p: p["published"], reverse=True)
 
 

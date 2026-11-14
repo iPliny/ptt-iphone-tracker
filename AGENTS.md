@@ -175,6 +175,7 @@
 ### 2026-11-10 已下架 Blogger 原文的週報存檔
 - 10/02、10/04、10/11 三篇既有公開週報的 Blogger 原文已確認為 HTTP 404。`site/blog.py:RETIRED_ORIGINALS` 同時比對日期與完整來源網址，這三篇的 canonical／og:url 改為本站存檔，並列入 sitemap；lastmod 仍取原始 published／updated，不能使用修復或建置日。
 - 保留原文內容、發布日期與私人資料 JSON；頁面註明原刊於 Blogger、原文已下架。不將其他 Blogger 轉貼自動改為本站 canonical，不在建置時以網路檢查或暫時性錯誤決定文章歸屬。
+- 2026-11-15：10/04、10/11 的舊移站連結已轉回本站全文存檔；建置時僅省略這兩篇開頭指向已知舊連結的「本篇完整版與後續週報已移到 CrawlSnek」告示，摘要改取其後正文。私人 JSON、正文、發布日期與 canonical 不變；只有告示、沒有全文的存根與其他來源／目的地不套用。
 
 ### 2026-10-30 本機爬蟲
 - `python -m jp.local --data <私人資料庫的 jp 目錄> [--dry-run] [--only pastec,iosys-sell]` 從家用 IP 收モバステ買取與イオシス販賣，沿用 `jp.buyback` 的 fetch、驗證及 CSV 更新。モバステ寫入私人 `jp/`，販賣價獨立寫入 `jp/sell/`，同一 KEY／CSV 欄位但機況不同，不混入買取價格。來源、機況對照與版本判斷見 `docs/local-crawler.md`。
