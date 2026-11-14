@@ -188,10 +188,28 @@ def clean_html(raw):
 
 
 def summary(body, limit=120):
-    """搜尋說明：第一段純文字，最多 limit 字。"""
-    m = re.search(r"<p>(.*?)</p>", body, re.S)
-    text = html.unescape(re.sub(r"<[^>]+>", "", m.group(1) if m else body)).strip()
+    """搜尋說明：第一段非空白的純文字，最多 limit 字。"""
+    text = ""
+    for paragraph in re.findall(r"<p(?:\s[^>]*)?>(.*?)</p>", body, re.S | re.I):
+        text = html.unescape(re.sub(r"<[^>]+>", "", paragraph)).strip()
+        if text:
+            break
+    if not text:
+        text = html.unescape(re.sub(r"<[^>]+>", "", body)).strip()
     return text if len(text) <= limit else text[:limit - 1] + "…"
+
+
+class _ArchiveNotice(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.text, self.hrefs = [], []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            self.hrefs.append(dict(attrs).get("href"))
+
+    def handle_data(self, data):
+        self.text.append(data)
 
 
 def restored_archive(post):
@@ -199,15 +217,17 @@ def restored_archive(post):
     target = ARCHIVE_MIGRATION_URLS.get(post["id"])
     if not target or not archived_original(post):
         return post
-    notice = re.match(r"\s*<p(?:\s[^>]*)?>(.*?)</p>\s*", post["html"], re.S)
+    notice = re.match(r"\s*<p(?:\s[^>]*)?>(.*?)</p>\s*", post["html"], re.S | re.I)
     if not notice:
         return post
-    text = html.unescape(re.sub(r"<[^>]+>", "", notice[1])).strip()
-    links = re.findall(r"<a\b[^>]*\bhref=[\"']([^\"']+)[\"']", notice[1], re.I)
+    parsed = _ArchiveNotice()
+    parsed.feed(notice[1])
+    text = "".join(parsed.text).strip().rstrip("/")
+    expected = "本篇完整版與後續週報已移到 CrawlSnek：" + target.removeprefix("https://")
+    links = parsed.hrefs
     body = post["html"][notice.end():]
-    if (not text.startswith("本篇完整版與後續週報已移到 CrawlSnek：") or
-            len(links) != 1 or html.unescape(links[0]).rstrip("/") != target or
-            not re.sub(r"<[^>]+>", "", body).strip()):
+    if (text != expected or len(links) != 1 or not links[0] or links[0].rstrip("/") != target or
+            not html.unescape(re.sub(r"<[^>]+>", "", body)).strip()):
         return post
     return dict(post, html=body, description=summary(body))
 

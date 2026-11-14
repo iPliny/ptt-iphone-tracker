@@ -136,7 +136,8 @@ class BlogTest(unittest.TestCase):
             target = B.ARCHIVE_MIGRATION_URLS[post["id"]]
             notice = ('<p><b>本篇完整版與後續週報已移到 CrawlSnek：'
                       f'<a href="{target}/" rel="noopener">{target.removeprefix("https://")}</a></b></p>\n\n')
-            posts.append(dict(post, html=notice + post["html"], description=B.summary(notice)))
+            posts.append(dict(post, html=notice + '<p><br></p><p>&nbsp;</p>' + post["html"],
+                              description=B.summary(notice)))
         blog_dir = os.path.join(self.dir, "blog")
         B.sync(posts, blog_dir)
         before = {p["id"]: read(os.path.join(blog_dir, p["id"] + ".json")) for p in posts}
@@ -150,17 +151,23 @@ class BlogTest(unittest.TestCase):
                 self.assertNotIn(B.ARCHIVE_MIGRATION_URLS[original["id"]], output)
                 self.assertIn(original["description"], output)
             self.assertIn(original["html"].replace("{{ROOT}}", "../../"), page)
+            self.assertIn(f'<meta name="description" content="{original["description"]}">', page)
+            self.assertIn(f'<meta property="og:description" content="{original["description"]}">', page)
+            self.assertIn('<meta name="twitter:card" content="summary_large_image">', page)
             self.assertIn('原刊於 Blogger，原文已下架', page)
             self.assertEqual(read(os.path.join(blog_dir, original["id"] + ".json")), before[original["id"]])
 
     def test_archive_notice_cleanup_preserves_other_sources_destinations_and_notice_only_stubs(self):
         post = dict(self.posts[-1], origin="blogger")
         notice = ('<p><strong>本篇完整版與後續週報已移到 CrawlSnek：'
-                  '<a href="https://crawlsnek.com/reports/macshop-03">完整版</a></strong></p>')
+                  '<a href="https://crawlsnek.com/reports/macshop-03">crawlsnek.com/reports/macshop-03</a></strong></p>')
         full = dict(post, html=notice + post["html"])
         self.assertEqual(B.restored_archive(full)["html"], post["html"])
         for changed in (dict(full, origin="site"), dict(full, url="https://example.com/live"),
                         dict(full, id="2026-10-12"), dict(full, html=notice),
+                        dict(full, html=notice + '<p><br></p><p>&nbsp;</p>'),
+                        dict(full, html=full["html"].replace('</strong>', '<br>第一段正文</strong>')),
+                        dict(full, html=full["html"].replace('href=', 'data-href=')),
                         dict(full, html=full["html"].replace("macshop-03", "macshop-04")),
                         dict(full, html=post["html"] + notice)):
             self.assertEqual(B.restored_archive(changed), changed)
