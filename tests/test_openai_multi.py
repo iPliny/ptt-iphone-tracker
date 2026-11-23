@@ -358,3 +358,15 @@ class OpenAIMultiTest(unittest.TestCase):
         self.process()
         self.post.assert_not_called()
         self.assertEqual(json.loads(self.cache.read_text())[URL][digest]["pending_since"], old)
+
+    def test_corrupt_version_replaced_by_valid_pending_on_transient_failure(self):
+        digest = T.body_hash(BODY)
+        for bad in ({"pending_since": "壞掉"}, [None], "x"):
+            with self.subTest(bad=bad):
+                self.set_empty_run()
+                self.cache.write_text(json.dumps({URL: {digest: bad}}))
+                self.post.return_value.status_code = 503
+                self.process()
+                entry = json.loads(self.cache.read_text())[URL][digest]
+                self.assertIsInstance(entry["pending_since"], str)
+                T.datetime.fromisoformat(entry["pending_since"])

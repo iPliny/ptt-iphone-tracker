@@ -1202,7 +1202,15 @@ def mark_split_pending(url, digest):
     versions = cache.get(url)
     if not isinstance(versions, dict):
         versions = cache[url] = {}
-    if digest not in versions:
+    entry = versions.get(digest)
+    valid = False
+    if isinstance(entry, dict) and "pending_since" in entry:
+        try:
+            datetime.fromisoformat(entry["pending_since"])
+            valid = True
+        except (TypeError, ValueError):
+            pass
+    if not valid:  # 沒有紀錄，或該版本的紀錄已損毀：重建，保留有效的首次待重試時間
         versions[digest] = {"pending_since": datetime.now().isoformat(timespec="seconds")}
         tmp = SPLIT_CACHE_FILE + ".tmp"
         os.makedirs(os.path.dirname(SPLIT_CACHE_FILE), exist_ok=True)
