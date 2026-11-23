@@ -1,0 +1,50 @@
+name: OpenAI smoke test
+
+# 手動觸發的測試：確認 Actions 能用 OPENAI_API_KEY 呼叫 OpenAI API。
+# 不接爬蟲、不排程。只印模型回覆與狀態，不印金鑰與標頭。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      MODEL: gpt-6.2-sol
+    steps:
+      - name: Call OpenAI API
+        shell: bash
+        run: |
+          set -u
+          if [ -z "${OPENAI_API_KEY:-}" ]; then
+            echo "::error::OPENAI_API_KEY secret is empty or missing"; exit 1
+          fi
+          PROMPT='你是 PTT MacShop 板的貼文分類器。只回一行 JSON，格式 {"type":"sell|buy|other","model":"...","price":數字或null}。標題：[販售] iPhone 16 Pro 256G 黑色 保固中 28000'
+          BODY=$(python3 -c 'import json,os,sys; print(json.dumps({"model":os.environ["MODEL"],"input":sys.argv[1],"max_output_tokens":200}))' "$PROMPT")
+          CODE=$(curl -sS -o resp.json -w '%{http_code}' \
+            https://api.openai.com/v1/responses \
+            -H "Authorization: Bearer $OPENAI_API_KEY" \
+            -H 'Content-Type: application/json' \
+            -d "$BODY") || { echo "::error::curl failed"; exit 1; }
+          echo "HTTP status: $CODE"
+          case "$CODE" in
+            200) ;;
+            401) echo "::error::401 金鑰無效或已撤銷"; python3 -c 'import json;print(json.load(open("resp.json")).get("error",{}).get("message"))'; exit 1 ;;
+            403) echo "::error::403 金鑰權限不足或模型不在允許清單"; python3 -c 'import json;print(json.load(open("resp.json")).get("error",{}).get("message"))'; exit 1 ;;
+            429) echo "::error::429 超過速率限制或額度用完"; python3 -c 'import json;print(json.load(open("resp.json")).get("error",{}).get("message"))'; exit 1 ;;
+            *)   echo "::error::unexpected status $CODE"; python3 -c 'import json;print(json.load(open("resp.json")).get("error",{}).get("message"))' || true; exit 1 ;;
+          esac
+          python3 - <<'PY'
+          import json
+          d = json.load(open("resp.json"))
+          print("model:", d.get("model"))
+          text = d.get("output_text")
+          if text is None:
+              text = "".join(c.get("text", "") for o in d.get("output", []) if o.get("type") == "message" for c in o.get("content", []))
+          print("reply:", text)
+          print("usage:", d.get("usage"))
+          PY
