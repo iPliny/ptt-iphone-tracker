@@ -82,6 +82,45 @@ class OpenAIMultiTest(unittest.TestCase):
         self.assertEqual(rows[0]["battery_health"], "")
         self.assertEqual(self.listings[URL]["status"], "略過")
 
+    def test_identical_phones_keep_one_per_matching_body_line(self):
+        item = dict(ITEM, model="iPhone 16", battery_health=None)
+        line = "iPhone 16 256GB 售28000"
+        title = line + " 兩支"
+        body = line + "\n" + line
+        # 舊版已將兩筆合併且快取成單筆。
+        self.cache.write_text(json.dumps({URL: {T.body_hash(body): [item]}}))
+        self.reply([item] * 3)
+        self.process(title=title, body=body)
+        with patch.object(T, "REPARSE", True):
+            self.process(title=title, body=body)
+        self.post.assert_called_once()
+        T.save_multi(self.multi)
+        self.assertEqual([r["item_no"] for r in T.load_multi()[URL]], ["1", "2"])
+        other = URL + "2"
+        self.process(other, title, line)
+        self.assertNotIn(other, self.multi)
+        self.assertEqual(json.loads(self.cache.read_text())[other][T.body_hash(line)], [item])
+
+    def test_expired_edited_listing_only_calls_again_after_another_edit(self):
+        self.process(title="iPhone 16 Pro", body=SINGLE)
+        previous = self.listings[URL].copy()
+        self.post.return_value.status_code = 503
+        self.process()
+        self.retries[URL]["first_failed"] = "2020-01-01 00:00:00"
+        T.save_extract_retries(self.retries)
+        self.retries = T.load_extract_retries()
+        T.expire_extract_retries(self.retries, self.listings)
+        self.assertEqual(self.listings[URL], previous)
+        self.process()
+        self.post.assert_called_once()
+        self.assertEqual(self.retries, {})
+        for field in ("price", "price_checked_at", "body_hash"):
+            self.assertEqual(self.listings[URL][field], previous[field])
+        self.reply(PAIR)
+        self.process(body=BODY + " 可議")
+        self.assertEqual(self.post.call_count, 2)
+        self.assertEqual(len(self.multi[URL]), 2)
+
     def test_cache_including_empty_and_old_version(self):
         T.REPARSE = True
         self.reply([])

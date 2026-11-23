@@ -33,6 +33,7 @@ import re
 import statistics
 import tempfile
 import time
+from collections import Counter
 from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 
@@ -66,7 +67,7 @@ RETRY_FILE = os.path.join(DATA_DIR, "extract_retry.csv")
 SPLIT_CACHE_FILE = os.path.join(DATA_DIR, "multi_llm_cache.json")
 OPENAI_MODEL = "gpt-6.2-sol"
 OPENAI_MAX_CALLS = 20
-RETRY_FIELDS = ["source_url", "first_failed", "last_failed", "attempts", "last_error"]
+RETRY_FIELDS = ["source_url", "first_failed", "last_failed", "attempts", "last_error", "split_body_hash"]
 RETRY_DAYS = 14
 HEALTH_ERROR_LIMIT = 10  # 超過此數才讓 Actions 標示失敗
 MULTI_FIELDS = ["source_url", "item_no", "post_time", "title", "model", "storage", "全新未拆封機",
@@ -1060,13 +1061,23 @@ class SplitPending(Exception):
     """留給下一輪；訊息僅允許 HTTP 狀態碼或空字串。"""
 
 
-def validated_items(payload, source):
+def split_item_line_counts(body):
+    counts = Counter()
+    for line in unicodedata.normalize("NFKC", body).splitlines():
+        names = {normalize_model(name) for name in _SPLIT_MODEL_RE.findall(line)}
+        prices = split_prices(line)
+        if len(names) == len(prices) == 1:
+            counts[(names.pop(), parse_storage(line), prices.pop())] += 1
+    return counts
+
+
+def validated_items(payload, source, line_counts):
     prices = split_prices(source)
     raw = payload["items"]
     if not isinstance(raw, list):
         raise ValueError
     result = []
-    seen = set()
+    seen = Counter()
     for item in raw:
         model, price = item["model"], item["price"]
         storage, battery, new = item["storage"], item["battery_health"], item["is_brand_new"]
@@ -1081,11 +1092,36 @@ def validated_items(payload, source):
         storage = parse_storage(storage)
         battery = battery if battery is not None and 50 <= battery <= 100 else None
         key = (model, storage, price, battery, new)
-        if key not in seen:
-            seen.add(key)
+        if seen[key] < max(1, line_counts[(model, storage, price)]):
+            seen[key] += 1
             result.append(dict(model=model, price=price, storage=storage,
                                battery_health=battery, is_brand_new=new))
     return result
+
+
+def load_split_cache(url):
+    try:
+        with open(SPLIT_CACHE_FILE, encoding="utf-8") as f:
+            cache = json.load(f)
+        if not isinstance(cache, dict):
+            raise ValueError
+    except FileNotFoundError:
+        cache = {}
+    except ValueError:
+        print("    [WARN] 多機拆單快取格式錯誤，重新建立。")
+        cache = {}
+    versions = cache.setdefault(url, {})
+    if not isinstance(versions, dict):
+        print("    [WARN] 該篇拆單快取格式錯誤，重新取得。")
+        versions = cache[url] = {}
+    return cache, versions
+
+
+def save_split_cache(cache):
+    tmp = SPLIT_CACHE_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False)
+    os.replace(tmp, SPLIT_CACHE_FILE)
 
 
 def openai_multi_items(url, art, stats, remember_rejection=False):
@@ -1100,25 +1136,19 @@ def openai_multi_items(url, art, stats, remember_rejection=False):
     excerpt = sale_body.encode("utf-8")[:10000].decode("utf-8", errors="ignore")
     source = f"{title[:200]}\n{excerpt}"
     try:
-        try:
-            with open(SPLIT_CACHE_FILE, encoding="utf-8") as f:
-                cache = json.load(f)
-            if not isinstance(cache, dict):
-                raise ValueError
-        except FileNotFoundError:
-            cache = {}
-        except ValueError:
-            print("    [WARN] 多機拆單快取格式錯誤，重新建立。")
-            cache = {}
-        versions = cache.setdefault(url, {})
-        if not isinstance(versions, dict):
-            print("    [WARN] 該篇拆單快取格式錯誤，重新取得。")
-            versions = cache[url] = {}
+        cache, versions = load_split_cache(url)
+        line_counts = split_item_line_counts(excerpt)
         if digest in versions:
-            if versions[digest] in ({"http_status": 400}, {"http_status": 404}):
+            if versions[digest] in ({"http_status": 400}, {"http_status": 404}, {"expired": True}):
                 return None
             try:
-                return validated_items({"items": versions[digest]}, source)
+                cached = versions[digest]
+                payload = cached if isinstance(cached, dict) else {"items": cached}
+                items = validated_items(payload, source, line_counts)
+                # 舊陣列可能已把多支相同的手機壓成一筆，遇到對應品項才重新查詢。
+                if isinstance(cached, dict) or not any(
+                        line_counts[(i["model"], i["storage"], i["price"])] > 1 for i in items):
+                    return items
             except (KeyError, ValueError, TypeError):
                 print("    [WARN] 該版本拆單快取格式錯誤，重新取得。")
                 del versions[digest]
@@ -1159,14 +1189,11 @@ def openai_multi_items(url, art, stats, remember_rejection=False):
             text = response.get("output_text") or "".join(
                 part["text"] for message in response["output"] if message.get("type") == "message"
                 for part in message["content"] if part.get("type", "output_text") == "output_text")
-            items = validated_items(json.loads(text), source)
-            versions[digest] = items
+            items = validated_items(json.loads(text), source, line_counts)
+            versions[digest] = {"items": items} if any(n > 1 for n in line_counts.values()) else items
         else:
             return None
-        tmp = SPLIT_CACHE_FILE + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(cache, f, ensure_ascii=False)
-        os.replace(tmp, SPLIT_CACHE_FILE)
+        save_split_cache(cache)
         return items
     except SplitPending:
         raise
@@ -1478,7 +1505,7 @@ def process_article(url, listings, use_llm, stats, multi=None, list_title="", re
                 split_items = candidates
         except SplitPending as pending:
             if retries is not None:
-                record_extract_retry(retries, url, str(pending))
+                record_extract_retry(retries, url, str(pending), h)
             return
     if (REPARSE or retry_split) and use_llm and row is not None and row.get("status") == "略過":
         prev = skipped_from(url) if row.get("model") else None
@@ -1696,10 +1723,11 @@ def save_extract_retries(retries):
     os.replace(tmp, RETRY_FILE)
 
 
-def record_extract_retry(retries, url, error):
+def record_extract_retry(retries, url, error, split_body_hash=""):
     now = now_str()
     row = retries.setdefault(url, {"source_url": url, "first_failed": now, "attempts": 0})
-    row.update(last_failed=now, attempts=int(row["attempts"]) + 1, last_error=error)
+    row.update(last_failed=now, attempts=int(row["attempts"]) + 1, last_error=error,
+               split_body_hash=split_body_hash)
 
 
 def expire_extract_retries(retries, listings):
@@ -1708,11 +1736,15 @@ def expire_extract_retries(retries, listings):
     for url, retry in list(retries.items()):
         if datetime.fromisoformat(retry["first_failed"]) > cutoff:
             continue
+        if url in listings and retry.get("split_body_hash"):
+            cache, versions = load_split_cache(url)
+            versions[retry["split_body_hash"]] = {"expired": True}
+            save_split_cache(cache)
         listings.setdefault(url, {"source_url": url, "post_time": post_time_from_url(url), "title": "",
                                   "status": "略過", "first_seen": retry["first_failed"],
                                   "last_checked": now_str(), "body_hash": ""})
         del retries[url]
-        print(f"[RETRY] {url} 萃取失敗滿 {RETRY_DAYS} 天，記為略過。")
+        print(f"[RETRY] {url} 萃取失敗滿 {RETRY_DAYS} 天，重試結案。")
 
 
 # ==========================================
