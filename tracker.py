@@ -33,6 +33,7 @@ import re
 import statistics
 import tempfile
 import time
+from decimal import Decimal
 from datetime import datetime, timedelta, timezone
 
 import requests
@@ -62,6 +63,9 @@ EVENTS_FILE = os.path.join(DATA_DIR, "events.csv")
 SUMMARY_FILE = os.path.join(DATA_DIR, "market_summary.csv")
 MULTI_FILE = os.path.join(DATA_DIR, "multi_items.csv")  # 一篇賣多樣商品時拆出的各支 iPhone（只算刊登價）
 RETRY_FILE = os.path.join(DATA_DIR, "extract_retry.csv")
+SPLIT_CACHE_FILE = os.path.join(DATA_DIR, "multi_llm_cache.json")
+OPENAI_MODEL = "gpt-6.2-sol"
+OPENAI_MAX_CALLS = 20
 RETRY_FIELDS = ["source_url", "first_failed", "last_failed", "attempts", "last_error"]
 RETRY_DAYS = 14
 HEALTH_ERROR_LIMIT = 10  # 超過此數才讓 Actions 標示失敗
@@ -975,12 +979,208 @@ def save_multi(multi, path=None):
     os.replace(tmp, path)
 
 
-def record_multi(url, art, multi, first_seen=None):
+SPLIT_PROMPT = """你是 PTT MacShop 二手交易文的整理員。下面這篇文章同時賣多樣商品或多支 iPhone。
+請只列出「iPhone 手機本體」的每一支，各自的型號、容量、單獨售價；一律依文章內文，禁止推測。
+規則：
+1. 配件、Apple Watch、iPad、AirPods 等非 iPhone 品項不要列。
+2. 售價必須是該支 iPhone 單獨的標價（新台幣整數）；只有合購總價、或找不到單獨售價的不要列。
+3. model 寫 Apple 正式名稱，例如 iPhone 16 Pro Max、iPhone 17、iPhone Air；storage 寫如 256GB、1TB，不確定填 null。
+4. battery_health 是電池健康度數字（不含 %），沒提填 null；is_brand_new 只有該支機身明確寫全新未拆封／未開通才填 true。
+5. 同一支不要重複列。看不出有任何一支 iPhone 就回空陣列。"""
+SPLIT_SCHEMA = {
+    "type": "object",
+    "properties": {"items": {"type": "array", "items": {
+        "type": "object",
+        "properties": {
+            "model": {"type": "string"},
+            "storage": {"type": ["string", "null"]},
+            "price": {"type": "integer"},
+            "battery_health": {"type": ["integer", "null"]},
+            "is_brand_new": {"type": "boolean"},
+        },
+        "required": ["model", "storage", "price", "battery_health", "is_brand_new"],
+        "additionalProperties": False,
+    }}},
+    "required": ["items"],
+    "additionalProperties": False,
+}
+
+
+_SPLIT_MODEL_RE = re.compile(
+    r"(?:i\s*phone|愛鳳)\s*(?:\d{1,2}e?|xs|xr|x|se\d?|air|duo)(?:\s*(?:pro\s*max|pro|plus|mini|max|pm))?"
+    r"|(?<![a-z0-9])(?:1[0-9]|[6-9])(?:\s*(?:pro\s*max|pro|plus|mini|pm))?"
+    r"(?=\s*(?:32|64|128|256|512|1|2)\s*(?:gb?|tb?)(?![a-z]))", re.I)
+_SPLIT_PRICE_RE = re.compile(
+    r"(?<![\da-z.])(?:NT\$?[ \t]*)?(\d{1,3}(?:,[ \t]*\d{3}(?!\d|[ \t]*[%gt]))+|\d+(?:\.\d+)?)"
+    r"(?:[ \t]*(萬|w|千|k))?(?![\da-z]|\.\d|[ \t]*(?:%|[gt]b?(?![a-z])))", re.I)
+
+
+def split_prices(text):
+    prices = set()
+    for match in _SPLIT_PRICE_RE.finditer(unicodedata.normalize("NFKC", text)):
+        value, unit = match.groups()
+        amount = Decimal(re.sub(r"[,\s]", "", value))
+        amount *= {"萬": 10000, "w": 10000, "千": 1000, "k": 1000}.get((unit or "").lower(), 1)
+        if 1000 <= amount <= 250000 and amount == int(amount):
+            prices.add(int(amount))
+    return prices
+
+
+def looks_multi_item(title, body):
+    title = unicodedata.normalize("NFKC", title)
+    body = unicodedata.normalize("NFKC", strip_signature(body))
+    if sells_other_product(title, body):
+        return False
+    accessory = is_accessory_post(title, parse_storage(title))
+    multi_title = multi_phone_title(title)
+    if not accessory and multi_title:
+        return True
+    models = set()
+    priced_lines = 0
+    for line in body.splitlines():
+        # 只看品名欄、品項開頭與另售清單，換機緣由不算商品。
+        line = re.split(r"換購|換成|換了|換新機|升級", line, maxsplit=1)[0]
+        field = _FIELD_RE.match(_field_line(line))
+        if field and re.search(r"型號|品名|物品", field.group(1)):
+            line = field.group(2)
+        else:
+            line = re.sub(r"^\s*(?:[-•]|\d+[.)、]|另售|加售|出售|售)\s*", "", line)
+            if not _SPLIT_MODEL_RE.match(line.lstrip()):
+                continue
+        names = _SPLIT_MODEL_RE.findall(line)
+        if accessory and names and parse_storage(line):
+            accessory = False
+        models.update(normalize_model(name) for name in names)
+        if names and any(not 1900 <= price <= 2099 for price in split_prices(line)):
+            priced_lines += 1
+    return not accessory and (multi_title or len(models) >= 2 or priced_lines >= 2)
+
+
+class SplitPending(Exception):
+    """留給下一輪；訊息僅允許 HTTP 狀態碼或空字串。"""
+
+
+def validated_items(payload, source):
+    prices = split_prices(source)
+    raw = payload["items"]
+    if not isinstance(raw, list):
+        raise ValueError
+    result = []
+    seen = set()
+    for item in raw:
+        model, price = item["model"], item["price"]
+        storage, battery, new = item["storage"], item["battery_health"], item["is_brand_new"]
+        if (not isinstance(model, str) or type(price) is not int or type(new) is not bool
+                or (storage is not None and not isinstance(storage, str))
+                or (battery is not None and type(battery) is not int)):
+            raise ValueError
+        if not _CANONICAL_MODEL_RE.fullmatch(model) or not 1000 <= price <= 250000:
+            continue
+        if price not in prices:
+            continue
+        storage = parse_storage(storage)
+        battery = battery if battery is not None and 50 <= battery <= 100 else None
+        key = (model, storage, price, battery, new)
+        if key not in seen:
+            seen.add(key)
+            result.append(dict(model=model, price=price, storage=storage,
+                               battery_health=battery, is_brand_new=new))
+    return result
+
+
+def openai_multi_items(url, art, stats, remember_rejection=False):
+    """有拆單結果時回傳清單（可為空）；其他情況沿用規則或排入重試。"""
+    key = os.environ.get("OPENAI_API_KEY")
+    title, body = art["title"], art["body"]
+    if (not key or EXTRACTOR == "ollama" or not looks_multi_item(title, body)
+            or extract_items(title, body)):
+        return None
+    digest = body_hash(body)
+    sale_body = strip_signature(body)
+    excerpt = sale_body.encode("utf-8")[:10000].decode("utf-8", errors="ignore")
+    source = f"{title[:200]}\n{excerpt}"
+    try:
+        try:
+            with open(SPLIT_CACHE_FILE, encoding="utf-8") as f:
+                cache = json.load(f)
+            if not isinstance(cache, dict):
+                raise ValueError
+        except FileNotFoundError:
+            cache = {}
+        except ValueError:
+            print("    [WARN] 多機拆單快取格式錯誤，重新建立。")
+            cache = {}
+        versions = cache.setdefault(url, {})
+        if not isinstance(versions, dict):
+            print("    [WARN] 該篇拆單快取格式錯誤，重新取得。")
+            versions = cache[url] = {}
+        if digest in versions:
+            if versions[digest] in ({"http_status": 400}, {"http_status": 404}):
+                return None
+            try:
+                return validated_items({"items": versions[digest]}, source)
+            except (KeyError, ValueError, TypeError):
+                print("    [WARN] 該版本拆單快取格式錯誤，重新取得。")
+                del versions[digest]
+        blocked = stats.get("openai_blocked")
+        if blocked in (401, 403):
+            return None
+        limit = int(os.environ.get("OPENAI_MAX_CALLS") or OPENAI_MAX_CALLS)
+        if blocked == 429 or stats.get("openai_calls", 0) >= limit:
+            raise SplitPending(str(blocked or ""))
+
+        # 每 7 秒最多一筆。輸入限制 UTF-8 位元組數，加上 schema、提示與輸出仍低於 200k TPM。
+        delay = stats.get("openai_next_call", 0) - time.monotonic()
+        if delay > 0:
+            time.sleep(delay)
+        stats["openai_calls"] = stats.get("openai_calls", 0) + 1
+        stats["openai_next_call"] = time.monotonic() + 7
+        resp = requests.post(
+            "https://api.openai.com/v1/responses", timeout=60, allow_redirects=False,
+            headers={"Authorization": f"Bearer {key}"},
+            json={"model": os.environ.get("OPENAI_MODEL") or OPENAI_MODEL,
+                  "instructions": SPLIT_PROMPT, "input": f"標題：{title[:200]}\n\n{excerpt}",
+                  "max_output_tokens": 3000,
+                  "text": {"format": {"type": "json_schema", "name": "split_items",
+                                      "strict": True, "schema": SPLIT_SCHEMA}}})
+        status = resp.status_code
+        if status in (401, 403, 429):
+            stats["openai_blocked"] = status
+        if status == 429 or status == 408 or status >= 500:
+            raise SplitPending(str(status))
+        if remember_rejection and status in (400, 404):
+            # 價格未確認時 body_hash 仍指向舊版；例行回訪同一版本文也應直接走規則。
+            versions[digest] = {"http_status": status}
+            items = None
+        elif status == 200:
+            response = resp.json()
+            if response.get("status", "completed") != "completed":
+                raise ValueError
+            text = response.get("output_text") or "".join(
+                part["text"] for message in response["output"] if message.get("type") == "message"
+                for part in message["content"] if part.get("type", "output_text") == "output_text")
+            items = validated_items(json.loads(text), source)
+            versions[digest] = items
+        else:
+            return None
+        tmp = SPLIT_CACHE_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False)
+        os.replace(tmp, SPLIT_CACHE_FILE)
+        return items
+    except SplitPending:
+        raise
+    except Exception:
+        raise SplitPending() from None
+
+
+def record_multi(url, art, multi, first_seen=None, items=None):
     """把多品項文章拆出的 iPhone 記進 multi；沒有就移除舊紀錄。回傳筆數。"""
     multi.pop(url, None)
     if EXTRACTOR == "ollama":
         return 0
-    items = extract_items(art["title"], art["body"])
+    if items is None:
+        items = extract_items(art["title"], art["body"])
     if items:
         multi[url] = [{"source_url": url, "item_no": n, "post_time": post_time_from_url(url), "title": art["title"],
                        "model": it["model"], "storage": it["storage"],
@@ -1266,11 +1466,27 @@ def process_article(url, listings, use_llm, stats, multi=None, list_title="", re
 
     first_seen = (retries or {}).get(url, {}).get("first_failed")
     skipped_row = None
-    if REPARSE and use_llm and row is not None and row.get("status") == "略過":
+    retry_split = (url in (retries or {}) and EXTRACTOR != "ollama"
+                   and bool(os.environ.get("OPENAI_API_KEY")))
+    split_items = None
+    if use_llm and multi is not None and (
+            row is None or REPARSE or retry_split
+            or (row.get("status") != "略過" and row.get("body_hash") != h)):
+        try:
+            candidates = openai_multi_items(url, art, stats, remember_rejection=retry_split and row is not None)
+            if candidates and len(candidates) >= 2:
+                split_items = candidates
+        except SplitPending as pending:
+            if retries is not None:
+                record_extract_retry(retries, url, str(pending))
+            return
+    if (REPARSE or retry_split) and use_llm and row is not None and row.get("status") == "略過":
         prev = skipped_from(url) if row.get("model") else None
-        if prev and safe_extract(art, stats) is not None:
+        if split_items is None and prev and safe_extract(art, stats) is not None:
             # 先前被「排除誤判」改成略過、現在規則認得的文章：恢復原本狀態，保留售出天數等紀錄
             row["status"] = prev
+            if multi is not None:
+                multi.pop(url, None)
             log_event(url, "恢復誤排除", f"略過 → {prev}")
         else:
             # 規則改進後，先前略過的文章當成新文章重新判斷，但保留第一次看到的時間
@@ -1282,7 +1498,7 @@ def process_article(url, listings, use_llm, stats, multi=None, list_title="", re
         if not use_llm:
             return  # 新文章要等有 LLM 時才解析
         print("    [NEW] 新文章，解析欄位。")
-        fields = safe_extract(art, stats)
+        fields = safe_extract(art, stats) if split_items is None else None
         if fields is None and art.get("extract_failed"):
             # Claude 暫時失敗：不記成略過（略過列之後不回訪），留給下次重新萃取
             if skipped_row is not None:
@@ -1292,7 +1508,7 @@ def process_article(url, listings, use_llm, stats, multi=None, list_title="", re
             print("    [RETRY] 萃取失敗，下次再試。")
             return
         if multi is not None:
-            if fields is None and record_multi(url, art, multi, first_seen):
+            if fields is None and record_multi(url, art, multi, first_seen, split_items):
                 print(f"    [MULTI] 多品項文章，拆出 {len(multi[url])} 支 iPhone（只算刊登價）。")
             elif fields is not None:
                 multi.pop(url, None)
@@ -1315,19 +1531,26 @@ def process_article(url, listings, use_llm, stats, multi=None, list_title="", re
             retries.pop(url, None)
         row["last_checked"] = now_str()
         return
-    elif use_llm and (row.get("body_hash") != h or REPARSE):
+    elif use_llm and (row.get("body_hash") != h or REPARSE or retry_split):
         edited = bool(row.get("body_hash")) and row["body_hash"] != h
         print("    [UPDATE] 本文被編輯，重新解析。" if edited else "    [REPARSE] 依新規則重新解析。")
-        fields = safe_extract(art, stats)
+        fields = safe_extract(art, stats) if split_items is None else None
         price_confirmed = fields is not None
-        if fields is None and ((REPARSE and row.get("body_hash") == h and not_single_iphone(art))
+        if retry_split and multi is not None:
+            retries.pop(url, None)  # 此篇拆單重試已結束，單機價格另行確認
+        if fields is None and (split_items is not None or (REPARSE and row.get("body_hash") == h and not_single_iphone(art))
                                or (edited and sells_other_product(art["title"], art["body"]))):
             # 本文沒變、新規則判定是配件或一篇賣多支 → 不再當單支刊登計入
             # 本文被改成賣 Apple Watch 等其他產品（標題還是 iPhone）→ 同樣排除
-            log_event(url, "排除誤判", f"{row.get('status')} → 略過（{'改賣其他產品' if edited else '重新解析'}）")
+            reason = "改賣其他產品" if edited else "重新解析"
+            if split_items is not None:
+                reason = "多支 iPhone"
+            log_event(url, "排除誤判", f"{row.get('status')} → 略過（{reason}）")
             row["status"] = "略過"
             if multi is not None:
-                record_multi(url, art, multi, row.get("first_seen"))
+                record_multi(url, art, multi, row.get("first_seen"), split_items)
+            if retries is not None:
+                retries.pop(url, None)
             row["last_checked"] = now_str()
             return
         if fields:

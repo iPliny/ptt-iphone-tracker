@@ -193,3 +193,10 @@
 - 不要搬動或刪除 BASE 資料夾（預設 `~/ai-cowork/ptt-local-crawler`）；要搬請先停排程並等待執行結束，保留完整 clone，再跑 `local/install.sh 新BASE` 或改 `~/Library/Application Support/crawlsnek/ptt-local-crawler.conf`，不可放進 Library／.Trash／Documents／Desktop／Downloads（不分大小寫，含符號連結）。
 - plist 由 repo 外固定的 `~/Library/Application Support/crawlsnek/ptt-bootstrap.sh` 啟動；更新 bootstrap 後須重跑 install.sh。安裝保留 09:40／21:40 JST（取決於 Mac 系統時區）與既有 log，不立即抓取。bootstrap 自動搜尋核對 origin，多候選記 log 並選資料庫最近 commit 最新者；只有無 conf，或明確 BASE_EXISTED=0 且 BASE 不存在、無候選時才 clone，既有 conf 失聯則報錯非 0；install.sh 寫 conf 前驗證路徑，爬蟲執行中提示退出、bootstrap 失敗最多嘗試 4 次。pull --ff-only 失敗沿用現有版本；詳細邊界見 local/README.md。
 - `local-crawler-watch.yml` 每兩小時讀私人 `jp/local/runs.csv`，モバステ／イオシス任一家超過 14 小時未成功即建固定標題 issue，既有 open 編輯內文，僅停更店家集合改變或全部恢復時留言，全部恢復後關閉；只有店名與時間可公開，不得加入原始資料列或內部錯誤。測試以暫存 HOME／合成 CSV 與 API 替身執行，不操作實際安裝。
+
+### 2026-11-23 OpenAI 多機拆單
+
+- 非 Ollama 模式有 `OPENAI_API_KEY` 時，疑似一篇賣多支 iPhone（標題多機、本文列出不同機型或分行列出同機型及售價）、排除配件且 `extract_items` 拆不出品項，才向 Responses API 送出該篇。通過驗證至少兩筆才寫入 `multi_items.csv` 計入刊登價；空陣列或單筆沿用原有規則。
+- 私人資料檔 `data/multi_llm_cache.json` 的第一層鍵為文章 URL，第二層鍵為完整本文的 `body_hash`，值為已驗證的品項陣列（model、storage、price、battery_health、is_brand_new）。成功的空陣列也保存。既有文章重試遇到 HTTP 400／404 時，該版本另存 `{"http_status": 400}` 或 `{"http_status": 404}`，後續回訪同版本文直接用規則。局部損毀只重建該篇或該版本。
+- 模型預設 `gpt-6.2-sol`，可用 `OPENAI_MODEL` 覆寫。每輪最多 `OPENAI_MAX_CALLS` 次（預設 20，含失敗），請求間隔至少 7 秒，標題最多 200 字、去簽名本文最多 10,000 UTF-8 位元組、輸出最多 3,000 tokens。
+- 無金鑰及一般 HTTP 拒絕沿用規則；401／403／429 會停止該輪後續 API 請求。429、逾時、5xx、回應格式錯誤與呼叫次數用盡均留待既有重試佇列處理，沿用 14 天期限。既有刊登拆單待重試期間保留原價、狀態與本文 hash。錯誤欄只留 HTTP 狀態碼，無狀態碼時留空。
