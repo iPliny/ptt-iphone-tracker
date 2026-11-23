@@ -62,6 +62,11 @@ EVENTS_FILE = os.path.join(DATA_DIR, "events.csv")
 SUMMARY_FILE = os.path.join(DATA_DIR, "market_summary.csv")
 MULTI_FILE = os.path.join(DATA_DIR, "multi_items.csv")  # 一篇賣多樣商品時拆出的各支 iPhone（只算刊登價）
 RETRY_FILE = os.path.join(DATA_DIR, "extract_retry.csv")
+SPLIT_CACHE_FILE = os.path.join(DATA_DIR, "multi_llm_cache.json")  # OpenAI 拆單結果：url → {body_hash, items}
+OPENAI_MODEL = "gpt-6.2-sol"
+OPENAI_URL = "https://api.openai.com/v1/responses"
+OPENAI_MAX_CALLS = 20  # 每次執行最多呼叫幾次（環境變數 OPENAI_MAX_CALLS 可覆寫）
+OPENAI_MAX_BODY = 6000  # 送出的本文字數上限
 RETRY_FIELDS = ["source_url", "first_failed", "last_failed", "attempts", "last_error"]
 RETRY_DAYS = 14
 HEALTH_ERROR_LIMIT = 10  # 超過此數才讓 Actions 標示失敗
@@ -976,11 +981,16 @@ def save_multi(multi, path=None):
 
 
 def record_multi(url, art, multi, first_seen=None):
-    """把多品項文章拆出的 iPhone 記進 multi；沒有就移除舊紀錄。回傳筆數。"""
+    """把多品項文章拆出的 iPhone 記進 multi；沒有就移除舊紀錄。回傳筆數。
+
+    先用規則拆；規則拆不出來、但文章看得出一篇賣多支 iPhone 時，才請 OpenAI 拆（見 llm_split_items）。"""
     multi.pop(url, None)
+    art.pop("llm_pending", None)
     if EXTRACTOR == "ollama":
         return 0
     items = extract_items(art["title"], art["body"])
+    if not items:
+        items = llm_split_items(url, art)
     if items:
         multi[url] = [{"source_url": url, "item_no": n, "post_time": post_time_from_url(url), "title": art["title"],
                        "model": it["model"], "storage": it["storage"],
@@ -1040,6 +1050,166 @@ def claude_extract(title, body):
     if resp.stop_reason != "end_turn":
         raise RuntimeError(f"Claude 未完成萃取（{resp.stop_reason}）")
     return json.loads(next(b.text for b in resp.content if b.type == "text"))
+
+
+# ==========================================
+# OpenAI 拆單（POYU 2026-11-23：只處理一篇賣很多支的文章，其餘照舊用規則）
+# ==========================================
+SPLIT_PROMPT = """你是 PTT MacShop 二手交易文的整理員。下面這篇文章同時賣多樣商品或多支 iPhone。
+請只列出「iPhone 手機本體」的每一支，各自的型號、容量、單獨售價；一律依文章內文，禁止推測。
+規則：
+1. 配件、Apple Watch、iPad、AirPods 等非 iPhone 品項不要列。
+2. 售價必須是該支 iPhone 單獨的標價（新台幣整數）；只有合購總價、或找不到單獨售價的不要列。
+3. model 寫 Apple 正式名稱，例如 iPhone 16 Pro Max、iPhone 17、iPhone Air；storage 寫如 256GB、1TB，不確定填 null。
+4. battery_health 是電池健康度數字（不含 %），沒提填 null；is_brand_new 只有該支機身明確寫全新未拆封／未開通才填 true。
+5. 同一支不要重複列。看不出有任何一支 iPhone 就回空陣列。"""
+SPLIT_SCHEMA = {
+    "type": "object",
+    "properties": {"items": {"type": "array", "items": {
+        "type": "object",
+        "properties": {
+            "model": {"type": "string"},
+            "storage": {"type": ["string", "null"]},
+            "price": {"type": "integer"},
+            "battery_health": {"type": ["integer", "null"]},
+            "is_brand_new": {"type": "boolean"},
+        },
+        "required": ["model", "storage", "price", "battery_health", "is_brand_new"],
+        "additionalProperties": False,
+    }}},
+    "required": ["items"],
+    "additionalProperties": False,
+}
+_split_state = {"calls": 0, "blocked": False}  # 本次執行已呼叫次數；金鑰／額度出問題後這輪不再呼叫
+
+
+def _iphone_mentions(text):
+    return len(re.findall(r"i\s*phone|愛鳳|(?<![a-z\d])(?:1[0-9]|[6-9])\s*(?:pro\s*max|pro|plus|pm|p)?(?![a-z\d])\s*(?:[\d]{2,4}\s*(?:g|gb|t|tb))",
+                          text or "", re.I))
+
+
+def looks_multi_item(art):
+    """規則拆不出來、但看得出一篇賣多支 iPhone：標題有兩支以上，或本文提到兩支以上 iPhone。"""
+    title, body = art["title"], strip_signature(art["body"])
+    if is_accessory_post(title, parse_storage(title)):
+        return False
+    return multi_phone_title(title) or _iphone_mentions(body) >= 2
+
+
+def load_split_cache(path=None):
+    path = path or SPLIT_CACHE_FILE
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_split_cache(cache, path=None):
+    path = path or SPLIT_CACHE_FILE
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False, indent=1, sort_keys=True)
+    os.replace(tmp, path)
+
+
+def openai_split(title, body):
+    """呼叫 OpenAI Responses API，回傳原始 items 清單。金鑰只從環境變數讀，不印出、不寫入任何檔案。"""
+    key = os.environ.get("OPENAI_API_KEY", "")
+    resp = requests.post(
+        OPENAI_URL, timeout=90,
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        json={"model": OPENAI_MODEL, "max_output_tokens": 4000,
+              "input": [{"role": "system", "content": SPLIT_PROMPT},
+                        {"role": "user", "content": f"標題：{title}\n\n{body[:OPENAI_MAX_BODY]}"}],
+              "text": {"format": {"type": "json_schema", "name": "split_items", "strict": True,
+                                  "schema": SPLIT_SCHEMA}}})
+    if resp.status_code != 200:
+        raise OpenAIError(resp.status_code)
+    data = resp.json()
+    text = data.get("output_text")
+    if text is None:
+        text = "".join(c.get("text", "") for o in data.get("output", []) if o.get("type") == "message"
+                       for c in o.get("content", []))
+    return json.loads(text)["items"]
+
+
+class OpenAIError(Exception):
+    def __init__(self, status):
+        super().__init__(f"OpenAI HTTP {status}")  # 只記狀態碼，不帶回應內容
+        self.status = status
+
+
+def _price_in_body(price, body):
+    """模型回的售價必須真的出現在本文裡（防幻覺）：接受 28000、28,000、2.8萬 等寫法。"""
+    flat = body.replace(",", "").replace("，", "")
+    if str(price) in flat:
+        return True
+    return price % 1000 == 0 and bool(re.search(rf"(?<![\d.]){price // 1000}\s*[kK]", flat)) \
+        or price % 100 == 0 and bool(re.search(rf"(?<![\d.]){price / 10000:g}\s*萬", flat))
+
+
+def validate_split_items(raw, body):
+    """把模型回的品項整理成 extract_items 的格式；型號不合法、售價不合理或不在本文的丟掉。"""
+    out, seen = [], set()
+    for it in raw if isinstance(raw, list) else []:
+        try:
+            model = normalize_model(it["model"])
+            price = int(it["price"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not _CANONICAL_MODEL_RE.fullmatch(model) or not 1000 <= price <= 250000 or not _price_in_body(price, body):
+            continue
+        storage = it.get("storage")
+        storage = normalize_storage(storage) if storage else None
+        storage = storage if storage not in (None, "未知") and parse_storage(storage) else None
+        battery = it.get("battery_health")
+        battery = battery if isinstance(battery, int) and 50 <= battery <= 100 else None
+        brand_new = bool(it.get("is_brand_new"))
+        key = (model, storage, price)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"model": model, "storage": storage, "price": price,
+                    "battery_health": 100 if brand_new else battery, "is_brand_new": brand_new})
+    return out
+
+
+def llm_split_items(url, art):
+    """一篇賣多支 iPhone、規則拆不出來時，請 OpenAI 拆成一支一筆。
+
+    - 沒有 OPENAI_API_KEY、或這篇不像多支 iPhone：直接回 []，行為和以前完全一樣。
+    - 結果依 url＋本文 hash 存進 data/multi_llm_cache.json，同一篇同樣內容不會再送第二次。
+    - 每次執行最多 OPENAI_MAX_CALLS 次；API 出錯（金鑰、額度、限流、逾時）一律回 []，
+      標記 art["llm_pending"] 讓新文章留在重試佇列，不影響爬蟲其他流程。"""
+    if not os.environ.get("OPENAI_API_KEY") or _split_state["blocked"] or not looks_multi_item(art):
+        return []
+    h = body_hash(art["body"])
+    cache = load_split_cache()
+    hit = cache.get(url)
+    if hit and hit.get("body_hash") == h:
+        return hit["items"]
+    limit = int(os.environ.get("OPENAI_MAX_CALLS") or OPENAI_MAX_CALLS)
+    if _split_state["calls"] >= limit:
+        art["llm_pending"] = True
+        return []
+    _split_state["calls"] += 1
+    try:
+        raw = openai_split(art["title"], strip_signature(art["body"]))
+    except Exception as e:
+        status = getattr(e, "status", None)
+        if status in (401, 403, 429):
+            _split_state["blocked"] = True  # 金鑰無效、權限不足或額度／限流：這輪不再嘗試
+        print(f"    [OPENAI] 拆單失敗，沿用規則結果：{status or type(e).__name__}")
+        art["llm_pending"] = True
+        return []
+    items = validate_split_items(raw, art["body"])
+    cache[url] = {"body_hash": h, "items": items}
+    save_split_cache(cache)
+    print(f"    [OPENAI] 多品項文章，由 OpenAI 拆出 {len(items)} 支 iPhone。")
+    return items
 
 
 def build_fields(parsed):
@@ -1296,6 +1466,13 @@ def process_article(url, listings, use_llm, stats, multi=None, list_title="", re
                 print(f"    [MULTI] 多品項文章，拆出 {len(multi[url])} 支 iPhone（只算刊登價）。")
             elif fields is not None:
                 multi.pop(url, None)
+        if fields is None and art.get("llm_pending") and retries is not None:
+            # OpenAI 暫時不能用（出錯或本輪額度用完）：不記成略過，留給下次重新拆
+            if skipped_row is not None:
+                listings[url] = skipped_row
+            record_extract_retry(retries, url, "OpenAI 拆單暫時失敗")
+            print("    [RETRY] OpenAI 拆單暫時失敗，下次再試。")
+            return
         if fields is None:
             # 仍記錄 hash，避免每次重跑；status 標成「略過」不進行情統計
             listings[url] = {"source_url": url, "post_time": post_time_from_url(url), "title": art["title"],
