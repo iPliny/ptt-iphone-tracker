@@ -152,7 +152,10 @@ class OpenAIMultiTest(unittest.TestCase):
                 self.assertEqual(len(self.listings), 0 if code == 429 else 2)
                 if code == 429:
                     self.assertEqual(self.retries[URL + "2"]["last_error"], "429")
-                self.assertFalse(self.cache.exists())
+                self.assertTrue(all("pending_since" in v for vs in self.read_cache().values() for v in vs.values()))
+
+    def read_cache(self):
+        return json.loads(self.cache.read_text()) if self.cache.exists() else {}
 
     def set_empty_run(self):
         self.stats = dict(new=0, errors=0, sold=0, price_changes=0)
@@ -332,3 +335,38 @@ class OpenAIMultiTest(unittest.TestCase):
         self.assertNotIn(os.environ["OPENAI_API_KEY"], output.getvalue())
         for path in self.cache.parent.iterdir():
             self.assertNotIn(os.environ["OPENAI_API_KEY"], path.read_text())
+
+    def test_identical_phones_each_listed_kept(self):
+        twin = dict(ITEM, model="iPhone 16", storage="256GB", battery_health=None)
+        self.reply([twin, twin])
+        self.process(title="iPhone 16 兩支", body="iPhone 16 256GB 售28000\niPhone 16 256GB 售28000")
+        self.assertEqual(len(self.multi[URL]), 2)
+
+    def test_duplicate_beyond_price_occurrences_dropped(self):
+        self.reply([ITEM, ITEM, PAIR[1]])
+        self.process()
+        self.assertEqual([r["price"] for r in self.multi[URL]], [28000, 15000])
+
+    def test_pending_deadline_not_reset_by_revisit(self):
+        digest = T.body_hash(BODY)
+        self.post.return_value.status_code = 503
+        self.process()
+        self.assertIn("pending_since", json.loads(self.cache.read_text())[URL][digest])
+        old = "2026-01-01T00:00:00"
+        self.cache.write_text(json.dumps({URL: {digest: {"pending_since": old}}}))
+        self.post.reset_mock()
+        self.process()
+        self.post.assert_not_called()
+        self.assertEqual(json.loads(self.cache.read_text())[URL][digest]["pending_since"], old)
+
+    def test_corrupt_version_replaced_by_valid_pending_on_transient_failure(self):
+        digest = T.body_hash(BODY)
+        for bad in ({"pending_since": "壞掉"}, [None], "x"):
+            with self.subTest(bad=bad):
+                self.set_empty_run()
+                self.cache.write_text(json.dumps({URL: {digest: bad}}))
+                self.post.return_value.status_code = 503
+                self.process()
+                entry = json.loads(self.cache.read_text())[URL][digest]
+                self.assertIsInstance(entry["pending_since"], str)
+                T.datetime.fromisoformat(entry["pending_since"])
