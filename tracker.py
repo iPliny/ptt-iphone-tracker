@@ -1016,13 +1016,18 @@ _SPLIT_PRICE_RE = re.compile(
 
 
 def split_prices(text):
-    prices = set()
+    return set(split_price_counts(text))
+
+
+def split_price_counts(text):
+    """本文中各售價出現的次數（用來容許「兩支一樣的手機」各列一筆）。"""
+    prices = {}
     for match in _SPLIT_PRICE_RE.finditer(unicodedata.normalize("NFKC", text)):
         value, unit = match.groups()
         amount = Decimal(re.sub(r"[,\s]", "", value))
         amount *= {"萬": 10000, "w": 10000, "千": 1000, "k": 1000}.get((unit or "").lower(), 1)
         if 1000 <= amount <= 250000 and amount == int(amount):
-            prices.add(int(amount))
+            prices[int(amount)] = prices.get(int(amount), 0) + 1
     return prices
 
 
@@ -1061,12 +1066,12 @@ class SplitPending(Exception):
 
 
 def validated_items(payload, source):
-    prices = split_prices(source)
+    prices = split_price_counts(source)
     raw = payload["items"]
     if not isinstance(raw, list):
         raise ValueError
     result = []
-    seen = set()
+    seen = {}
     for item in raw:
         model, price = item["model"], item["price"]
         storage, battery, new = item["storage"], item["battery_health"], item["is_brand_new"]
@@ -1081,8 +1086,9 @@ def validated_items(payload, source):
         storage = parse_storage(storage)
         battery = battery if battery is not None and 50 <= battery <= 100 else None
         key = (model, storage, price, battery, new)
-        if key not in seen:
-            seen.add(key)
+        # 同型號同容量同價格的兩支（「iPhone 16 兩支，各 28000」）要各算一筆，但不得超過該價格在本文出現的次數
+        if seen.get(key, 0) < prices[price]:
+            seen[key] = seen.get(key, 0) + 1
             result.append(dict(model=model, price=price, storage=storage,
                                battery_health=battery, is_brand_new=new))
     return result
@@ -1114,11 +1120,19 @@ def openai_multi_items(url, art, stats, remember_rejection=False):
         if not isinstance(versions, dict):
             print("    [WARN] 該篇拆單快取格式錯誤，重新取得。")
             versions = cache[url] = {}
-        if digest in versions:
-            if versions[digest] in ({"http_status": 400}, {"http_status": 404}):
-                return None
+        entry = versions.get(digest)
+        if entry in ({"http_status": 400}, {"http_status": 404}):
+            return None
+        if isinstance(entry, dict) and "pending_since" in entry:
+            # 這個版本曾因暫時錯誤待重試；滿 RETRY_DAYS 天就結案，改走規則，直到文章再被編輯
             try:
-                return validated_items({"items": versions[digest]}, source)
+                if datetime.fromisoformat(entry["pending_since"]) <= datetime.now() - timedelta(days=RETRY_DAYS):
+                    return None
+            except (TypeError, ValueError):
+                del versions[digest]
+        elif digest in versions:
+            try:
+                return validated_items({"items": entry}, source)
             except (KeyError, ValueError, TypeError):
                 print("    [WARN] 該版本拆單快取格式錯誤，重新取得。")
                 del versions[digest]
@@ -1169,9 +1183,32 @@ def openai_multi_items(url, art, stats, remember_rejection=False):
         os.replace(tmp, SPLIT_CACHE_FILE)
         return items
     except SplitPending:
+        mark_split_pending(url, digest)
         raise
     except Exception:
+        mark_split_pending(url, digest)
         raise SplitPending() from None
+
+
+def mark_split_pending(url, digest):
+    """記下這個版本第一次因暫時錯誤待重試的時間（之後不改），讓 14 天期限不會因再次回訪而重置。"""
+    try:
+        with open(SPLIT_CACHE_FILE, encoding="utf-8") as f:
+            cache = json.load(f)
+        if not isinstance(cache, dict):
+            raise ValueError
+    except (OSError, ValueError):
+        cache = {}
+    versions = cache.get(url)
+    if not isinstance(versions, dict):
+        versions = cache[url] = {}
+    if digest not in versions:
+        versions[digest] = {"pending_since": datetime.now().isoformat(timespec="seconds")}
+        tmp = SPLIT_CACHE_FILE + ".tmp"
+        os.makedirs(os.path.dirname(SPLIT_CACHE_FILE), exist_ok=True)
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(cache, f, ensure_ascii=False)
+        os.replace(tmp, SPLIT_CACHE_FILE)
 
 
 def record_multi(url, art, multi, first_seen=None, items=None):
