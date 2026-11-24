@@ -231,7 +231,7 @@
   // ---------- 型號行情 ----------
   const MODEL_COLS = [
     ["model", "型號"], ["storage", "容量"], ["listed", "刊登", 1], ["active", "在架", 1], ["sold", "已售", 1],
-    ["median_price", "刊登中位數", 1], ["median_sold_price", "成交中位數", 1], ["min_price", "最低", 1],
+    ["median_price", "刊登中位數", 1], ["median_sold_price", "已售最後標價中位數", 1], ["min_price", "最低", 1],
     ["max_price", "最高", 1], ["median_days", "售出天數", 1],
   ];
 

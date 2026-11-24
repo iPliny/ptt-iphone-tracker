@@ -99,8 +99,12 @@ class ModelHtmlTest(unittest.TestCase):
         self.assertNotIn("$30,000.0", html)
         self.assertIn("全部容量的文章（13）", html)
         self.assertIn("在架 10 · 已售 3 · 多品項 1", html)
-        self.assertIn("售出時的最後標價", html)
-        self.assertIn("（推估）", html)
+        self.assertIn("已售最後標價中位數", html)
+        self.assertIn("$29,000", html)
+        self.assertIn('<td class="num">1.5</td>', html)
+        self.assertIn("1.5 天", html)
+        self.assertIn("3 筆售出紀錄", html)
+        self.assertNotIn("（推估）", html)
         self.assertNotIn("載入中…", html)
         self.assertEqual([a["href"] for t, a in page.elements if t == "link" and a.get("rel") == "canonical"],
                          [self.canonical])
@@ -142,7 +146,7 @@ class ModelHtmlTest(unittest.TestCase):
         self.data["apple"][self.model] = dict(prices={"256GB": 36900, "512GB": None},
                                                    sources=["https://www.apple.com/tw/newsroom/example"])
         html = self.render()
-        self.assertIn("最終官方售價", html)
+        self.assertIn("停售前官方售價", html)
         self.assertIn("查無官方價格", html)
         self.assertIn("https://www.apple.com/tw/newsroom/example", html)
 

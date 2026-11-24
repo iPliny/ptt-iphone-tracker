@@ -68,10 +68,9 @@ def summary_cards(stats):
          (f' · 多品項 {stats["multi"]}' if stats.get("multi") else "")),
         ("刊登中位數", money(stats.get("median_price")),
          money(stats.get("min_price")) + " – " + money(stats.get("max_price"))),
-        ("成交中位數", money(stats.get("median_sold_price")), "售出時的最後標價"),
+        ("已售最後標價中位數", money(stats.get("median_sold_price")), ""),
         ("售出天數中位數", str(days) + " 天" if days is not None else "—",
-         (f"{samples} 筆樣本" + ("（推估）" if stats.get("days_estimated") else ""))
-         if samples else "還沒有售出天數"),
+         f"{samples} 筆售出紀錄" if samples else "還沒有售出天數"),
     ]
     return "".join(f'<div class="kpi"><div class="label">{escape(label)}</div>'
                    f'<div class="value">{escape(str(value))}</div>'
@@ -82,7 +81,7 @@ def summary_cards(stats):
 def capacity_table(rows):
     columns = [("storage", "容量"), ("listed", "刊登"), ("active", "在架"),
                ("sold", "已售"), ("median_price", "刊登中位數"),
-               ("median_sold_price", "成交中位數"), ("min_price", "最低"),
+               ("median_sold_price", "已售最後標價中位數"), ("min_price", "最低"),
                ("max_price", "最高"), ("median_days", "售出天數")]
     header = "<thead><tr>" + "".join(f"<th>{label}</th>" for _, label in columns) + "</tr></thead>"
     body = []
@@ -96,8 +95,6 @@ def capacity_table(rows):
                 text = escape(money(value))
             else:
                 text = "—" if value is None else escape(str(value))
-            if key == "median_days" and value is not None and row.get("days_estimated"):
-                text += "（推估）"
             attr = ' class="num"' if key != "storage" else ""
             cells.append(f'<td{attr}>{text}</td>')
         body.append("<tr>" + "".join(cells) + "</tr>")
@@ -124,17 +121,17 @@ def apple_table(info):
     if not info:
         return ""
     on_sale = bool(info.get("buy_url"))
-    heading = "官網售價" if on_sale else "最終官方售價"
     link = safe_link(info.get("buy_url"), "到 Apple 官網購買 ↗") if on_sale else "官網已停售"
     missing = "官網沒有這個容量" if on_sale else "查無官方價格"
     rows = "".join(f'<tr><td>{escape(storage)}</td><td class="num">{escape(money(price) if price else missing)}</td></tr>'
                    for storage, price in sorted(info.get("prices", {}).items(), key=lambda x: storage_key(x[0])))
-    note = ("官網售價為 " + str(info.get("checked_at", "")) + " 在 Apple 台灣官網查到的價格，購買前請以官網為準。"
-            if on_sale else "最終官方售價是 Apple 台灣官網停售前最後的建議售價。")
+    note = f'Apple 台灣官網 · 查詢日期 {info["checked_at"]}' if on_sale and info.get("checked_at") else ""
+    heading = "官網售價" if on_sale else "停售前官方售價"
     sources = "、".join(safe_link(url, f"來源{i + 1}") for i, url in enumerate(info.get("sources", [])))
+    attribution = " · ".join(part for part in (escape(note), sources) if part)
     return (f'<div class="card-head"><h2>Apple 原廠</h2>{link}</div><div class="scroll"><table>'
             f'<thead><tr><th>容量</th><th>{heading}</th></tr></thead><tbody>{rows}</tbody></table></div>'
-            f'<p class="hint">{escape(note)}{sources}</p>')
+            + (f'<p class="hint">{attribution}</p>' if attribution else ""))
 
 
 def trend_pct(values, days):
@@ -198,11 +195,11 @@ def render_model_html(template, data, model, canonical_url, asset_prefix=""):
     capacities = [row for row in data["models"] if row["model"] == model]
     title = model + " 二手行情、各容量價格 · PTT MacShop交易觀測"
     description = (f'{model} 的 PTT MacShop 刊登行情：{stats.get("listed", 0)} 筆刊登，'
-                   f'刊登價中位數 {money(stats.get("median_price"))}。售出價格為賣家售出時最後標價，非實際成交價。')
+                   f'刊登價中位數 {money(stats.get("median_price"))}。')
     if model == "iPhone Duo":
         title = "iPhone Duo 二手行情與全新未拆價格｜PTT MacShop交易觀測"
         description = ("整理 PTT MacShop 的 iPhone Duo 刊登資料，查看各容量統計、全新未拆與二手價格走勢，"
-                       "以及售出時最後標價。刊登價與售出標價均不代表實際成交價。")
+                       "以及售出時最後標價。")
     html = re.sub(r"<title>.*?</title>", lambda _: f"<title>{escape(title)}</title>", strip_social_meta(template), count=1)
     html = re.sub(r'<meta name="description" content="[^"]*">',
                   lambda _: f'<meta name="description" content="{escape(description, quote=True)}">', html, count=1)
@@ -216,8 +213,6 @@ def render_model_html(template, data, model, canonical_url, asset_prefix=""):
         html = html.replace('<p class="sub"><span id="updated">',
                             '<p class="sub">查看 iPhone Duo 全新未拆與二手刊登行情、各容量統計及價格走勢。</p>\n'
                             '      <p class="sub"><span id="updated">', 1)
-        html = html.replace('<p class="hint">「成交價」',
-                            '<p class="hint">各容量統計包含全新未拆與二手刊登。「成交價」', 1)
     updated = f'最後回訪 {data.get("last_checked") or "—"} · 這個機型共追蹤 {len(listings)} 篇'
     html = html.replace('<span id="updated">載入中…</span>', f'<span id="updated">{escape(updated)}</span>')
     html = html.replace('<main class="wrap" id="model-main" hidden>', '<main class="wrap" id="model-main">')

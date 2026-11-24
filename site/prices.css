@@ -4,7 +4,6 @@
 .price-filters label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
 .price-filters input, .price-filters select, .price-filters button { min-width: 0; width: 100%; min-height: 44px; }
 .price-filters .price-search { grid-column: 1 / -1; }
-.price-notice { border-left: 3px solid var(--accent); padding-left: 10px; font-size: 13px; }
 #price-table { min-width: 690px; }
 #price-table th { cursor: default; }
 #price-table td { vertical-align: top; white-space: normal; }

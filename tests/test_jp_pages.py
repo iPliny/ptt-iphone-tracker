@@ -45,12 +45,18 @@ class JpPagesTest(unittest.TestCase):
                 self.assertNotIn("jp-badge", cell)
                 page = P.page_html(payload, "iPhone 17 Pro", lang, SITE)
                 self.assertIn(label, page)
-                self.assertIn("9:40", page)
-                self.assertIn("21:40", page)
+                self.assertNotIn("9:40", page)
+                self.assertNotIn("21:40", page)
                 self.assertNotIn(text[key].format(s="256GB", shop="モバステ", p="¥180,000"), page)
             groups, _ = P.comparison(payload["latest"], "iPhone 17 Pro", condition, set(P.SHOPS))
             self.assertIsNone(groups[0]["highest"])
             self.assertEqual(P.best_line(groups, P.TEXT["zh"], key), "")
+
+    def test_schedule_displayed_once_on_each_comparison_home(self):
+        for relative in ("jp/index.html", "jp/ja/index.html"):
+            page = (ROOT / "site" / relative).read_text(encoding="utf-8")
+            self.assertEqual(page.count("9:40"), 1)
+            self.assertEqual(page.count("21:40"), 1)
 
     def test_visible_prices_matches_jp_js(self):
         # 與 tests/jp.test.cjs 的 visiblePrices 案例相同。

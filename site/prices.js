@@ -2,16 +2,11 @@
 (function () {
   'use strict';
   const COLUMNS = ['section', 'year', 'model', 'storage', 'amount', 'evidence', 'price_type', 'effective_date', 'issuer', 'source_id', 'note'];
-  const EVIDENCE = {A: 'Apple 原文', B: '電信官方（非 Apple 直售）', C: '轉載待原件', F: '時點待複核', N: '台灣不適用'};
+  const EVIDENCE = {A: 'Apple 原文', B: '電信官方', C: '轉載待原件', F: '時點待複核', N: '台灣不適用'};
   const SECTIONS = {
     'tw-launch': '台灣上市價／首發方案（TWD）',
     'tw-later': '台灣後續容量／調價（TWD）',
     us: '初代美國價格（USD）'
-  };
-  const NOTES = {
-    'tw-launch': '歷史上市價，不是現在售價。電信首發方案另標定價主體；待查金額顯示「待查」，不是零元。',
-    'tw-later': '這裡是後來新增的容量或後續調價，不可覆寫原上市定價；「初發年」仍是機型初次發表年。',
-    us: '以美元列示，未換算新台幣；不含各州另計稅負與電信服務資費，不作台灣空機基準。'
   };
   const normal = value => String(value || '').normalize('NFKC').toLowerCase().replace(/iphone|[\s()第代_-]/g, '');
   const storageSize = value => Number.parseFloat(value) * (/TB$/i.test(value) ? 1000 : 1);
@@ -38,7 +33,7 @@
           !(r.effective_date === null || typeof r.effective_date === 'string')) throw new Error('價格記錄不符');
       const published = r.evidence === 'A' || r.evidence === 'B';
       if (published ? !Number.isInteger(r.amount) || r.amount <= 0 : r.amount !== null) {
-        throw new Error('禁止公開待查金額');
+        throw new Error('金額與查核狀態不符');
       }
       r.source_url = sourceUrl(data.sources[r.source_id]);
       if (!r.source_url) throw new Error('來源連結不符');
@@ -75,7 +70,7 @@
   }
   function amountText(r) {
     if (r.evidence === 'N') return '不適用';
-    if (!['A', 'B'].includes(r.evidence) || !Number.isInteger(r.amount) || r.amount <= 0) return '待查';
+    if (!['A', 'B'].includes(r.evidence) || !Number.isInteger(r.amount) || r.amount <= 0) return '—';
     return `${r.currency === 'USD' ? 'US$' : 'NT$'}${r.amount.toLocaleString('en-US')}`;
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = {decode, filterRows, amountText, sourceUrl, storageSize};
@@ -111,8 +106,7 @@
       const model = node('td', r.model, 'price-model');
       model.append(node('span', `${r.year} 年`, 'price-note'));
       const timing = node('td', r.price_type);
-      timing.append(node('span', `適用：${r.effective_date || '日期待查'} · ${r.issuer}`, 'price-note'));
-      if (r.note) timing.append(node('span', r.note, 'price-note'));
+      timing.append(node('span', `適用：${r.effective_date || '—'} · ${r.issuer}`, 'price-note'));
       const evidence = node('td');
       evidence.append(node('span', EVIDENCE[r.evidence], 'chip'));
       const a = node('a', ['A', 'B'].includes(r.evidence) ? '查閱官方來源 ↗' : '查看來源線索 ↗', 'price-source');
@@ -126,7 +120,6 @@
     $('price-empty').hidden = matches.length > 0;
     $('price-table-scroll').hidden = matches.length === 0;
     $('price-result').textContent = `${matches.length} 筆記錄 · ${new Set(matches.map(r => r.model)).size} 個機型 · ${matches.filter(r => r.amount !== null).length} 筆有來源支持的金額`;
-    $('price-section-note').textContent = NOTES[f.section];
     $('price-caption').textContent = SECTIONS[f.section];
     const url = new URL(location.href);
     url.search = '';
@@ -147,7 +140,7 @@
       fillOptions(controls.year, [...new Set(rows.map(r => r.year))].sort((a, b) => b - a));
       fillOptions(controls.storage, [...new Set(rows.map(r => r.storage))].sort((a, b) => storageSize(a) - storageSize(b)));
       readUrl();
-      $('price-coverage').textContent = `底稿日期 ${data.updated_at} · 收錄 ${new Set(rows.map(r => r.model)).size} 個機型、${rows.length} 筆記錄（含待查及不適用） · 另 ${data.withheld_records} 筆機型／索引待核記錄暫不刊出。`;
+      $('price-coverage').textContent = `底稿日期 ${data.updated_at} · 收錄 ${new Set(rows.map(r => r.model)).size} 個機型、${rows.length} 筆記錄`;
       render();
     } catch (_) {
       rows = [];

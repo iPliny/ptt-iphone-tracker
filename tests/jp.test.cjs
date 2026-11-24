@@ -234,7 +234,9 @@ test('48時間を超えた最後の成功を旧データとして両言語で表
 
 test('無成功紀錄使用中日文 none，不輸出 undefined；日文頁保留正確文字',()=>{
   const fs=require('node:fs');
-  assert.match(fs.readFileSync('site/jp/ja/index.html','utf8'),/実際の買取には/);
+  const html=fs.readFileSync('site/jp/ja/index.html','utf8');
+  assert.match(html,/モバステは A〜C ランクの最高買取額です。/);
+  assert.doesNotMatch(html,/実際の買取には/);
   for (const [lang,label] of [['zh','尚無紀錄'],['ja','記録なし']]) {
     try {
       jp.setLang(lang);

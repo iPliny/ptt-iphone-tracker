@@ -127,15 +127,12 @@
   }
 
   function soldNote(r) {
-    if (r.days_to_sell == null) return "已售出，售出時間無法推估（依偵測日 " + dayOf(r.sold_detected_at) + " 計）";
-    return "上架 " + r.days_to_sell + " 天後售出" + (r.days_basis === "推估" ? "（推估）" : "");
+    if (r.days_to_sell == null) return "發現售出 " + dayOf(r.sold_detected_at);
+    return "上架 " + r.days_to_sell + " 天後售出";
   }
 
-  // 表格的售出天數欄：有推估樣本只標「（推估）」，不列筆數；沒推估的列放同寬的隱形標記，讓數字對齊。
   function daysCell(m) {
-    const est = m.median_days != null && m.days_estimated;
-    return (m.median_days == null ? "—" : esc(m.median_days)) +
-      `<span class="est"${est ? "" : ' aria-hidden="true" style="visibility:hidden"'}>（推估）</span>`;
+    return m.median_days == null ? "—" : esc(m.median_days);
   }
 
   // 改價事件的顯示文字與滑鼠提示；時間語意見 AGENTS.md「改價時間」。
@@ -143,8 +140,8 @@
     const estimated = e.time_basis === "ptt_edit";
     const what = (estimated ? "改價 " : "發現改價 ") + e.detail.replace(/(\d+)/g, (n) => money(n));
     const explanation = estimated ?
-      `${e.time}（台灣時間），依當次 PTT 最新編輯時間推估；系統發現時間：${e.detected_at}` :
-      `系統發現時間：${e.detected_at || e.time}；沒有可用的當次編輯時間`;
+      `PTT 編輯時間 ${e.time}（台灣時間） · 系統發現時間 ${e.detected_at}` :
+      `系統發現時間 ${e.detected_at || e.time}`;
     return { what, explanation };
   }
 

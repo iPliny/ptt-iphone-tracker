@@ -301,7 +301,7 @@ def article(issue):
         body.append(s)
         s = f"{name(top)} 本週刊登價從 {money(top['min_price'])} 到 {money(top['max_price'])} 都有"
         if top["median_sold_price"]:
-            s += f"，已售出的 {top['sold']} 支成交標價中位數是 {money(top['median_sold_price'])}"
+            s += f"，已售出的 {top['sold']} 支最後標價中位數是 {money(top['median_sold_price'])}"
         body.append(s + "，價差可能來自電池健康度、保固與外觀。")
         optional.append(("models", body[-1]))
         ng = issue["new_groups"]
@@ -314,14 +314,14 @@ def article(issue):
     sections.append({"id": "models", "h": "哪些 iPhone 最多人賣？二手價多少？", "body": body, "table": bool(groups)})
 
     # 3. 售出速度
+    speed = []
     if fast:
         parts = [f"{g['model']}（{g['median_days']} 天，{g['n']} 支）" for g in fast[:3]]
-        s = "以本週售出、能算出售出天數的文章來看，賣得最快的是 " + "、".join(parts) + "。"
-    else:
-        s = f"本週能算出售出天數的機型都不到 {FAST_MIN} 支，樣本太少，暫不排名。"
+        speed.append("本週賣得最快的是 " + "、".join(parts) + "。")
     if issue["median_days"] is not None:
-        s += f"全部 {issue['days_samples']} 支售出的中位數是發文後 {issue['median_days']} 天。"
-    sections.append({"id": "speed", "h": "哪些機型賣得最快？", "body": [s]})
+        speed.append(f"{issue['days_samples']} 筆售出紀錄的售出天數中位數是 {issue['median_days']} 天。")
+    if speed:
+        sections.append({"id": "speed", "h": "哪些機型賣得最快？" if fast else "本週售出天數", "body": speed})
 
     # 電池健康度
     bl, bs = issue.get("battery_listed"), issue.get("battery_sold")
@@ -354,9 +354,7 @@ def article(issue):
     if top:
         tips.append(f"想買的人可以把上表的刊登價中位數當出價基準，例如 {name(top)} 低於 {money(top['median_price'])} 的文章就算不錯的價格；")
     tips.append("想賣的人可以參考同型號、同容量的中位數訂價，標價明顯高於中位數時，可能要等比較久或需要降價。")
-    caveat = "電池健康度、保固與外觀也會影響價格，本週報只比較型號與容量，實際出價請再看個別文章。"
-    sections.append({"id": "tips", "h": "想買或想賣二手 iPhone，可以怎麼參考？", "body": ["".join(tips), caveat]})
-    optional.insert(0, ("tips", caveat))
+    sections.append({"id": "tips", "h": "想買或想賣二手 iPhone，可以怎麼參考？", "body": ["".join(tips)]})
 
     for sec_id, text in optional:  # 字數上限：從最不重要的段落開始拿掉
         if trim(lead, sections) <= MAX_CHARS:
@@ -371,8 +369,6 @@ def article(issue):
                     "a": f"{label} 這週 PTT MacShop 版的二手 {name(top)} 共 {top['listed']} 篇，刊登價中位數 {money(top['median_price'])}，"
                          f"價格區間 {money(top['min_price'])}～{money(top['max_price'])}。"})
     faq += [
-        {"q": "週報裡的成交價是真實成交價嗎？",
-         "a": "不是。PTT 沒有公開成交價，本站把偵測到「已售出」時的最後標價當作成交標價，實際成交可能再議價。"},
         {"q": "週報多久更新一次？",
          "a": "每週日晚上 8 點（台灣時間）出刊，統計剛結束的週日到週六。每天的即時動態可以看網站首頁。"},
     ]
@@ -455,7 +451,7 @@ def page_html(issue, issues, root):
       </section>
       <nav class="toc" aria-label="目次">
         <p class="toc-title">目次</p>
-        <ol>{''.join(f'<li><a href="#{s["id"]}">{E(s["h"])}</a></li>' for s in a['sections'])}<li><a href="#faq">常見問題</a></li><li><a href="#method">資料怎麼來</a></li></ol>
+        <ol>{''.join(f'<li><a href="#{s["id"]}">{E(s["h"])}</a></li>' for s in a['sections'])}<li><a href="#faq">常見問題</a></li></ol>
       </nav>
 """]
     for sec in a["sections"]:
@@ -477,10 +473,7 @@ def page_html(issue, issues, root):
         <h2>常見問題</h2>
         <dl class="faq">{faq}</dl>
       </section>
-      <section id="method">
-        <h2>資料怎麼來</h2>
-        <p class="hint">統計期間 {E(label)}（台灣時間）。資料來自 PTT MacShop 版標題含「[販售]」與 iPhone 的文章，本站每 6 小時回訪一次，依推文與內文關鍵字判斷是否售出。刊登價取文章標價，同一篇文章只算一次；售出天數是發文到售出的時間，第一次看到就已售出的文章用最後編輯時間推估。價格表不含全新未拆封機。</p>
-      </section>
+      <p class="hint"><a href="{root}market/#faq">算法說明</a></p>
     </article>
 """)
     if len(issues) > 1:

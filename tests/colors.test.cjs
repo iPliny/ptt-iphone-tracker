@@ -39,7 +39,7 @@ const row = (color, relative, storage = null, n = 3) => ({ model, color, relativ
   samples: n, listed: n, sold: 1, median_price: relative == null ? null : 30000 });
 const listing = (color, storage = '256GB') => ({ model, color, storage, post_time: '', status: '在售', price: null });
 
-test('顏色表按相對值排序，樣本不足最後；容量切換和未標顏色篇數同步', async () => {
+test('顏色表按相對值排序，缺值排最後；容量切換和未標顏色篇數同步', async () => {
   const { element, choose } = await render([
     row('銀色', .03), row('藏藍色', null, null, 2), row('宇宙橙色', -.05),
     row('銀色', null, '256GB', 2),
@@ -49,12 +49,13 @@ test('顏色表按相對值排序，樣本不足最後；容量切換和未標�
   assert.ok(html.indexOf('銀色') < html.indexOf('藏藍色'));
   assert.match(html, /−5%/);
   assert.match(html, /\+3%/);
-  assert.match(html, /樣本不足/);
+  assert.match(html, /藏藍色<\/td>.*?<td data-label="相對同型號同容量" class="num muted">—<\/td>/);
+  assert.doesNotMatch(html, /樣本不足/);
   assert.doesNotMatch(html, /二手刊登價中位數/);  // 全部容量不顯示混了容量的價格
   assert.match(element('#color-best').textContent, /宇宙橙色（比中位數低 5%，3 篇）/);
-  assert.match(element('#color-note').textContent, /未標示顏色的 2 篇/);
+  assert.match(element('#color-note').textContent, /未標示顏色 2 篇/);
   choose('256GB');
-  assert.match(element('#color-note').textContent, /未標示顏色的 1 篇/);
+  assert.match(element('#color-note').textContent, /未標示顏色 1 篇/);
   assert.doesNotMatch(element('#color-table').innerHTML, /宇宙橙色/);
   assert.match(element('#color-table').innerHTML, /二手刊登價中位數/);
   assert.equal(element('#color-best').hidden, true);

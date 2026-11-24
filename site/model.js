@@ -132,7 +132,7 @@
     }).join("");
   }
 
-  // ---------- Apple 原廠：在售給官網連結與現行售價，停售給最終官方售價 ----------
+  // ---------- Apple 原廠：在售給官網連結與現行售價，停售給停售前官方售價 ----------
   function renderApple() {
     const a = (D.apple || {})[model];
     $("#apple").hidden = !a;
@@ -146,11 +146,11 @@
       : `<span class="muted">官網已停售${a.discontinued ? "（" + esc(a.discontinued) + "）" : ""}</span>`;
     const sources = (a.sources || []).map((u, i) =>
       `<a href="${esc(u)}" target="_blank" rel="noopener">來源${a.sources.length > 1 ? i + 1 : ""}</a>`).join("、");
+    const checked = onSale && a.checked_at ? "Apple 台灣官網 · 查詢日期 " + esc(a.checked_at) : "";
+    const attribution = [checked, sources].filter(Boolean).join(" · ");
     $("#apple").innerHTML = `<div class="card-head"><h2>Apple 原廠</h2>${head}</div>` +
-      `<div class="scroll"><table><thead><tr><th>容量</th><th class="num">${onSale ? "官網售價" : "最終官方售價"}</th></tr></thead><tbody>${rows}</tbody></table></div>` +
-      `<p class="hint">${onSale
-        ? "官網售價為 " + esc(a.checked_at) + " 在 Apple 台灣官網查到的價格，購買前請以官網為準。"
-        : "最終官方售價是 Apple 台灣官網停售前最後的建議售價。" + (sources ? "（" + sources + "）" : "")}</p>`;
+      `<div class="scroll"><table><thead><tr><th>容量</th><th class="num">${onSale ? "官網售價" : "停售前官方售價"}</th></tr></thead><tbody>${rows}</tbody></table></div>` +
+      (attribution ? `<p class="hint">${attribution}</p>` : "");
   }
 
   function renderKpis() {
@@ -158,11 +158,11 @@
     const days = m && m.median_days != null
       ? m.median_days + " 天" : "—";
     const daysNote = m && m.days_samples
-      ? m.days_samples + " 筆樣本" + (m.days_estimated ? "（推估）" : "") : "還沒有售出天數";
+      ? m.days_samples + " 筆售出紀錄" : "還沒有售出天數";
     const cards = [
       ["刊登", m ? m.listed : selected().length, m ? "在架 " + m.active + " · 已售 " + m.sold + (m.multi ? " · 多品項 " + m.multi : "") : "沒有可用的標價"],
       ["刊登中位數", money(m && m.median_price), m ? money(m.min_price) + " – " + money(m.max_price) : ""],
-      ["成交中位數", money(m && m.median_sold_price), "售出時的最後標價"],
+      ["已售最後標價中位數", money(m && m.median_sold_price), ""],
       ["售出天數中位數", days, daysNote],
     ];
     $("#kpis").innerHTML = cards.map(([label, v, note]) =>
@@ -334,7 +334,7 @@
     if (m && m.median_price) {
       s += `<line class="median" x1="${L}" x2="${W - R}" y1="${y(m.median_price)}" y2="${y(m.median_price)}"><title>刊登中位數 ${money(m.median_price)}</title></line>`;
     }
-    // 已售出畫在最上層，比較容易看到成交價落點
+    // 已售出畫在最上層，比較容易看到已售文章的標價落點
     const order = { "逾期未售": 0, "已刪除": 0, "在售": 1, "交易中": 2, "已售出": 3 };
     pts.slice().sort((a, b) => order[a.status] - order[b.status]).forEach((r) => {
       s += `<a href="${esc(r.url)}" target="_blank" rel="noopener"><circle class="pt st-${esc(r.status)}" cx="${x(t(r))}" cy="${y(r.price)}" r="5">` +
@@ -346,7 +346,7 @@
   // ---------- 各容量比較 ----------
   const COLS = [
     ["storage", "容量"], ["listed", "刊登", 1], ["active", "在架", 1], ["sold", "已售", 1],
-    ["median_price", "刊登中位數", 1], ["median_sold_price", "成交中位數", 1], ["min_price", "最低", 1],
+    ["median_price", "刊登中位數", 1], ["median_sold_price", "已售最後標價中位數", 1], ["min_price", "最低", 1],
     ["max_price", "最高", 1], ["median_days", "售出天數", 1],
   ];
 
@@ -390,15 +390,14 @@
     $("#color-table").innerHTML = "<thead><tr>" + columns.map((c, i) =>
       `<th scope="col" class="${i ? "num" : ""}">${c}</th>`).join("") + "</tr></thead><tbody>" + rows.map((r) => {
       const pct = Math.round(Math.abs(r.relative || 0) * 100);
-      const relative = r.relative == null ? "樣本不足" : (r.relative < 0 ? "−" : r.relative > 0 ? "+" : "") + pct + "%";
+      const relative = r.relative == null ? "—" : (r.relative < 0 ? "−" : r.relative > 0 ? "+" : "") + pct + "%";
       const tone = r.relative == null ? "muted" : r.relative < 0 ? "relative-low" : r.relative > 0 ? "relative-high" : "";
       return "<tr>" + cell(esc(r.color), 0) + cell(r.listed, 1) + cell(r.sold, 2) +
-        (showPrice ? cell(r.median_price == null ? "樣本不足" : money(r.median_price), 3) : "") +
+        (showPrice ? cell(r.median_price == null ? "—" : money(r.median_price), 3) : "") +
         cell(relative, columns.length - 1, tone) + "</tr>";
     }).join("") + (rows.length ? "" : `<tr><td colspan="${columns.length}" class="empty">這個容量尚無可比較的顏色價格資料</td></tr>`) + "</tbody>";
     const missing = selected().filter((r) => !r.color).length;
-    $("#color-note").textContent = "顏色由標題與規格欄判斷，未標示顏色的 " + missing +
-      " 篇不列入；每個顏色至少 3 篇才顯示數字。價格欄只算二手機；相對值是和同型號、同容量、同為全新或二手的刊登價中位數比較，全新機不會拉高某個顏色。異常價格不列入。";
+    $("#color-note").textContent = "未標示顏色 " + missing + " 篇";
   }
 
   function selectedCount(s) {

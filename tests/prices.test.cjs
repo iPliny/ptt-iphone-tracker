@@ -23,7 +23,7 @@ test('機型搜尋、年份及容量篩選；不以起價補其他容量', () =>
   const f = {q: 'iphone 16 pro', year: '2024', storage: '256GB', evidence: 'all'};
   const found = filterRows(rows, f);
   assert.equal(found.length, 2);
-  assert.equal(amountText(found.find(r => r.model === 'iPhone 16 Pro')), '待查');
+  assert.equal(amountText(found.find(r => r.model === 'iPhone 16 Pro')), '—');
   assert.equal(amountText(found.find(r => r.model === 'iPhone 16 Pro Max')), 'NT$44,900');
   assert.equal(filterRows(rows, {q: 'SE 2'}).length, 1);
   assert.equal(filterRows(rows, {q: '<img onerror=alert(1)>'}).length, 0);
@@ -51,7 +51,7 @@ test('格式／未知狀態／重複／待查數值／非正數一律拒絕', ()
   d = copy(); d.columns.reverse(); assert.throws(() => decode(d));
   d = copy(); d.records[0][5] = 'E'; assert.throws(() => decode(d));
   d = copy(); d.records.push(d.records[0]); assert.throws(() => decode(d));
-  d = copy(); d.records.find(r => r[5] === 'C')[4] = 99999; assert.throws(() => decode(d), /待查金額/);
+  d = copy(); d.records.find(r => r[5] === 'C')[4] = 99999; assert.throws(() => decode(d), /金額與查核狀態不符/);
   d = copy(); d.records.find(r => r[5] === 'A')[4] = 0; assert.throws(() => decode(d));
 });
 test('來源 URL 拒絕 script／相對 URL／登入資訊與冒用 Apple 的來源', () => {
@@ -62,7 +62,7 @@ test('來源 URL 拒絕 script／相對 URL／登入資訊與冒用 Apple 的來
 });
 test('缺值與錯誤數值不顯示零元；待查狀態即使意外帶數值也不展示', () => {
   assert.equal(amountText({evidence: 'N', amount: null}), '不適用');
-  assert.equal(amountText({evidence: 'C', amount: 99999}), '待查');
-  assert.equal(amountText({evidence: 'A', amount: null}), '待查');
-  assert.equal(amountText({evidence: 'A', amount: 0}), '待查');
+  assert.equal(amountText({evidence: 'C', amount: 99999}), '—');
+  assert.equal(amountText({evidence: 'A', amount: null}), '—');
+  assert.equal(amountText({evidence: 'A', amount: 0}), '—');
 });
