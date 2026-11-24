@@ -185,8 +185,7 @@ def price_commentary_card(commentary, model):
         '\n\n    <section class="card price-commentary" id="price-commentary">'
         '<div class="card-head"><h2>價格短評</h2></div>'
         f'<p class="commentary-text">{escape(body.strip())}</p>'
-        f'<p class="hint">資料更新至 {escape(commentary["as_of"])}。'
-        '依 PTT MacShop 刊登價整理，不是成交價，也不是買賣建議。</p></section>'
+        f'<p class="hint">資料更新至 {escape(commentary["as_of"])}。</p></section>'
     )
 
 

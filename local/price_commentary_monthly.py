@@ -27,6 +27,7 @@ LOG = Path.home() / "Library/Logs/ptt-price-commentary.log"
 LOCK = Path.home() / "Library/Application Support/crawlsnek/ptt-price-commentary.lock"
 TAIPEI = timezone(timedelta(hours=8))
 FIX_ROUNDS = 3
+DISCLAIMER = re.compile(r"僅供參考|非實際成交價|不是成交價|並非成交價|樣本太少|樣本不足|無法代表|請以官網為準|不構成|免責")
 
 
 def log(message):
@@ -109,14 +110,14 @@ def generate(month, as_of, scratch):
     models = agy_json(prompt, scratch)
     for round_no in range(FIX_ROUNDS):
         bad = {k: {"目前字數": length(v), "原文": v} for k, v in models.items()
-               if not isinstance(v, str) or not 250 <= length(v) <= 300}
+               if not isinstance(v, str) or not 250 <= length(v) <= 300 or DISCLAIMER.search(v)}
         if not bad:
             break
         log(f"第 {round_no + 1} 輪修字數：{len(bad)} 則")
         (scratch / "fix.json").write_text(json.dumps(bad, ensure_ascii=False, indent=1), encoding="utf-8")
-        fix_prompt = (f"讀取 {scratch}/fix.json 與 {facts}（絕對路徑）。每個機型的短評字數不在 250–300 字（不含空白）。"
+        fix_prompt = (f"讀取 {scratch}/fix.json 與 {facts}（絕對路徑）。每個機型的短評字數不在 250–300 字（不含空白），或含免責／防禦性字句。"
                       "請改寫成約 275 字（目標 265–290，寧可落在中間）：不足的用 facts 內的事實補充（不可編造），"
-                      "過長的刪次要句子；保留文風與已有事實，樣本少的機型維持「樣本太少僅供參考」的誠實說法。"
+                      "過長的刪次要句子；保留平靜、有把握的語氣與已有事實；完全不寫免責或防禦性的話（僅供參考、非實際成交價、樣本太少等一句都不要）；樣本少的機型直接平實寫目前有幾筆與價位。"
                       "單一段落純文字、只用 facts 的數字、不給買賣建議、不出現人名帳號。不要執行任何指令。"
                       "只輸出一個 JSON 物件，鍵為機型名稱，值為改寫後文字，不要程式碼區塊。")
         models.update(agy_json(fix_prompt, scratch))
