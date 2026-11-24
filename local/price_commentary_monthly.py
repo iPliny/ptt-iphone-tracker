@@ -153,6 +153,8 @@ def main():
     today = datetime.now(TAIPEI).date()
     target = target_month(today, args.force)
     month, as_of = target
+    if (CODE_DIR / ".git").exists() and os.environ.get("PTT_COMMENTARY_NO_SELF_UPDATE") != "1":
+        subprocess.run(["git", "-C", str(CODE_DIR), "pull", "--ff-only", "-q"], capture_output=True)  # 失敗就沿用現有版本
     ensure_clone()
     if git("branch", "--show-current") != "main":
         raise RuntimeError("私人資料庫不在 main 分支")

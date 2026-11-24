@@ -4,7 +4,7 @@
 <dict>
     <key>Label</key><string>com.crawlsnek.ptt-price-commentary</string>
     <key>ProgramArguments</key>
-    <array><string>/usr/bin/python3</string><string>__CODE_DIR__/local/price_commentary_monthly.py</string></array>
+    <array><string>__PYTHON__</string><string>__CODE_DIR__/local/price_commentary_monthly.py</string></array>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key><string>__HOME__/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>

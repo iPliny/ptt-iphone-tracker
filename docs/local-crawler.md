@@ -94,6 +94,6 @@ bootstrap 讀同目錄 `ptt-local-crawler.conf` 的 BASE，預設 `~/ai-cowork/p
 
 ## 每月底價格短評更新（2026-11-25）
 - 機型頁「價格短評」由 `local/price_commentary_monthly.py` 每月底在家用 Mac 更新：呼叫 `site/price_commentary.py facts` 彙整公開統計 → `agy`（預設 `gemini-4-neon-medium`，可用 `PTT_AGY_MODEL` 改）依 `local/price_commentary_prompt.txt` 寫 45 則 → 字數不符的最多修 3 輪 → `check` 驗稿 → 寫入私人資料庫 `commentary/price.json`、推送並 `gh workflow run pages.yml` 重新部署。
-- 安裝：`bash local/install-commentary.sh`。launchd 每天 22:00（Mac 系統時區）啟動，腳本只在月底（台灣日期）或月初 1～3 日補跑上個月時動作，其餘直接結束；同一個 as_of 不重複產生。
+- 安裝：`bash local/install-commentary.sh`（建立專用程式 clone `~/Documents/Codex/dispatch/ptt-iphone-tracker-runner` 與 venv，排程只用它，每次執行前 `git pull --ff-only`）。launchd 每天 22:00（Mac 系統時區）啟動，腳本只在月底（台灣日期）或月初 1～3 日補跑上個月時動作，其餘直接結束；同一個 as_of 不重複產生。
 - 手動：`python3 local/price_commentary_monthly.py --force 2026-12 [--dry-run]`。失敗會跳 macOS 通知，log 在 `~/Library/Logs/ptt-price-commentary.log`。
-- 需要：這份程式 clone 在 main、專用資料 clone `~/Documents/Codex/dispatch/ptt-iphone-data-commentary`（不存在會自動 clone；與爬蟲的 clone 分開，可用 `PTT_COMMENTARY_DATA_DIR` 改）、`agy`（~/.local/bin）與 `gh` 已登入。
+- 需要：專用資料 clone `~/Documents/Codex/dispatch/ptt-iphone-data-commentary`（不存在會自動 clone；與爬蟲的 clone 分開，可用 `PTT_COMMENTARY_DATA_DIR` 改）、`agy`（~/.local/bin）與 `gh` 已登入。
