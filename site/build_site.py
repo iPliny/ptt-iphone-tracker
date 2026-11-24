@@ -434,6 +434,8 @@ def apple_prices(models, path=APPLE_PRICES):
 
 
 def build_data(data_dir=DATA_DIR, now=None):
+    from price_commentary import load_commentary
+
     raw = read_csv(os.path.join(data_dir, "listings.csv"))
     events = read_csv(os.path.join(data_dir, "events.csv"))
     events = attach_price_times(events, read_csv(os.path.join(data_dir, "price_event_times.csv")))
@@ -469,6 +471,7 @@ def build_data(data_dir=DATA_DIR, now=None):
         "listings": listings,
         "events": events_out,
         "apple": apple_prices(r["model"] for r in listings + multi),
+        "commentary": load_commentary(data_dir),
     }
 
 

@@ -174,6 +174,22 @@ def trend_summary(data, model):
     return "".join(out)
 
 
+def price_commentary_card(commentary, model):
+    """只在該機型有短評時產生卡片，稿件一律當純文字。"""
+    if commentary is None:
+        return ""
+    body = commentary["models"].get(model)
+    if not isinstance(body, str) or not body.strip():
+        return ""
+    return (
+        '\n\n    <section class="card price-commentary" id="price-commentary">'
+        '<div class="card-head"><h2>價格短評</h2></div>'
+        f'<p class="commentary-text">{escape(body.strip())}</p>'
+        f'<p class="hint">資料更新至 {escape(commentary["as_of"])}。'
+        '依 PTT MacShop 刊登價整理，不是成交價，也不是買賣建議。</p></section>'
+    )
+
+
 def render_model_html(template, data, model, canonical_url, asset_prefix=""):
     """保留互動元件 ID 與腳本，預先填入可直接閱讀的機型內容。"""
     from seo import metadata, strip_social_meta
@@ -205,8 +221,6 @@ def render_model_html(template, data, model, canonical_url, asset_prefix=""):
     updated = f'最後回訪 {data.get("last_checked") or "—"} · 這個機型共追蹤 {len(listings)} 篇'
     html = html.replace('<span id="updated">載入中…</span>', f'<span id="updated">{escape(updated)}</span>')
     html = html.replace('<main class="wrap" id="model-main" hidden>', '<main class="wrap" id="model-main">')
-    html = html.replace('<section class="kpis" id="kpis"></section>',
-                        '<section class="kpis" id="kpis">' + summary_cards(stats) + '</section>')
     html = html.replace('<table id="compare"></table>', '<table id="compare">' + capacity_table(capacities) + '</table>')
     html = html.replace('<h2 id="list-title">文章</h2>', f'<h2 id="list-title">全部容量的文章（{len(listings)}）</h2>')
     html = html.replace('<div id="list"></div>', '<div id="list">' + listing_cards(listings) + '</div>')
@@ -226,7 +240,11 @@ def render_model_html(template, data, model, canonical_url, asset_prefix=""):
             for attr in ["src", "href"]:
                 html = html.replace(f'{attr}="{value}"', f'{attr}="{asset_prefix}{value}"')
     html = html.replace('</main>', model_navigation(data, asset_prefix, model) + '\n</main>', 1)
-    return html
+    return html.replace(
+        '<section class="kpis" id="kpis"></section>',
+        '<section class="kpis" id="kpis">' + summary_cards(stats) + '</section>'
+        + price_commentary_card(data.get("commentary"), model), 1,
+    )
 
 
 def build_model_pages(out_dir, data, site_url):

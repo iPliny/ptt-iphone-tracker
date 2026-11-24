@@ -64,6 +64,7 @@ button:disabled { opacity: .4; cursor: default; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin: 14px 0; }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+.commentary-text { margin: 0; line-height: 1.7; white-space: pre-line; }
 .legend { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
 .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-left: 6px; }
 .sw.new { background: var(--new); } .sw.sold { background: var(--sold); } .sw.shelf { background: var(--shelf); height: 3px; }
