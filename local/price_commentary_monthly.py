@@ -17,7 +17,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 CODE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = Path(os.environ.get("PTT_DATA_DIR", Path.home() / "Documents/Codex/dispatch/ptt-iphone-data"))
+# 專用 clone，不與本機爬蟲（local/run.sh）共用工作目錄，避免兩邊的 Git 操作互相干擾。
+DATA_DIR = Path(os.environ.get("PTT_COMMENTARY_DATA_DIR",
+                               Path.home() / "Documents/Codex/dispatch/ptt-iphone-data-commentary"))
+DATA_REMOTE = "https://github.com/iPliny/ptt-iphone-data.git"
 MODEL = os.environ.get("PTT_AGY_MODEL", "gemini-4-neon-medium")
 AGY = os.environ.get("PTT_AGY") or str(Path.home() / ".local/bin/agy")
 LOG = Path.home() / "Library/Logs/ptt-price-commentary.log"
@@ -54,11 +57,18 @@ def target_month(today, force):
     return f"{prev.year}-{prev.month:02d}", prev.isoformat()
 
 
-def current_as_of(data_dir):
+def published_as_of():
+    """遠端 main 上已發布的稿件日期（尚未產生時為空字串）。"""
     try:
-        return json.loads((data_dir / "commentary/price.json").read_text(encoding="utf-8")).get("as_of") or ""
-    except FileNotFoundError:
+        return json.loads(git("show", "origin/main:commentary/price.json")).get("as_of") or ""
+    except subprocess.CalledProcessError:
         return ""
+
+
+def ensure_clone():
+    if not (DATA_DIR / ".git").exists():
+        DATA_DIR.parent.mkdir(parents=True, exist_ok=True)
+        run(["git", "clone", DATA_REMOTE, str(DATA_DIR)])
 
 
 def agy_json(prompt, scratch):
@@ -143,15 +153,22 @@ def main():
     today = datetime.now(TAIPEI).date()
     target = target_month(today, args.force)
     month, as_of = target
-    if not args.force and current_as_of(DATA_DIR) >= as_of:
-        return 0  # 這個月底（或更晚）的稿已經產生
-    if not args.force and today.day != calendar.monthrange(today.year, today.month)[1] and today.day > 3:
-        return 0  # 非月底也非月初補跑期間
-    log(f"開始更新 {month} 價格短評（資料截至 {as_of}）")
+    ensure_clone()
     if git("branch", "--show-current") != "main":
         raise RuntimeError("私人資料庫不在 main 分支")
     if git("status", "--porcelain"):
         raise RuntimeError("私人資料庫有未提交變更，停止")
+    git("fetch", "origin", "main")
+    if git("rev-list", "origin/main..HEAD"):  # 上次已 commit 但沒推送成功：先補推送與部署
+        git("pull", "--rebase", "origin", "main")
+        push_with_retry()
+        run(["gh", "workflow", "run", "pages.yml", "--repo", "iPliny/ptt-iphone-tracker", "--ref", "main"])
+        log("補推送上次未完成的短評並觸發部署。")
+    if not args.force and published_as_of() >= as_of:
+        return 0  # 這個月底（或更晚）的稿已經發布
+    if not args.force and today.day != calendar.monthrange(today.year, today.month)[1] and today.day > 3:
+        return 0  # 非月底也非月初補跑期間
+    log(f"開始更新 {month} 價格短評（資料截至 {as_of}）")
     git("pull", "--rebase", "origin", "main")
     with tempfile.TemporaryDirectory(prefix="price-commentary-") as tmp:
         models = generate(month, as_of, Path(tmp))
