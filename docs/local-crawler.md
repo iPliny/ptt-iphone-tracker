@@ -91,3 +91,9 @@ bootstrap 讀同目錄 `ptt-local-crawler.conf` 的 BASE，預設 `~/ai-cowork/p
 主頁與中日機型頁按機型、容量分組：未開封對照未使用品最低價，中古對照 A／B／C 合併最低價；同價依商品網址、等級排序。保留最低價原始商品連結、等級與日本時間確認時間，不計算買賣價差，也不混入買取最高價、價差或走勢。以建置快照時間比較每筆 `last_checked`，嚴格超過 48 小時顯示舊資料並淡化；商品條件仍以原頁為準，可能含網路利用限制。前段「販賣仍未公開」為當時紀錄。
 
 離線驗證：`python -m unittest discover -s tests`、`node --test tests/*.test.cjs`。販賣資料測試見 `tests/test_jp_sell.py` 與 `tests/jp.test.cjs`，只使用合成資料。
+
+## 每月底價格短評更新（2026-11-25）
+- 機型頁「價格短評」由 `local/price_commentary_monthly.py` 每月底在家用 Mac 更新：呼叫 `site/price_commentary.py facts` 彙整公開統計 → `agy`（預設 `gemini-4-neon-medium`，可用 `PTT_AGY_MODEL` 改）依 `local/price_commentary_prompt.txt` 寫 45 則 → 字數不符的最多修 3 輪 → `check` 驗稿 → 寫入私人資料庫 `commentary/price.json`、推送並 `gh workflow run pages.yml` 重新部署。
+- 安裝：`bash local/install-commentary.sh`。launchd 每天 22:00（Mac 系統時區）啟動，腳本只在月底（台灣日期）或月初 1～3 日補跑上個月時動作，其餘直接結束；同一個 as_of 不重複產生。
+- 手動：`python3 local/price_commentary_monthly.py --force 2026-12 [--dry-run]`。失敗會跳 macOS 通知，log 在 `~/Library/Logs/ptt-price-commentary.log`。
+- 需要：這份程式 clone 在 main、私人資料庫 clone 乾淨且在 main、`agy`（~/.local/bin）與 `gh` 已登入。
