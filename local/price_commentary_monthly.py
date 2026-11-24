@@ -159,7 +159,7 @@ def main():
     if git("status", "--porcelain"):
         raise RuntimeError("私人資料庫有未提交變更，停止")
     git("fetch", "origin", "main")
-    if git("rev-list", "origin/main..HEAD"):  # 上次已 commit 但沒推送成功：先補推送與部署
+    if git("rev-list", "origin/main..HEAD") and not args.dry_run:  # 上次已 commit 但沒推送成功：先補推送與部署
         git("pull", "--rebase", "origin", "main")
         push_with_retry()
         run(["gh", "workflow", "run", "pages.yml", "--repo", "iPliny/ptt-iphone-tracker", "--ref", "main"])
