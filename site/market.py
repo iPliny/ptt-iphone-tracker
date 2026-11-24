@@ -82,15 +82,17 @@ def link(r, root):
 def faq(day, period):
     return [
         {"q": "二手行情是怎麼算的？",
-         "a": "每天結束時仍在 PTT MacShop 版上販售的單支 iPhone 文章，取當天標價的中位數；全新未拆與二手分開算，"
-              "明顯抓錯的異常價格不列入。當天在架少於 3 篇的機型容量不計算。"},
+         "a": "每天結束時，按機型、容量及全新未拆或二手分組，取 PTT MacShop 在架單支 iPhone 的標價中位數。"
+              "每組至少要有 3 篇在架文章，計算前會排除異常價格。"},
         {"q": "這是實際成交價嗎？",
-         "a": "不是。PTT 沒有公開成交價，這裡是賣家的刊登價；便宜的文章通常先賣掉，所以在架行情會比成交價略高。"
-              "機型頁的「成交中位數」是偵測到售出時的最後標價，可以一起參考。"},
+         "a": "本站整理 PTT MacShop 的刊登價，已售文章採偵測到售出時的最後標價。"},
+        {"q": "顏色表的相對值是怎麼算的？",
+         "a": "每篇標價先和同機型、同容量、同為全新或二手的刊登價中位數比較，再按顏色取相對值的中位數。"
+              "每色至少 3 篇可比較的刊登才顯示相對值，價格欄列二手機的標價中位數。"},
         {"q": "多久更新一次？",
          "a": f"本站每 6 小時回訪 PTT 文章並重建網站，本頁數字是 {day} 的行情。漲跌是和 {period} 天前的行情相比。"},
         {"q": "「賣得最快」怎麼排？",
-         "a": f"用發文到偵測售出的天數中位數排序，至少 {FAST_MIN} 筆售出紀錄才列入；第一次看到就已售出的文章，用賣家最後編輯的時間推估。"},
+         "a": f"每組至少 {FAST_MIN} 篇有售出天數的文章，按發文到售出的天數中位數排序。首次觀測時已售出的文章，以最後編輯時間計算。"},
         {"q": "很久沒賣掉的文章怎麼算？",
          "a": "發文 45 天內每 6 小時回訪，之後到 90 天約每天回訪一次。滿 90 天還沒賣掉的文章標成「逾期未售」，"
               "仍算在刊登數與刊登價，但不再算在架，也不算售出。"},
@@ -106,8 +108,8 @@ def page_html(data, root="../"):
     title = f"{TITLE}【{d.year}年{d.month}月】各機型二手價格每日更新"
     period, drops, cheap, fast = rankings(data, rows)
     used_count = sum(1 for r in rows if r.get("used"))
-    lead = (f"整理 PTT MacShop 版的 iPhone 販售文，{d.year}/{d.month}/{d.day} 共有 {used_count} 組機型容量算得出二手行情。"
-            "行情是當天仍在架文章的標價中位數，每 6 小時更新。")
+    lead = (f"整理 PTT MacShop 版的 iPhone 販售文，{d.year}/{d.month}/{d.day} 的二手行情"
+            f"涵蓋 {used_count} 組機型與容量。")
     if drops:
         lead += f"近 {period} 天跌最多的是 {label(drops[0])}（{pct_text(drops[0][f'used_{period}'])}）。"
     description = lead[:150]
@@ -138,13 +140,13 @@ def page_html(data, root="../"):
              f'<td class="num">{pct_text(r.get(f"used_{period}"))}</td></tr>' for r in cheap])))
     if fast:
         sections.append(("fast", "賣得最快", table(
-            "發文到售出的天數中位數（不分全新與否）", ["機型／容量", "售出天數", "已售", "成交中位數"],
-            [f'<tr><th scope="row">{link(m, root)}</th><td class="num">{m["median_days"]} 天'
-             f'{"（含推估）" if m.get("days_estimated") else ""}</td><td class="num">{m["sold"]}</td>'
+            "發文到售出的天數中位數（不分全新與否）", ["機型／容量", "售出天數", "已售", "已售最後標價中位數"],
+            [f'<tr><th scope="row">{link(m, root)}</th><td class="num">{m["median_days"]} 天</td>'
+             f'<td class="num">{m["sold"]}</td>'
              f'<td class="num">{money(m.get("median_sold_price"))}</td></tr>' for m in fast])))
     if rows:
         sections.append(("all", "各機型二手行情一覽", table(
-            "目前行情；全新未拆另列，— 表示在架太少算不出來", ["機型／容量", "二手行情", "7 天", "30 天", "全新未拆"],
+            "各機型與容量的最新行情", ["機型／容量", "二手行情", "7 天", "30 天", "全新未拆"],
             [f'<tr><th scope="row">{link(r, root)}</th><td class="num">{money(r.get("used"))}</td>'
              f'<td class="num">{pct_text(r.get("used_7"))}</td><td class="num">{pct_text(r.get("used_30"))}</td>'
              f'<td class="num">{money(r.get("new"))}</td></tr>' for r in rows])))

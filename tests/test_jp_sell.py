@@ -101,7 +101,7 @@ class SellTest(unittest.TestCase):
                 home = (root / f'output/jp/{path}index.html').read_text()
                 page = (root / f'output/jp/{path}iphone-18-pro/index.html').read_text()
                 self.assertIn(P.TEXT[lang]['sell'], home)
-                self.assertLess(home.index('最高價以底色' if lang == 'zh' else '最高価格は背景色'),
+                self.assertLess(home.index('價差為最高價減最低價' if lang == 'zh' else '価格差は最高価格と最低価格の差'),
                                 home.index('<div id="sell">'))
                 self.assertIn('¥180,000', home)
                 self.assertIn('¥120,000', page)

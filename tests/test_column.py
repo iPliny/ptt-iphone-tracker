@@ -101,16 +101,17 @@ class ColumnTest(unittest.TestCase):
 
     def test_article_max_length(self):
         """每段都寫滿、型號名稱很長時，內文也不超過 1000 字。"""
-        g = {"model": "iPhone 17 Pro Max", "storage": "1TB", "listed": 99, "median_price": 123456,
+        model = "iPhone 17 Pro Max 限量紀念版"
+        g = {"model": model, "storage": "1TB", "listed": 99, "median_price": 123456,
              "min_price": 100000, "max_price": 150000, "sold": 99, "median_sold_price": 120000}
         issue = {"week_start": "2026-12-27", "week_end": "2027-01-02", "generated_at": "2027-01-03 20:00:00",
                  "new": 999, "sold": 999, "deleted": 999, "brand_new": 999, "price_changes": 999,
                  "price_cuts": 999, "price_raises": 999, "avg_cut_pct": 12.3, "on_shelf": 999,
                  "median_days": 12.5, "days_samples": 999, "groups": [g] * 8, "new_groups": [g] * 3,
-                 "fast": [{"model": "iPhone 17 Pro Max", "n": 99, "median_days": 12.5}] * 5,
+                 "fast": [{"model": model, "n": 99, "median_days": 12.5}] * 5,
                  "battery_listed": 88, "battery_sold": 91,
-                 "biggest_cut": {"model": "iPhone 17 Pro Max", "storage": "1TB", "from": 150000, "to": 100000},
-                 "prev": {"new": 1, "sold": 1, "medians": {"iPhone 17 Pro Max|1TB": 100000}}}
+                 "biggest_cut": {"model": model, "storage": "1TB", "from": 150000, "to": 100000},
+                 "prev": {"new": 1, "sold": 1, "medians": {f"{model}|1TB": 100000}}}
         a = C.article(issue)
         self.assertLessEqual(C.trim(a["lead"], a["sections"]), C.MAX_CHARS)
         self.assertNotIn("battery", [s["id"] for s in a["sections"]])  # 先拿掉補充段落
@@ -137,6 +138,9 @@ class ColumnTest(unittest.TestCase):
         self.assertIn('href="../../style.css"', older)
         self.assertLess(index.index("gtag/js?id=G-G3GH12TQSZ"), index.index("<title>"))
         self.assertIn("歷期週報", index)
+        self.assertIn('href="../market/#faq">算法說明</a>', index)
+        self.assertNotIn("成交價", index)
+        self.assertNotIn("推估", index)
         ld = re.search(r'<script type="application/ld\+json">(.*?)</script>', index, re.S).group(1)
         self.assertEqual([x["@type"] for x in json.loads(ld)], ["Article", "BreadcrumbList", "FAQPage"])
 
@@ -153,7 +157,9 @@ class ColumnTest(unittest.TestCase):
     def test_empty_week_renders(self):
         i = C.compute_issue(self.dir, date(2026, 11, 1), date(2026, 11, 7))
         self.assertEqual((i["new"], i["groups"]), (0, []))
-        self.assertIn("<h1>", C.page_html(i, [i], "../"))
+        html = C.page_html(i, [i], "../")
+        self.assertIn("<h1>", html)
+        self.assertNotIn('id="speed"', html)
 
     def test_fixture_data_renders(self):
         """合成資料也能產生一期並輸出頁面，不需私人 checkout。"""

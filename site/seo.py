@@ -37,7 +37,7 @@ def metadata(title, description, url, breadcrumbs=(), *, site_url=None):
 
 def render_home(template, data, site_url):
     title = "PTT MacShop交易觀測｜二手 iPhone 行情與成交追蹤"
-    description = "每日整理 PTT MacShop 二手 iPhone 行情、各容量刊登價、售出天數與成交追蹤，並提供日本買取價、官方價格及行情週報。售出標價不代表實際成交價。"
+    description = "每日整理 PTT MacShop 二手 iPhone 行情、各容量刊登價、售出天數與成交追蹤，並提供日本買取價、官方價格及行情週報。"
     html = re.sub(r"<title>.*?</title>", lambda _: f"<title>{title}</title>", strip_social_meta(template), count=1)
     html = re.sub(r'<meta name="description" content="[^"]*">',
                   lambda _: f'<meta name="description" content="{description}">', html, count=1)
@@ -63,6 +63,6 @@ def render_home(template, data, site_url):
                     f'<td>{escape(row.get("storage") or "容量未提供")}</td><td>{row.get("listed", 0)}</td>'
                     f'<td>{escape(money(row.get("median_price")))}</td>'
                     f'<td>{escape(money(row.get("median_sold_price")))}</td></tr>')
-    table = ('<thead><tr><th>型號</th><th>容量</th><th>刊登</th><th>刊登中位數</th><th>售出時最後標價中位數</th></tr></thead>'
+    table = ('<thead><tr><th>型號</th><th>容量</th><th>刊登</th><th>刊登中位數</th><th>已售最後標價中位數</th></tr></thead>'
              '<tbody>' + ("".join(rows) or '<tr><td colspan="5">尚無型號行情</td></tr>') + '</tbody>')
     return html.replace('<table id="models"></table>', '<table id="models">' + table + '</table>')
