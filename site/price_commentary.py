@@ -22,6 +22,9 @@ URL = re.compile(
 )
 
 
+DISCLAIMER = re.compile(r"僅供參考|非實際成交價|不是成交價|並非成交價|樣本太少|樣本不足|無法代表|請以官網為準|不構成|免責")
+
+
 def is_apple_url(value):
     parsed = urlsplit(value)
     host = parsed.hostname or ""
@@ -138,6 +141,8 @@ def validate(commentary, model_names):
         length = len("".join(body.split()))
         if not 250 <= length <= 300:
             errors.append(f"{model} 的短評有 {length} 字，須為 250–300 字")
+        if DISCLAIMER.search(body):
+            errors.append(f"{model} 的短評含免責或防禦性字句")
         if URL.search(body):
             errors.append(f"{model} 的短評含網址")
         if re.search(r"[#*`|]|\r|(?<!\n)\n(?!\n)|\n{3}", body):

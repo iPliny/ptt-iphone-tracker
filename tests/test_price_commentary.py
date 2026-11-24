@@ -81,6 +81,11 @@ class PriceCommentaryTest(unittest.TestCase):
                 errors = C.validate(commentary({MODEL: body}), [MODEL])
                 self.assertEqual(bool(errors), length in (249, 301))
 
+    def test_validate_rejects_disclaimer_wording(self):
+        body = "價" * 260 + "這個數字僅供參考"
+        errors = C.validate(commentary({MODEL: body}), [MODEL])
+        self.assertTrue(any("免責" in e for e in errors))
+
     def test_validate_missing_model_and_invalid_text(self):
         for suffix in ("#", "*", "`", "|", "\n格", "\n\n\n格"):
             with self.subTest(suffix=suffix):
