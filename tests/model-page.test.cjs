@@ -18,13 +18,28 @@ function dataset() {
     events: [], apple: {}, colors: [], last_checked: '2026-10-16 00:23:20' };
 }
 
-async function page({ staticPage = true, search = '', data = dataset(), fail = false, saved = new Map() } = {}) {
+async function page({ staticPage = true, search = '', data = dataset(), fail = false, saved = new Map(), robots } = {}) {
   const elements = new Map();
-  const links = staticPage ? [{ rel: 'canonical', href: base + common.modelPageUrl(model) }] : [];
+  const head = [];
+  function createElement(tag) {
+    return { tag, remove() {
+      const index = head.indexOf(this);
+      if (index !== -1) head.splice(index, 1);
+    } };
+  }
+  const appendChild = node => head.push(node);
+  if (staticPage) appendChild(Object.assign(createElement('link'), { rel: 'canonical', href: base + common.modelPageUrl(model) }));
+  appendChild(Object.assign(createElement('meta'), { property: 'og:url', content: '' }));
+  appendChild(Object.assign(createElement('meta'), { property: 'og:title', content: '' }));
+  if (robots !== undefined) appendChild(Object.assign(createElement('meta'), { name: 'robots', content: robots }));
   const history = [], requests = [];
   function element(selector) {
-    if (selector === 'link[rel="canonical"]') return links[0] || null;
     if (selector === 'meta[name="site-url"]') return { content: base };
+    const headSelector = /^(link|meta)\[(rel|name|property)="([^"]+)"\]$/.exec(selector);
+    if (headSelector) {
+      const [, tag, attr, value] = headSelector;
+      return head.find(node => node.tag === tag && node[attr] === value) || null;
+    }
     if (!elements.has(selector)) elements.set(selector, {
       hidden: false, value: selector === '#sort-f' ? 'time' : '',
       textContent: selector === '#updated' ? '最後回訪 snapshot' : '',
@@ -36,7 +51,7 @@ async function page({ staticPage = true, search = '', data = dataset(), fail = f
   }
   const document = {
     title: staticPage ? model + ' 預先產生的標題' : '', body: { dataset: staticPage ? { model } : {} },
-    querySelector: element, createElement: () => ({}), head: { appendChild: link => links.push(link) },
+    querySelector: element, createElement, head: { appendChild },
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../site/model.js'), 'utf8'), {
     document, location: { search, pathname: staticPage ? '/models/iphone-18-pro' : '/model.html' },
@@ -49,32 +64,59 @@ async function page({ staticPage = true, search = '', data = dataset(), fail = f
     setTimeout: () => 1, clearTimeout() {},
   });
   await new Promise(resolve => setImmediate(resolve));
-  return { document, element, links, history, requests, saved,
+  return { document, element, head, history, requests, saved,
     choose(storage) { element('#storage-tabs').listeners.click({ target: { closest: () => ({ dataset: { storage } }) } }); } };
 }
 
-test('靜態頁重用 canonical、保留預產標題，只讀該機型資料，查詢 m 不覆蓋機型身分', async () => {
+function assertCapacityMetadata(view) {
+  assert.equal(view.element('meta[name="robots"]').content, 'noindex,follow');
+  assert.equal(view.element('link[rel="canonical"]'), null);
+  assert.equal(view.element('meta[property="og:url"]'), null);
+}
+
+function assertModelMetadata(view) {
+  const canonical = view.element('link[rel="canonical"]');
+  assert.equal(canonical.href, base + 'models/iphone-18-pro');
+  assert.equal(view.element('meta[property="og:url"]').content, canonical.href);
+  assert.equal(view.element('meta[name="robots"]'), null);
+}
+
+test('靜態容量頁設為 noindex，切回全部容量時恢復 canonical', async () => {
   const view = await page({ search: '?m=other&s=256GB&utm_source=test' });
   assert.deepEqual(view.requests, ['../models/iphone-18-pro.json']);
-  assert.equal(view.links.length, 1);
-  assert.equal(view.links[0].href, base + 'models/iphone-18-pro');
-  assert.equal(view.element('meta[property="og:url"]').content, view.links[0].href);
+  assertCapacityMetadata(view);
   assert.equal(view.document.title, model + ' 預先產生的標題');
   assert.equal(view.element('#model-name').textContent, model);
   assert.match(view.element('#list-title').textContent, /256GB的文章（12）/);
   view.choose('512GB');
   assert.equal(view.history.at(-1), '/models/iphone-18-pro?s=512GB');
+  assertCapacityMetadata(view);
   view.choose('*');
   assert.equal(view.history.at(-1), '/models/iphone-18-pro');
-  assert.equal(view.links.length, 1);
+  assertModelMetadata(view);
+  view.choose('256GB');
+  assertCapacityMetadata(view);
 });
 
-test('原 model.html 查詢入口保留容量網址與篩選行為，canonical 指向預產標準頁', async () => {
+test('靜態與舊入口沒有 s 時皆保留 canonical，且未設定 noindex', async () => {
+  for (const staticPage of [true, false]) {
+    const view = await page({ staticPage, search: '?m=iPhone+18+Pro&utm_source=test' });
+    assertModelMetadata(view);
+  }
+});
+
+test('空白 s 仍設為 noindex，並更新既有 robots 標籤', async () => {
+  const view = await page({ search: '?s=', robots: 'index,follow' });
+  assertCapacityMetadata(view);
+  assert.equal(view.head.filter(node => node.name === 'robots').length, 1);
+  view.choose('*');
+  assert.equal(view.element('meta[name="robots"]').content, 'index,follow');
+});
+
+test('原 model.html 容量頁保留容量網址與篩選行為，並設為 noindex', async () => {
   const view = await page({ staticPage: false, search: '?m=iPhone+18+Pro&s=256GB' });
   assert.deepEqual(view.requests, ['models/iphone-18-pro.json']);
-  assert.equal(view.links.length, 1);
-  assert.equal(view.links[0].href, base + 'models/iphone-18-pro');
-  assert.equal(view.element('meta[property="og:url"]').content, view.links[0].href);
+  assertCapacityMetadata(view);
   assert.equal(view.element('meta[property="og:title"]').content, view.document.title);
   view.choose('512GB');
   assert.equal(view.history.at(-1), 'model.html?m=iPhone+18+Pro&s=512GB');

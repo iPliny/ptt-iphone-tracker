@@ -10,18 +10,10 @@
   const params = new URLSearchParams(location.search);
   const staticModel = document.body && document.body.dataset.model || "";
   const model = staticModel || params.get("m") || "";
-  // 同一機型的容量／篩選參數共用 canonical；空白機型不宣告 canonical。
-  if (model) {
-    let canonical = $('link[rel="canonical"]');
-    if (!canonical || !canonical.href) {
-      canonical = document.createElement("link");
-      document.head.appendChild(canonical);
-    }
-    canonical.rel = "canonical";
-    canonical.href = $('meta[name="site-url"]').content + modelPageUrl(model);
-    const ogUrl = $('meta[property="og:url"]');
-    if (ogUrl) ogUrl.content = canonical.href;
-  }
+  const originalRobots = $('meta[name="robots"]');
+  const originalRobotsContent = originalRobots?.content;
+  const ogUrl = $('meta[property="og:url"]');
+  updateIndexing(params.has("s"));
   let storage = params.get("s");  // null = 全部容量
   let D = null;
   let mine = [];       // 這個機型的全部文章
@@ -96,7 +88,36 @@
     if (storage !== null) query.set("s", storage);
     history.replaceState(null, "", staticModel
       ? location.pathname + (query.toString() ? "?" + query : "") : modelUrl(model, storage));
+    updateIndexing(query.has("s"));
     render();
+  }
+
+  function updateIndexing(hasStorageParam) {
+    const robots = $('meta[name="robots"]');
+    let canonical = $('link[rel="canonical"]');
+    if (hasStorageParam) {
+      const meta = robots || document.createElement("meta");
+      meta.name = "robots";
+      meta.content = "noindex,follow";
+      if (!robots) document.head.appendChild(meta);
+      canonical?.remove();
+      ogUrl?.remove();
+      return;
+    }
+
+    if (originalRobots) originalRobots.content = originalRobotsContent;
+    else robots?.remove();
+    if (!model) return;
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.rel = "canonical";
+      document.head.appendChild(canonical);
+    }
+    canonical.href = $('meta[name="site-url"]').content + modelPageUrl(model);
+    if (ogUrl) {
+      ogUrl.content = canonical.href;
+      if (!$('meta[property="og:url"]')) document.head.appendChild(ogUrl);
+    }
   }
 
   function selected() {
