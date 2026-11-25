@@ -10,6 +10,8 @@ const watchlist = require('../site/watchlist.js');
 async function render(colors, listings) {
   const elements = new Map();
   function element(id) {
+    if (id === 'meta[name="site-url"]') return { content: 'https://example.test/' };
+    if (!id.startsWith('#')) return null;
     if (!elements.has(id)) elements.set(id, {
       hidden: false, value: '', innerHTML: '', textContent: '', listeners: {},
       addEventListener(name, fn) { this.listeners[name] = fn; }, setAttribute() {},

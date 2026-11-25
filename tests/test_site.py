@@ -259,6 +259,7 @@ class BuildSiteTest(unittest.TestCase):
         locs = [e.text for e in root.findall("s:url/s:loc", ns)]
         self.assertEqual(locs, [S.SITE_URL, S.SITE_URL + "market/", S.SITE_URL + "prices", S.SITE_URL + "jp/", S.SITE_URL + "jp/ja/", S.SITE_URL + "models/iphone-15-pro",
                                 S.SITE_URL + "models/iphone-16e"])
+        self.assertFalse(any("?" in url for url in locs if url.startswith(S.SITE_URL + "models/")))
         self.assertEqual(root.findall("s:url/s:lastmod", ns), [])  # 沒有內容日期，不回填建置日。
 
     def test_estimated_sold_date(self):

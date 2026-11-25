@@ -9,7 +9,7 @@ const common = require('../site/common.js');
 const watchlist = require('../site/watchlist.js');
 
 // 使用真正建置出的 HTML 與 sitemap，比對機型腳本輸出的 canonical。
-test('機型 canonical 與 sitemap 編碼一致，排除容量、追蹤參數與重複 m', (t) => {
+test('機型本體 canonical 與 sitemap 編碼一致，排除追蹤參數與重複 m', (t) => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'macshop-seo-'));
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
   const data = path.join(tmp, 'data'), out = path.join(tmp, 'out');
@@ -24,15 +24,13 @@ test('機型 canonical 與 sitemap 編碼一致，排除容量、追蹤參數與
   const sitemap = fs.readFileSync(path.join(out, 'sitemap.xml'), 'utf8');
   const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1]);
   const source = fs.readFileSync(path.join(out, 'model.js'), 'utf8');
-  function canonical(search) {
+  function headElements(search) {
     const links = [];
-    const elements = new Map();
     vm.runInNewContext(source, {
       document: {
         querySelector(selector) {
           if (selector === 'meta[name="site-url"]') return { content: base };
-          if (!elements.has(selector)) elements.set(selector, {});
-          return elements.get(selector);
+          return selector === '#model-name' ? {} : null;
         },
         createElement: tagName => ({ tagName }),
         head: { appendChild: link => links.push(link) },
@@ -48,13 +46,14 @@ test('機型 canonical 與 sitemap 編碼一致，排除容量、追蹤參數與
     const url = base + common.modelPageUrl(model);
     assert.ok(locs.includes(url));
     assert.ok(url, model);
-    const query = '?m=' + encodeURIComponent(model) + '&s=256GB&utm_source=test&m=ignored';
-    const links = canonical(query);
+    const query = '?m=' + encodeURIComponent(model) + '&utm_source=test&m=ignored';
+    const links = headElements(query);
     assert.equal(links.length, 1);
     assert.equal(links[0].tagName, 'link');
     assert.equal(links[0].rel, 'canonical');
     assert.equal(links[0].href, url);
   }
-  assert.equal(canonical('?m=iPhone+17+Pro')[0].href, base + 'models/iphone-17-pro');
-  for (const query of ['', '?s=256GB', '?m=']) assert.deepEqual(canonical(query), []);
+  assert.equal(headElements('?m=iPhone+17+Pro')[0].href, base + 'models/iphone-17-pro');
+  for (const query of ['', '?m=']) assert.deepEqual(headElements(query), []);
+  assert.deepEqual(headElements('?s=256GB'), [{ tagName: 'meta', name: 'robots', content: 'noindex,follow' }]);
 });
