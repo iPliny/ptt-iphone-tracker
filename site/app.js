@@ -15,6 +15,7 @@
   let listLimit = PAGE;
   let dayLimit = PAGE;
   let showAllModels = false;
+  const MODEL_MIN_LISTED = 50; // 刊登數在此以下的型號預設收起
   let modelSort = { key: "listed", asc: false };
   const watchlist = PttWatchlist.createStore(() => window.localStorage);
   let watchScope = { model: null, storage: null };
@@ -238,9 +239,9 @@
   function renderModels() {
     const q = $("#model-q").value.trim().toLowerCase();
     const matched = D.models.filter((m) => !q || (m.model + " " + m.storage).toLowerCase().includes(q));
-    // 只有 1 篇刊登的型號參考價值低，預設收起來；搜尋時照樣列出
-    const hidden = q ? 0 : matched.filter((m) => m.listed <= 1).length;
-    const rows = showAllModels || q ? matched : matched.filter((m) => m.listed > 1);
+    // 刊登數 50 篇以下的型號預設收起來；搜尋時照樣列出
+    const hidden = q ? 0 : matched.filter((m) => m.listed <= MODEL_MIN_LISTED).length;
+    const rows = showAllModels || q ? matched : matched.filter((m) => m.listed > MODEL_MIN_LISTED);
     const { key, asc } = modelSort;
     rows.sort((a, b) => {
       const x = a[key], y = b[key];
@@ -272,7 +273,7 @@
     }));
     const btn = $("#models-more");
     btn.hidden = hidden === 0;
-    btn.textContent = showAllModels ? "收起只有 1 篇刊登的型號" : "顯示更多（另有 " + hidden + " 個只有 1 篇刊登的型號）";
+    btn.textContent = showAllModels ? "收起刊登數 " + MODEL_MIN_LISTED + " 以下的型號" : "顯示更多（另有 " + hidden + " 個刊登數 " + MODEL_MIN_LISTED + " 以下的型號）";
   }
 
   // ---------- 全部文章 ----------
